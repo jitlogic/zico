@@ -1,0 +1,42 @@
+
+.toolbar {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  border-bottom: 1px solid $c-line;
+  height: 1.65em;
+  .svg-icon {
+    margin-right: 0.12em;
+    margin-left: 0.12em;
+    //width: 1.25em;
+    //height: 1em;
+  }
+  .cpt {
+    flex: 10;
+    cursor: default;
+    padding: 0.21em 0.5em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    min-width: 1em;
+  }
+  .search {
+    flex: 10;
+    cursor: text;
+    padding: 0.25em 0.75em;
+    color: $c-text;
+    background: $b-hover;
+    border: none;
+    &:focus {
+      border: none;
+      outline: none;
+    }
+  } // .input - search box etc.
+  .itm {
+    flex: 0 1 auto;
+    margin: 0.04em 0;
+    padding: 0.21em 0.5em;
+  }
+}
+

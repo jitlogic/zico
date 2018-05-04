@@ -1,0 +1,146 @@
+
+.popup-panel {
+
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+
+  .background {
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0.4;
+    background-color: black;
+  }
+
+  .frame {
+    display: flex;
+    flex-direction: column;
+    z-index: 12;
+    position: absolute;
+    margin: auto;
+    background-color: $b-normal;
+    padding: 0.5em;
+    border: 1px solid $c-line;
+    border-radius: 0.25em 0.25em 0.25em 0.25em;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.176);
+    max-height: 100vh;
+  }
+
+  .top-right {
+    top: 0.25em;
+    right: 0.25em;
+  }
+
+  .top-left {
+    top: 0.25em;
+    left: 0.25em;
+  }
+
+  .mid-mid {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+  }
+
+  .caption {
+    border-bottom: 1px solid $c-line;
+    padding-bottom: 0.125em;
+    margin-bottom: 0.25em;
+  }
+
+  .interior {
+    display: flex;
+    flex-direction: column;
+  }
+
+} // .popup-panel
+
+
+@media screen and (max-width: $small) {
+  .popup-panel {
+    .frame {
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      max-height: 100vh;
+      transform: translate(0,0);
+    }
+    .interior {
+
+    }
+  }
+}
+
+
+
+// -------------------------------- Message box interior  ------------------------------
+
+.popup-msgbox {
+  .msg {
+    display: flex;
+    flex-direction: column;
+    padding: 1em 1em 0;
+    div {
+      margin-bottom: 0.5em;
+    }
+  }
+}
+
+@media screen and (max-width: $small) {
+  .popup-msgbox {
+    .msg {
+      width: 100%;
+      padding: 4em 0;
+      align-content: center;
+    }
+  }
+}
+
+
+// TODO uprościć style niżej
+.popup-menu {
+  //overflow-y: auto;
+  padding-top: 0.35em;
+  min-height: min-content;
+  .separator {
+    border-bottom: 1px solid $c-line;
+    left: 0;
+    right: 0;
+    height: 0.12em;
+    padding-top: 0.45em;
+    margin-bottom: 0.45em;
+  }
+  .item {
+    display: flex;
+    white-space: nowrap;
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+    &:hover {
+      background-color: $b-hover;
+      cursor: pointer;
+    }
+    .icon {
+      filter: opacity(50%);
+      padding-left: 0.12em;
+      padding-right: 0.35em;
+    }
+    .icon-selected {
+      filter: opacity(100%);
+      font-weight: normal;
+      padding-right: 0.35em;
+      padding-left: 0.12em;
+    }
+  }
+  .current {
+    font-weight: bold;
+  }
+}
+

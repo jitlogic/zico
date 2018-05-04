@@ -1,0 +1,156 @@
+
+//   /view/trace/list
+
+.trace-list-list {
+  .itm {
+    .seg {
+      display: flex;
+      overflow: hidden;
+      padding-right: 0.25em;
+    }
+    .svg-icon {
+      padding: 0 0.25em;
+    }
+    .ct {
+      flex: 0 0 4em;
+      text-align: center;
+    }
+    .c2 {
+      flex: 4 4 80%;
+      margin-right: 0.5em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 2em;
+    }
+    @media screen and (max-width: $small) {
+      flex-direction: column;
+      border-bottom: 1px solid $c-line;
+    }
+  } // .itm
+
+  .det {
+    white-space: nowrap;
+    .btns {
+      margin-top: 0.5em;
+      .lbl {
+        color: $c-light;
+        //padding-left: 0.25em;
+        padding-right: 0.25em;
+      }
+      .val {
+        padding-right: 0.5em;
+      }
+      .svg-icon {
+        padding-right: 0.5em;
+        min-width: 1em;
+        min-height: 1em;
+      }
+    }
+    .wait {
+      margin-bottom: 0.5em;
+    }
+  } // .det
+} // .trace-list-list
+
+
+.trace-tree-list {
+  .method {
+    display: flex;
+    .mc {
+      display: flex;
+      overflow-x: hidden;
+      margin-right: 0.5em;
+    }
+    .mr {
+      margin-right: 0.25em;
+    }
+    .m {  // method description
+      flex-grow: 10;
+      white-space: nowrap;
+      overflow-x: hidden;
+      text-overflow: ellipsis;
+    } // .t
+    .t {
+      min-width: 3em;
+      max-width: 3em;
+      text-align: right;
+      margin-right: 0.5em;
+    } // .t
+    .ti {
+      display: flex;
+      min-width: 5em;
+      max-width: 5em;
+      margin-right: 0.5em;
+      text-align: center;
+      .svg-icon {
+        padding-right: 0.5em;
+      }
+    } // .t
+  } // .itm
+} // .trace-tree-list
+
+
+.trace-attrs {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  .a { // Attributes section
+    display: flex;
+    @media screen and (max-width: $small) {
+      flex-direction: column;
+    }
+    // Keys
+    .k {
+      font-weight: bold;
+      color: $c-blue;
+      padding-right: 0.5em;
+      flex-grow: 0;
+      flex-shrink: 0;
+    }
+    // Values
+    .v {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-left: 0.25em;
+      @media screen and (max-width: $small) {
+        white-space: pre-wrap;
+        overflow: auto;
+      }
+    }
+    // Icons
+    .i {
+      flex-grow: 0;
+      flex-shrink: 0;
+    }
+  } // .a
+} // .trace-attrs
+
+.trace-record-exception {  // TODO clean up this
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+  .cls {
+    display: flex;
+    .lb {
+      margin-right: 0.5em;
+    }
+    .cl {
+      color: $c-red;
+    }
+  }
+  .msg {
+    font-weight: bold;
+  }
+  .stk {
+    font-size: small;
+    .si {
+      display: flex;
+      .c {
+      }
+      .f {
+        color: $c-text;
+        margin-left: 0.5em;
+      }
+    }
+  }
+}

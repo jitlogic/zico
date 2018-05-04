@@ -1,0 +1,211 @@
+
+
+.svg-icon {
+  width: 1em;
+  height: 1em;
+}
+
+.clickable {
+  filter: opacity(50%);
+  cursor: pointer;
+  &:hover {
+    filter: opacity(100%);
+  }
+}
+
+.flexible {
+  flex: 10;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+.flex {
+  display: flex;
+}
+
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.centered {
+  text-align: center;
+  justify-content: center;
+}
+
+.text-rtl {
+  direction: rtl;
+  text-align: left;
+}
+
+.small-or-less {
+  @media screen and (min-width: $small) {
+    display: none;
+  }
+}
+
+.small-or-more {
+  @media screen and (max-width: $small) {
+    display: none;
+  }
+}
+
+.medium-or-less {
+  @media screen and (min-width: $medium) {
+    display: none;
+  }
+}
+
+.medium-or-more {
+  @media screen and (max-width: $medium) {
+    display: none;
+  }
+}
+
+
+.large-or-less {
+  @media screen and (min-width: $large) {
+    display: none;
+  }
+}
+
+.large-or-more {
+  @media screen and (max-width: $large) {
+    display: none;
+  }
+}
+
+
+.button-row {
+  display: flex;
+  justify-content: center;
+  padding: 2em 1em 1em;
+  align-items: center;
+  @media screen and (max-width: $small) {
+    flex-direction: column;
+    padding-top: 1em;
+    .label {
+      margin-top: 1em;
+    }
+  }
+}
+
+.button {
+  display: flex;
+  cursor: pointer;
+  justify-content: center;
+  flex: 1 1 auto;
+  border: 1px solid $c-text;
+  max-width: 6em;
+  padding: 0.5em 2em;
+  margin-left: 0.5em;
+  margin-right: 0.5em;
+  border-radius: 0.25em;
+  filter: opacity(60%);
+  &:hover {
+    filter: opacity(100%);
+    background: $b-hover;
+  }
+  .svg-icon {
+    margin-right: 0.5em;
+  }
+
+  @media screen and (max-width: $small) {
+    min-width: 14em;
+    max-width: 14em;
+    margin-bottom: 2em;
+  }
+}
+
+.button-disabled {
+  cursor: default;
+  filter: opacity(30%);
+  &:hover {
+    filter: opacity(30%);
+    background: $b-normal;
+  }
+}
+
+.input {
+  border: 1px solid $c-line;
+  padding-left: 0.25em;
+  height: 16px;
+  border-radius: 0.12em;
+  color: $c-text;
+  background: $b-normal;
+  width: 100%;
+  &:focus {
+    outline: none;
+    background: $b-focus;
+  }
+}
+
+
+// --------------------------------------- Top level components  -----------------------------
+
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  //font: normal 100% Arial, sans-serif;
+  font-family: PT Sans,sans-serif;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+  margin: 0;
+  @include text-color($c-text);
+  background: $b-normal;
+}
+
+.top-container {
+  display: flex;
+  height: 100%;
+}
+
+.main {
+  overflow: hidden;
+  flex: 10;
+}
+
+.central-panel {
+  flex: 10;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+
+
+
+
+
+// ******************************************* old krap *******************************
+
+
+.display-inline {
+  display: inline;
+}
+
+.display-none {
+  display: none !important;
+}
+
+// Small screens (handheld)
+@media screen and (max-width: $small) {
+  .hide-s {
+    display: none !important;
+  }
+}
+
+// Normal screens (desktops, tablets)
+@media screen and (min-width: $small) {
+  .hide-n {
+    display: none !important;
+  }
+}
+
+

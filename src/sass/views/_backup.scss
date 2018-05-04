@@ -1,0 +1,21 @@
+
+.backup-screen {
+
+  .col1 {
+    display: flex;
+    justify-content: space-around;
+    min-width: 12em;
+    max-width: 12em;
+  }
+
+  .col2 {
+    min-width: 16em;
+    max-width: 16em;
+    text-align: center;
+    @media screen and (max-width: $small) {
+
+    }
+  }
+
+} // .backup-screen
+

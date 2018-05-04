@@ -1,0 +1,50 @@
+@charset "UTF-8";
+
+// TODO przejść na semantic convention - zamiast 'ciemna linia' zrobić 'linia-rozdziałka' itd; - aby można było definiować themes;
+
+$small:  32em;      // small screen (512px-);
+$medium: 48em;     // medium screen (768px);
+$large:  64em;      // large screen (1024px+);
+
+// Theme: dark
+
+// Semantic colors
+$c-text:   #aaa;  // Normal text
+$c-line:   #888;  // Lines and separators / darkened text
+$c-light:  #ddd;    // Highlighted text
+$c-darker: #888;    // Darker text
+$b-light:  #333;    // Lighter background
+$b-normal: #222;    // Normal background
+$b-darker: #181818; // Darker background
+$b-hover:  #282828;  // Hover background
+$b-focus:  #333;  // Selection / focus
+$b-red: #551a1a;
+
+// Named colors
+$c-red:    #f66;
+$c-green:  #0f0;
+$c-blue:   #29f;
+$c-gray:   gray;
+$c-yellow: yellow;
+$c-white:  white;
+$c-black:  black;
+
+@import "colors";
+@import "common";
+
+@import "widgets/calendar";
+@import "widgets/form";
+@import "widgets/list";
+@import "widgets/menu";
+@import "widgets/popup";
+@import "widgets/toolbar";
+
+@import "views/mon";
+@import "views/cfg";
+@import "views/backup";
+@import "views/about";
+@import "views/trace";
+@import "views/user";
+
+@import "pages/login";
+

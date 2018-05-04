@@ -1,0 +1,97 @@
+
+// TODO uprościć style niżej
+.calendar {
+  .header {
+    display: flex;
+    padding-bottom: 0.25em;
+    border-bottom: 1px solid $c-line;
+    * {
+      flex: 1 auto;
+    }
+    .nav {
+      cursor: pointer;
+      padding-top: 0.125em;
+      padding-bottom: 0.125em;
+      text-align: center;
+      border: 1px solid transparent;
+      &:hover {
+        background: $b-hover;
+        border: 1px solid $c-line;
+      }
+    }
+    .label {
+      text-align: center;
+      padding-top: 0.2em;
+      font-weight: bold;
+    }
+  }
+  .caption {
+    display: flex;
+    margin-top: 0.5em;
+    font-weight: bold;
+    .cell {
+      padding: 0.125em;
+      width: 1.5em;
+      text-align: center;
+      display: table-cell;
+    }
+  }
+
+  .table {
+    display: flex;
+    flex-direction: column;
+    margin: 0 auto auto;
+    // .table
+  }
+  .row {
+    display: flex;
+    flex-direction: row;
+    .cell {
+      padding: 0.125em;
+      margin-top: 0.5em;
+      width: 1.5em;
+      text-align: center;
+      cursor: pointer;
+      &:hover {
+        background: $b-hover;
+      }
+      &:last-child {
+        color: red;
+      }
+    } // .cell
+    .nosel {
+      color: $c-line;
+      &:last-child {
+        color: $c-line;
+      }
+    } // .nosel
+    .sel {
+      background: $b-focus;
+      &:hover {
+        background: $b-focus;
+      }
+    } // .sel
+  } // .row
+} // .calendar
+
+@media screen and (max-width: $small) {
+  .calendar {
+    .caption {
+      width: 100%;
+      .cell {
+        width: 14%;
+      }
+    }
+    .table {
+      width: 100%;
+    }
+    .row {
+      .cell {
+        width: 14%;
+        height: 1.7em;
+        padding-top: 0.6em;
+      }
+    }
+  } // .calendar
+} // .screen
+

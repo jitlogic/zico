@@ -1,0 +1,176 @@
+
+
+// Main list (used in most monitoring and configuration views)
+.list {
+  overflow-y: auto;
+  max-height: 100vh;
+
+  // List item
+  .itm {
+    display: flex;
+    cursor: default;
+    padding: 0.25em 0.5em;
+    &:hover {
+      background-color: $b-hover;
+    }
+
+    // Description column (eg. visible name, labels etc.)
+    .dsc {
+      display: flex;
+      overflow: hidden;
+
+      // Visible name
+      .n {
+        font-weight: bold;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      // Object label
+      .l {
+        color: $c-text;
+        padding-left: 0.5em;
+        font-size: small;
+      }
+
+    } // .dsc
+
+    // Comment column
+    .cmt {
+      color: $c-darker;
+    }
+
+    // Action icons column
+    .icn {
+      display: flex;
+      padding-left: 0.2em;
+      .svg-icon {
+        cursor: pointer;
+        margin-right: 0.25em;
+      }
+    } // .icn
+
+    // Additional info column
+    .inf {
+      display: flex;
+      align-self: flex-start;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-right: 0.5em;
+      white-space: nowrap;
+      .ii {
+        display: flex;
+        padding-left: 0.2em;
+        padding-right: 1em;
+        font-size: small;
+        .i {
+          font-weight: bold;
+          color: $c-darker;
+          padding-right: 0.2em;
+          filter: opacity(75%);
+        }
+        .t {
+          padding-left: 0.2em;
+        }
+      }
+    }
+
+    // Default view: two columns + button column
+    .c1 {
+      flex: 4 4 40%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 0.5em;
+    }
+    .c2 {
+      flex: 4 4 40%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @media screen and (max-width: $small) {
+      .c3 {
+        display: none;
+      }
+      flex-direction: column;
+      border-bottom: 1px solid $c-line;
+    }
+  } // .itm
+
+  // Details view (expanded list item)
+  .det {
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+    padding: 0.25em 0.5em;
+    background-color: $b-focus;
+    &:hover {
+      background-color: $b-hover;
+    }
+
+    .kv {
+      display: flex;
+      flex-direction: row;
+
+      .k {
+        font-weight: bold;
+      }
+
+      .v {
+        text-overflow: ellipsis;
+      }
+
+      .c {
+        text-overflow: ellipsis;
+        color: $c-darker;
+      }
+
+      .s {
+        display: flex;
+        font-weight: bold;
+        color: $c-darker;
+        .i {
+          flex: 0 0 1.5em;
+          color: $c-darker;
+        }
+      } // .s
+
+    } // .kv
+
+    // Bottom line with action buttons
+    .btns {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-end;
+      .l {
+        flex: 10 10 70%;
+        color: $c-darker;
+      }
+      .s {
+        width: 1em;
+      }
+    } // .btns
+
+    // Default view: 3 columns
+    .c1  { flex: 4 4 20%; }
+    .c2  { flex: 4 4 30%; }
+    .c3  { flex: 4 4 50%; }
+    .c2x { flex: 4 4 80%; }
+
+    @media screen and (max-width: $small) {
+      .c3 {
+        display: none;
+      }
+      flex-direction: column;
+      border-bottom: 1px solid $c-line;
+    }
+
+  } // .det
+
+
+
+}
+
+

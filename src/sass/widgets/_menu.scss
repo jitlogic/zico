@@ -1,0 +1,80 @@
+// ---------------------------------- Main menu (left-side slider) ----------------------------
+
+.main-menu {
+  display: flex;
+  flex-direction: column;
+
+  overflow-x: hidden;
+  overflow-y: hidden;
+
+  z-index: 1;
+
+  color: white;
+  background: $b-light;
+  border-right: 1px solid $c-line;
+
+  .toolbar {
+    .svg-icon {
+      padding-left: 0.5em;
+    }
+  }
+
+  .pnl {
+    padding: 0.5em;
+    flex: 10;
+    overflow-y: auto;
+    height: 100vh;
+  }
+
+  // Menu section (collapsible)
+  .scn {
+    display: flex;
+    @include text-color($c-text);
+    font-weight: bold;
+    cursor: pointer;
+    padding-top: 0.5em;
+    padding-bottom: 0.25em;
+    .ic {
+      width: 1em;
+      padding-right: 0.5em;
+    }
+    &:hover {
+      @include text-color($c-light);
+      background: $b-hover;
+    }
+  } // .scn
+
+  .ico {
+    width: 1em;
+    padding-right: 0.5em;
+  }
+
+  .icm {
+    color: $c-red;
+  }
+
+  // Single item from menu section.
+  .itm {
+    display: flex;
+    color: $c-text;
+    cursor: pointer;
+    padding-left: 0.5em;
+    &:hover {
+      @include text-color($c-light);
+      background: $b-hover;
+    }
+  }
+}
+
+@media screen and (max-width: $small) {
+  .main-menu {
+    width: 100%;
+  }
+}
+
+@media screen and (min-width: $small) {
+  .main-menu {
+    width: 12em;
+  }
+}
+
