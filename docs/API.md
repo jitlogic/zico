@@ -41,6 +41,9 @@ curl -H "Accept: application/edn" http://localhost:8640/conf/objects/metric
 
 ## Query interface
 
+```
+curl -H 'Accept: application/edn' -H 'Content-Type: application/edn' -X POST -d '{:limit 10, :offset 10}' http://localhost:8640/data/trace/search
+```
 
 
 ## Trace data

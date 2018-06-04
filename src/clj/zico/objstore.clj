@@ -47,12 +47,13 @@
        ))))
 
 
-(defn extract-uuid-seq [uuid]
-  (or
-    (when (string? uuid)
-      (when-let [[_ _ _ _ seq _] (re-matches RE-UUID uuid)]
-        (Long/parseLong seq 16)))
-    0))
+(defn extract-uuid-seq [id]
+  (cond
+    (string? id)
+    (when-let [[_ _ _ _ seq _] (re-matches RE-UUID id)]
+      (Long/parseLong seq 16))
+    (int? id) id
+    :else 0))
 
 
 (def OBJ-TYPES

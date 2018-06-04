@@ -3,36 +3,87 @@
     [taoensso.timbre :as log]
     [slingshot.slingshot :refer [throw+ try+]]
     [zico.util :as zutl]
-    [zico.objstore :as zobj])
+    [zico.objstore :as zobj]
+    [clj-time.coerce :as ctc]
+    [clj-time.format :as ctf])
   (:import
     (java.io File)
     (io.zorka.tdb.store
-      RotatingTraceStore TraceStore StoreSearchQuery TemplatingMetadataProcessor TraceRecordFilter
+      RotatingTraceStore TraceStore TemplatingMetadataProcessor TraceRecordFilter
       TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceTypeResolver)
-    (java.util HashMap Map List)
-    (io.zorka.tdb.meta ChunkMetadata MetadataSearchQuery MetadataInfo StructuredTextIndex)
-    (io.zorka.tdb MissingSessionException)))
+    (java.util HashMap Map List ArrayList)
+    (io.zorka.tdb.meta ChunkMetadata StructuredTextIndex)
+    (io.zorka.tdb MissingSessionException)
+    (io.zorka.tdb.search.rslt SearchResult)
+    (io.zorka.tdb.search SearchQuery SortOrder QmiNode)
+    (io.zorka.tdb.search.lsn AndExprNode OrExprNode)
+    (io.zorka.tdb.search.ssn TextNode)
+    (io.zorka.tdb.search.tsn KeyValSearchNode)))
 
 
-(defn params-to-query [{:keys [deep-search dur tstart tstop err text order] :as params}
-                       env-id app-id ttype-id offset limit]
-  (let [q (doto (StoreSearchQuery.) (.setEnvId env-id) (.setAppId app-id) (.setTypeId ttype-id))]
-    (.setWindowSize q 1024)
-    (when deep-search (.setSflags q MetadataSearchQuery/DEEP_SEARCH))
-    (when dur (.setDuration q (/ (Long/parseLong (str dur "000")) 1)))
-    (.setLimit q (if (= "d" order) 16384 (+ offset limit))) ; TODO this is kludge, SORT_DURATION should work for itself
-    (when tstart (.setTstart q (zutl/to-java-time tstart)))
-    (when tstop (.setTstop q (zutl/to-java-time tstop)))
-    (when (= "true" err) (.setTflags q MetadataSearchQuery/TF_ERROR))
-    (when (= "d" order) (.setSflags q MetadataSearchQuery/SORT_DURATION))
-    (when text (.addPattern q text))
-    q))
+(def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
 
-(defn seq-search-results [tsr]
-  (let [cid (.getNext tsr)]
+
+(defn lmap [f coll]
+  (let [lst (ArrayList.)]
+    (doseq [n (map f coll)]
+      (.add lst n))
+    lst))
+
+
+(defn parse-qmi-node [q]
+  (doto (QmiNode.)
+    (.setAppId (zobj/extract-uuid-seq (:app q)))
+    (.setEnvId (zobj/extract-uuid-seq (:env q)))
+    (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
+    (.setMinDuration (:min-duration q 0))
+    (.setMaxDuration (:max-duration q Long/MAX_VALUE))
+    (.setMinCalls (:min-calls q 0))
+    (.setMaxCalls (:max-calls q Long/MAX_VALUE))
+    (.setMinErrs (:min-errors q 0))
+    (.setMaxErrs (:max-errors q Long/MAX_VALUE))
+    (.setMinRecs (:min-recs q 0))
+    (.setMaxRecs (:max-recs q Long/MAX_VALUE))
+    (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
+    (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
+    ))
+
+
+(defn parse-search-node [q]
+  (if (string? q)
+    (TextNode. ^String q true true)
+    (case (:type q)
+      :and (AndExprNode. (lmap parse-search-node (:args q)))
+      :or (OrExprNode. (lmap parse-search-node (:args q)))
+      :text (TextNode. (:text q) (:match-start q false) (:match-end q false))
+      :xtext (TextNode. (:text q) (:match-start q true) (:match-end q true))
+      :qmi (parse-qmi-node q)
+      :kv (KeyValSearchNode. (:key q) (parse-search-node (:val q)))
+      nil)))
+
+
+(defn parse-search-query [q]
+  (doto (SearchQuery. (if (:q q) (parse-search-node (:q q)) (QmiNode.)))
+    (.setLimit (:limit q 50))
+    (.setOffset (:offset q 0))
+    (.setAfter (:after q 0))
+    (.setWindow (:window q 65536))
+    (.setSortOrder (case (:sort-order q :none)
+                     :none SortOrder/NONE,
+                     :duration SortOrder/DURATION,
+                     :calls SortOrder/CALLS,
+                     :recs SortOrder/RECS,
+                     :errors SortOrder/ERRORS))
+    (.setSortReverse (:sort-reverse q false))
+    (.setDeepSearch (:deep-search q true))))
+
+
+(defn seq-search-results [^SearchResult tsr]
+  (let [cid (.nextResult tsr)]
     (if (not= cid -1)
       (lazy-seq (cons cid (seq-search-results tsr)))
       nil)))
+
 
 (defn get-uuids [uuid-fn dur-fn cid-sr limit]
   (loop [[cid & rst] cid-sr, rslt {}]
@@ -45,52 +96,56 @@
         :else (recur rst rslt)))))
 
 
-(defn trace-list [{:keys [obj-store trace-store] :as app-state} ctx]
-  (let [{:keys [env app ttype limit offset order] :as params} (-> ctx :params)
-        limit (if limit (Integer/parseInt limit) 50)
-        offset (if offset (Integer/parseInt offset) 0)
-        env (zobj/get-obj obj-store env)
-        app (zobj/get-obj obj-store app)
-        ttype (zobj/get-obj obj-store ttype)
-        env-id (zobj/extract-uuid-seq (:uuid env))
-        app-id (zobj/extract-uuid-seq (:uuid app))
-        ttype-id (zobj/extract-uuid-seq (:uuid ttype))
-        query (params-to-query params env-id app-id ttype-id offset limit)
+(defn find-and-map-by-id [obj-store fexpr]
+  (into {} (for [uuid (zobj/find-obj obj-store fexpr)]
+             {(zobj/extract-uuid-seq uuid) uuid})))
+
+
+(defn trace-search
+  [{:keys [obj-store trace-store] :as app-state}
+   {{:keys [limit offset] :or {limit 50, offset 0} :as params} :data :as req}]
+  (let [query (parse-search-query params)
+        apps (find-and-map-by-id obj-store {:class :app})
+        envs (find-and-map-by-id obj-store {:class :env})
+        ttps (find-and-map-by-id obj-store {:class :ttype})
         cid-sr (seq-search-results (.search trace-store query))
         uuids (when cid-sr
                 (get-uuids
                   #(.getTraceUUID trace-store %)
-                  #(.getTraceDuration trace-store %)
-                  cid-sr (if (= "d" order) 16384 (+ offset limit))))
+                  #(.getTraceDuration trace-store %) ; TODO extract whole chunk earlier and operate directly on it
+                  cid-sr (* 8 (+ offset limit))))    ; TODO handle sort order, offset and limit
         uuids (for [[uuid [cid dur]] uuids] {:uuid uuid, :cid cid, :dur dur})
-        uuids (drop offset (reverse (sort-by (if (= "d" order) :dur :cid) uuids)))
-        data (sort-by :data-offs
-                      (for [{:keys [uuid cid]} (take limit uuids)
-                            :let [cm (.getChunkMetadata trace-store cid)]]
-                        {:uuid       uuid
-                         :lcid       cid
-                         :descr       (.getDesc trace-store cid)
-                         :duration   (.getDuration cm)
-                         ; TODO more efficient search for type, app, env
-                         :ttype      (first (zobj/find-obj obj-store {:class :ttype, :id (.getTypeId cm)}))
-                         :app        (first (zobj/find-obj obj-store {:class :app, :id (.getAppId cm)}))
-                         :env        (first (zobj/find-obj obj-store {:class :env, :id (.getEnvId cm)}))
-                         :tst        (.getTstamp cm)
-                         :tstamp     (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp cm)))
-                         :data-offs  (.getDataOffs cm)
-                         :start-offs (.getStartOffs cm)
-                         :flags      (if (.hasFlag cm MetadataInfo/TF_ERROR) #{:err} #{}) ; TODO musi być dedykowany marker dla ustawiania/usuwania flagi :err w przychodzących trace'ach
-                         :recs       (.getRecs cm)
-                         :calls      (.getCalls cm)
-                         :errs       (.getErrors cm)
-                         }))]
-    {:status 200, :body {:type :rest, :data data}}))
+        data (reverse
+               (sort-by :data-offs
+                        (for [{:keys [uuid cid]} uuids
+                              :let [cm (.getChunkMetadata trace-store cid)]]
+                          {:uuid       uuid
+                           :lcid       cid
+                           :descr      (.getDesc trace-store cid)
+                           :duration   (.getDuration cm)
+                           :ttype      (ttps (.getTypeId cm))
+                           :app        (apps (.getAppId cm))
+                           :env        (envs (.getEnvId cm))
+                           :tst        (.getTstamp cm)
+                           :tstamp     (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp cm)))
+                           :data-offs  (.getDataOffs cm)
+                           :start-offs (.getStartOffs cm)
+                           :flags      (if (.hasFlag cm ChunkMetadata/TF_ERROR) #{:err} #{})
+                           :recs       (.getRecs cm)
+                           :calls      (.getCalls cm)
+                           :errs       (.getErrors cm)
+                           })))]
+    {:status 200, :body {:type :rest, :data (vec (take limit (drop offset data)))}}))
 
 
 (defn resolve-attr-obj [obj resolver]
   (cond
     (instance? ObjectRef obj)
-    (.resolve resolver (.getId obj))
+    (let [id (.getId obj)]
+      (if (> id 0)
+        (.resolve resolver (.getId obj))
+        "#!REF[0]" ; TODO This is bug and should be tracked in trace generation/ingestion code
+        ))
     (or (instance? Map obj) (map? obj))
     (into
       {}
@@ -110,6 +165,7 @@
                  :method (.resolve resolver (.getMethodId si))
                  :file (.resolve resolver (.getFileId si))
                  :line (.getLineNum si)})})))
+
 
 (defn trace-record-filter [obj-store]
   "Returns trace record filter "

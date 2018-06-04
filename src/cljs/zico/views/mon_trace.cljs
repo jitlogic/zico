@@ -56,22 +56,23 @@
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
 
-(defn datetime-to-param [d]
-  (ctf/unparse PARAM-FORMATTER d))
-
-
-(defn format-filter-args [db offset]
+(defn make-filter [db offset]
   (let [vroot (-> db :view :trace :list)
         text (-> vroot :search :text)
-        argv (for [k [:ttype :app :env :dur :err :tstart :tstop]
-                   :let [v (-> vroot :filter k :selected)]
-                   :when v
-                   :let [v (if (#{:tstart :tstop} k) (ctf/unparse PARAM-FORMATTER v) v)]]
-               (str (name k) "=" v))
-        argv (concat argv [(str "offset=" offset) (str "order=" (if (-> vroot :sort :dur) "d" "t"))])
-        argv (if (empty? text) argv (concat argv [(str "text=" text)]))]
-    (str "../../../data/trace/list"
-      (if (empty? argv) "" (str "?" (reduce #(str %1 "&" %2) argv))))))
+        qmi (into
+              {:type :qmi}
+              (for [k [:ttype :app :env]
+                    :let [v (-> vroot :filter k :selected)]
+                    :when v]
+                {k v}))
+        qmi (into
+              qmi
+              (for [k [:tstart :tstop]
+                    :let [v (-> vroot :filter k :selected)]
+                    :when v]
+                {k (ctf/unparse PARAM-FORMATTER v)}))
+        q (if text {:type :and, :args [qmi {:type :text, :text text}]} qmi)]
+    (merge {:limit 50, :offset offset, :q q})))
 
 
 (zs/reg-event-fx
@@ -99,10 +100,9 @@
   (fn [{:keys [db]} _]
     {:db db
      :dispatch
-     [:rest/get (format-filter-args db (count (-> db :data :trace :list)))
-      [:data :trace :list] :map-by :uuid, :merge-by merge
-      :on-success [::extend-list-notification]
-      ]}))
+         [:rest/post "../../../data/trace/search"
+          (make-filter db (count (get-in db [:data :trace :list])))
+          :on-success [::handle-trace-search-result false]]}))
 
 
 (zs/reg-event-db
@@ -118,9 +118,16 @@
   (fn [{:keys [db]} [_ path v]]
     {:db db
      :dispatch
-     [:rest/get (format-filter-args db 0)
-      [:data :trace :list] :map-by :uuid
-      :on-success [::extend-list-notification]]}))
+     [:rest/post "../../../data/trace/search" (make-filter db 0)
+      :on-success [::handle-trace-search-result true]]}))
+
+
+(zs/reg-event-fx
+  ::handle-trace-search-result
+  (fn [{:keys [db]} [_ clean data]]
+    (let [d0 (if clean {} (get-in db [:data :trace :list] {}))]
+      {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))
+       :dispatch [::extend-list-notification data]})))
 
 
 (zs/reg-event-fx
@@ -139,6 +146,7 @@
       [:div.k k]
       [:div.v v]
       [:div.i (zw/svg-button :awe :filter :blue "Filter by." [::filter-by-attr k v])]])])
+
 
 (defn render-exception [exception full]
   [:div.trace-record-exception

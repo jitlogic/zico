@@ -109,8 +109,9 @@
                        (body-string req)))
 
     ; Trace API
-    (GET "/data/trace/list" req (ztrc/trace-list app-state req))
     (GET "/data/trace/type" _ (zobj/find-and-get obj-store :ttype))
+
+    (POST "/data/trace/search" req (ztrc/trace-search app-state req))
 
     (GET "/data/trace/:uuid/detail" req
       (ztrc/trace-detail app-state 1 req))
