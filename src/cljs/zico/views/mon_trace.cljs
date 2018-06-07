@@ -61,7 +61,7 @@
         text (-> vroot :search :text)
         qmi (into
               {:type :qmi}
-              (for [k [:ttype :app :env]
+              (for [k [:ttype :app :env :min-duration]
                     :let [v (-> vroot :filter k :selected)]
                     :when v]
                 {k v}))
@@ -71,7 +71,10 @@
                     :let [v (-> vroot :filter k :selected)]
                     :when v]
                 {k (ctf/unparse PARAM-FORMATTER v)}))
-        q (if text {:type :and, :args [qmi {:type :text, :text text}]} qmi)]
+        tft (if-not (empty? text) {:type :text, :text text})
+        all (for [[k v] (:filter-attrs vroot) :when (string? k)] {:type :kv, :key k, :val v})
+        all (for [f (into [qmi tft] all) :when (some? f)] f)
+        q (if (> (count all) 1) {:type :and, :args (vec all)} (first all))]
     (merge {:limit 50, :offset offset, :q q})))
 
 
@@ -132,20 +135,30 @@
 
 (zs/reg-event-fx
   ::filter-by-attr
-  (fn [{:keys [db]} [_ k v]]
-    (let [q (str k " == \"" v "\"")]
-      {:db db, :dispatch-n [[:form/set-value [:view :trace :list :search] :nil q] [::refresh-list]]})))
+  (fn [{:keys [db]} [_ k v ttype]]
+    (let [fattrs (-> db :view :trace :list :filter-attrs)
+          fattrs (if (= ttype (:ttype fattrs)) fattrs {:ttype ttype})
+          fattrs (if (contains? fattrs k) (dissoc fattrs k) (assoc fattrs k v))]
+      {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
+       :dispatch [::refresh-list]})))
 
+(def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
 
-(defn render-attrs [attrs]
+(defn render-attrs [attrs ttype]                            ; TODO ttype -> render-filter-buttons-fn
   "Renders method call attributes (if any)"
-  [:div.trace-attrs
-   (for [[n l k v] (map cons (range) (zu/map-to-seq attrs))]
-     ^{:key n}
-     [:div.a {:style {:margin-left (str l "em")}}
-      [:div.k k]
-      [:div.v v]
-      [:div.i (zw/svg-button :awe :filter :blue "Filter by." [::filter-by-attr k v])]])])
+  (let [filter-attrs @FILTER-ATTRS]
+    [:div.trace-attrs
+     (for [[n l k v] (map cons (range) (zu/map-to-seq attrs))]
+       ^{:key n}
+       [:div.a {:style {:margin-left (str l "em")}}
+        [:div.k k]
+        [:div.v v]
+        (when ttype
+          (if (contains? filter-attrs k)
+            [:div.i (zw/svg-button :awe :cancel :red "Clear filter ..."
+                                   [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list]])]
+            [:div.i (zw/svg-button :awe :filter :blue "Filter by ..." [::filter-by-attr k v ttype])]
+            ))])]))
 
 
 (defn render-exception [exception full]
@@ -184,7 +197,7 @@
    (cond
      (nil? detail) [:div.wait "Wait..."]
      (nil? (:attrs detail)) [:div.wait "No attributes here."]
-     :else (render-attrs (:attrs detail)))
+     :else (render-attrs (:attrs detail) ttype))
    (when (:exception detail)
      (render-exception (:exception detail) true))
    [:div.btns
@@ -263,6 +276,36 @@
     [:awe :sitemap :text]))
 
 
+; TODO this is too complicated; filters need to have its own unified data structure working on single loop
+(defn clear-filter-items []
+  (let [cfg (zs/subscribe [:get [:data :cfg]])
+        filter (zs/subscribe [:get [:view :trace :list :filter]])
+        search (zs/subscribe [:get [:view :trace :list :search]])
+        fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
+    (ra/reaction
+      (let [filter @filter, search @search, fattrs @fattrs,
+            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt]]
+                     :let [uuid (get-in filter [k :selected])] :when uuid]
+                 {:key      (str k), :text (str lbl (get-in @cfg [k uuid :name])), :icon [:awe ic :red],
+                  :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list]]})
+            f2 (when-not (empty? (:text search))
+                 [{:key      ":text", :text (str "Search: " (zu/ellipsis (:text search) 32)), :icon [:awe :search :red],
+                   :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list]]}])
+            f3 (for [[k _] fattrs :when (string? k)]
+                 {:key      (str "ATTR-" k), :text (zu/ellipsis (str "Attr: " k) 32), :icon [:awe :filter :red],
+                  :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list]]})]
+        (doall
+          (concat
+            [{:key "all", :text "<clear all>", :icon [:awe :cancel :red]
+              :on-click [:do [:set [:view :trace :list :filter] {}]
+                         [:set [:view :trace :list :filter-attrs] {}]
+                         [::refresh-list]]}]
+            f1 f2 f3)))
+      )))
+
+(def CLEAR-FILTER-ITEMS (clear-filter-items))
+
+
 (defn toolbar-right []
   (let [view-state (zs/subscribe [:get [:view :trace :list]])]
     (fn []
@@ -297,8 +340,11 @@
            [:popup/open :menu, :position :top-right, :items ENV-ITEMS]
            :opaque (get-in view-state [:filter :env :selected]))
          (zw/svg-button :awe :cancel :red "Clear filters."
-           [::filter-list [:view :trace :list :filter] {}]
-           :opaque (some? []))]))))
+                        [:popup/open :menu :position :top-right :items CLEAR-FILTER-ITEMS]
+                        :opaque (> (count @CLEAR-FILTER-ITEMS) 1))
+         ;(zw/svg-button :awe :cancel :red "Clear filters."
+         ;               :opaque (some? []))
+         ]))))
 
 
 (defn toolbar-left []
@@ -374,7 +420,7 @@
     [:div.ti (zw/svg-icon :awe :clock :blue) [:div.flexible] (zu/ticks-to-str duration)]]
    [:div.c-light.ellipsis (str method args)]
    [:div.c-darker.text-rtl.ellipsis package "." class]
-   (when attrs (render-attrs attrs))
+   (when attrs (render-attrs attrs nil))
    (when exception (render-exception exception true))])
 
 

@@ -86,3 +86,9 @@
     (symbol? v) (name v)
     :else (str v)))
 
+(defn ellipsis [s limit]
+  (cond
+    (not (string? s)) "..."
+    (> (count s) limit) (str (subs s 0 limit) "...")
+    :else s
+    ))

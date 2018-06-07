@@ -104,6 +104,7 @@
 (defn trace-search
   [{:keys [obj-store trace-store] :as app-state}
    {{:keys [limit offset] :or {limit 50, offset 0} :as params} :data :as req}]
+  (println "PARAMS:" params)
   (let [query (parse-search-query params)
         apps (find-and-map-by-id obj-store {:class :app})
         envs (find-and-map-by-id obj-store {:class :env})
