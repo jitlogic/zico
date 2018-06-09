@@ -240,7 +240,7 @@
      [:meta {:charset "utf-8"}]
      [:meta {:name "viewport"
              :content "width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no"}]
-     (include-css (str "/css/zorka" (if (System/getProperty "zorka.dev.mode") ".css" ".min.css")))]
+     (include-css (str "/css/zico" (if (System/getProperty "zico.dev.mode") ".css" ".min.css")))]
     [:body {:class "body-container"}
      content]))
 

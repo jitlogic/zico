@@ -104,7 +104,6 @@
 (defn trace-search
   [{:keys [obj-store trace-store] :as app-state}
    {{:keys [limit offset] :or {limit 50, offset 0} :as params} :data :as req}]
-  (println "PARAMS:" params)
   (let [query (parse-search-query params)
         apps (find-and-map-by-id obj-store {:class :app})
         envs (find-and-map-by-id obj-store {:class :env})
@@ -388,14 +387,14 @@
           cleaner-executor (zutl/simple-executor 1 1 cleaner-executor)
           trace-store (open-trace-store new-conf old-conf trace-store indexer-executor cleaner-executor obj-store)
           postproc (TemplatingMetadataProcessor.)
-          trace-descs (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:uuid obj), (:desc obj)}))]
-      (doseq [[uuid descr] trace-descs
-              :let [id (Integer/parseInt (.substring uuid 19 23) 16)]]
+          trace-descs (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:uuid obj), (:descr obj)}))]
+      (doseq [[uuid descr] trace-descs :when uuid :when descr :let [id (zobj/extract-uuid-seq uuid)]]
         (.putTemplate postproc id descr))
       (.setPostproc trace-store postproc)
       (assoc app-state
         :indexer-executor indexer-executor
         :cleaner-executor cleaner-executor
-        :trace-store trace-store))
+        :trace-store trace-store
+        :trace-postproc postproc))
     app-state))
 

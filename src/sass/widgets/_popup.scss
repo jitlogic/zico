@@ -104,10 +104,7 @@
   }
 }
 
-
-// TODO uprościć style niżej
 .popup-menu {
-  //overflow-y: auto;
   padding-top: 0.35em;
   min-height: min-content;
   .separator {
@@ -125,19 +122,17 @@
     padding-right: 0.25em;
     &:hover {
       background-color: $b-hover;
+      color: $c-light;
       cursor: pointer;
     }
     .icon {
-      filter: opacity(50%);
       padding-left: 0.12em;
       padding-right: 0.35em;
     }
-    .icon-selected {
-      filter: opacity(100%);
-      font-weight: normal;
-      padding-right: 0.35em;
-      padding-left: 0.12em;
-    }
+  }
+  .item-selected {
+    color: $c-light;
+    font-weight: bold;
   }
   .current {
     font-weight: bold;

@@ -11,7 +11,7 @@
 
 
 (def DURATIONS
-  [["0" "<clear filter>"  nil ]
+  [["0" "clear"  nil ]
    ["1s"  "1 second"    1     ]
    ["5s"  "5 seconds"   5     ]
    ["15s" "15 seconds"  15    ]
@@ -44,7 +44,6 @@
         (reverse (sort-by (if @order :duration :tstamp) (vals @data))))
       )))
 
-
 (zs/register-sub
   :data/trace-tree-list
   (fn [db [_]]
@@ -74,8 +73,9 @@
         tft (if-not (empty? text) {:type :text, :text text})
         all (for [[k v] (:filter-attrs vroot) :when (string? k)] {:type :kv, :key k, :val v})
         all (for [f (into [qmi tft] all) :when (some? f)] f)
-        q (if (> (count all) 1) {:type :and, :args (vec all)} (first all))]
-    (merge {:limit 50, :offset offset, :q q})))
+        q (if (> (count all) 1) {:type :and, :args (vec all)} (first all))
+        deep-search (= true (-> db :view :trace :list :deep-search))]
+    (merge {:limit 50, :offset offset, :deep-search deep-search, :q q})))
 
 
 (zs/reg-event-fx
@@ -118,7 +118,7 @@
 
 (zs/reg-event-fx
   ::refresh-list
-  (fn [{:keys [db]} [_ path v]]
+  (fn [{:keys [db]} _]
     {:db db
      :dispatch
      [:rest/post "../../../data/trace/search" (make-filter db 0)
@@ -128,9 +128,14 @@
 (zs/reg-event-fx
   ::handle-trace-search-result
   (fn [{:keys [db]} [_ clean data]]
-    (let [d0 (if clean {} (get-in db [:data :trace :list] {}))]
+    (let [d0 (if clean {} (get-in db [:data :trace :list] {}))
+          sel (get-in db [:view :trace :list :selected])
+          uuids (into #{} (map :uuid data))
+          evt (if (and sel (contains? uuids sel))
+                [:rest/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail]]
+                [:nop])]
       {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))
-       :dispatch [::extend-list-notification data]})))
+       :dispatch [:do evt [::extend-list-notification data]]})))
 
 
 (zs/reg-event-fx
@@ -155,9 +160,17 @@
         [:div.v v]
         (when ttype
           (if (contains? filter-attrs k)
-            [:div.i (zw/svg-button :awe :cancel :red "Clear filter ..."
-                                   [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list]])]
-            [:div.i (zw/svg-button :awe :filter :blue "Filter by ..." [::filter-by-attr k v ttype])]
+            [:div.i (zw/svg-button
+                      :awe :cancel :red "Clear filter ..."
+                      [:do
+                       [:dissoc [:view :trace :list :filter-attrs] k]
+                       [:dissoc [:view :trace :list] :selected]
+                       [::refresh-list]])]
+            [:div.i (zw/svg-button
+                      :awe :filter :blue "Filter by ..."
+                      [:do
+                       [:dissoc [:view :trace :list] :selected]
+                       [::filter-by-attr k v ttype]])]
             ))])]))
 
 
@@ -180,18 +193,9 @@
   ^{:key uuid}
   [:div.det
    {:data-trace-uuid uuid}
-   [:div
-    [:div tstamp]
-    ;[:div uuid]
-    ; TODO trace type description does not work (currently)
-    ;(when-let [{:keys [family glyph mode name comment] :as tt} (get @CFG-TTYPES ttype)]
-    ;  [:div.tt
-    ;   [:div.i (zw/svg-icon (or family :awe) (or glyph :paw) (TTYPE-MODES mode :black))]
-    ;   [:div.n name]
-    ;   [:div.c.hide-s comment]])
-    ]
-   [:div.c-light.bold descr]
-   [:div.c-darker result]
+   [:div tstamp]
+   [:div.c-light.bold.wrapping descr]
+   [:div.c-darker.ellipsis result]
    [:div.c-light.ellipsis (str method args)]
    [:div.c-darker.ellipsis.text-rtl package "." class]
    (cond
@@ -248,7 +252,7 @@
     (ra/reaction
       (doall
         (cons
-          {:key "nil", :text "<clear>", :icon [:awe :cancel :red],
+          {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
            :on-click [:do [:set path nil] [::refresh-list]]}
           (for [{:keys [uuid name]} (sort-by :name (vals (zu/deref? data)))]
             {:key      uuid, :text name, :icon icon,
@@ -296,9 +300,11 @@
                   :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list]]})]
         (doall
           (concat
-            [{:key "all", :text "<clear all>", :icon [:awe :cancel :red]
-              :on-click [:do [:set [:view :trace :list :filter] {}]
+            [{:key "all", :text "clear filters", :icon [:awe :cancel :red]
+              :on-click [:do
+                         [:set [:view :trace :list :filter] {}]
                          [:set [:view :trace :list :filter-attrs] {}]
+                         [:set [:view :trace :list :search] {}]
                          [::refresh-list]]}]
             f1 f2 f3)))
       )))
@@ -350,12 +356,16 @@
 (defn toolbar-left []
   (let [view-state (zs/subscribe [:get [:view :trace :list]])]
     (fn []
-      (let [{:keys [sort suppress]} @view-state]
+      (let [{:keys [sort suppress deep-search]} @view-state]
         [:div.flexible.flex
          (zw/svg-button
            :awe :sort-alt-down :light "Sort by duration"
            [::filter-list [:view :trace :list :sort :dur] (not (:dur sort))]
            :opaque (:dur sort))
+         (zw/svg-button
+           :awe :binoculars :light "Deep search"
+           [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list]]
+           :opaque deep-search)
          (zw/svg-button
            :awe :eye-off :light "Suppress details"
            [:toggle [:view :trace :list :suppress]]
@@ -366,10 +376,9 @@
   (zs/traverse-and-handle
     (.-target e) "data-trace-uuid" "zorka-traces"
     :btn-details #(zs/dispatch [::display-tree %])
-    :itm (fn [v]
-           (zs/dispatch [:toggle [:view :trace :list :selected] v])
-           (zs/dispatch [:rest/get (str "../../../data/trace/" v "/detail")
-                         [:data :trace :list v :detail]]))
+    :itm #(zs/dispatch [:do [:toggle [:view :trace :list :selected] %]
+                        [:rest/get (str "../../../data/trace/" % "/detail")
+                         [:data :trace :list % :detail]]])
     :det #(zs/dispatch [:toggle [:view :trace :list :selected] %])))
 
 
