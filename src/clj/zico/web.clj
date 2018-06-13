@@ -81,13 +81,8 @@
           [:headers "content-type"] "application/json")))))
 
 
-(defn zorka-main-routes [{:keys [obj-store] :as app-state}]
+(defn zorka-agent-routes [{:keys [obj-store] :as app-state}]
   (routes
-
-    (GET "/" []
-      {:status  302, :body "Redirecting...",
-       :headers {"Location" "/view/mon/trace/list"}})
-
     ; Agent API
     (POST "/agent/register" req
       (ztrc/agent-register app-state req))
@@ -106,7 +101,15 @@
                        (get headers "x-zorka-agent-uuid")
                        (get headers "x-zorka-session-uuid")
                        (get headers "x-zorka-trace-uuid")
-                       (body-string req)))
+                       (body-string req)))))
+
+
+(defn zorka-web-routes [{:keys [obj-store] :as app-state}]
+  (routes
+
+    (GET "/" []
+      {:status  302, :body "Redirecting...",
+       :headers {"Location" "/view/mon/trace/list"}})
 
     ; Trace API
     (GET "/data/trace/type" _ (zobj/find-and-get obj-store :ttype))
@@ -186,7 +189,8 @@
     (println "ENTER: (" text ")" req)
     (f req)))
 
-(defn wrap-base-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
+
+(defn wrap-web-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
   (let [wrap-auth (if (= :none (:auth auth)) identity zaut/wrap-user-auth)]
     (-> handler
         wrap-rest-request
@@ -197,6 +201,7 @@
         wrap-auth
         zaut/wrap-keep-session
         (wrap-session {:store session-store})
+        ;(without-agent-session session-store)
         wrap-cookies
         wrap-content-type
         (wrap-default-charset "utf-8")
@@ -211,9 +216,26 @@
         )))
 
 
+(defn wrap-agent-middleware [handler]
+  (-> handler
+      wrap-rest-request
+      wrap-rest-response))
+
+
+(defn web-agent-switch [web-handler agent-handler]
+  (fn [{:keys [uri] :as req}]
+    (println "uri=" uri)
+    (if (.startsWith uri "/agent")
+      (agent-handler req)
+      (web-handler req))))
+
+
 (defn with-zorka-web-handler [app-state]
-  (let [web-routes (zorka-main-routes app-state)]
+  (let [web-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))
+        agent-handler (-> app-state zorka-agent-routes wrap-agent-middleware)
+        main-handler (web-agent-switch web-handler agent-handler)]
     (assoc app-state
-      :web-routes web-routes
-      :web-handler (-> web-routes (wrap-base-middleware app-state)))))
+      :agent-handler agent-handler
+      :web-handler web-handler
+      :main-handler main-handler)))
 

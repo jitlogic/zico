@@ -76,8 +76,8 @@
 
 (defn zorka-main-handler [req]
   (check-reload #'reload)
-  (if-let [web-handler (:web-handler zorka-app-state)]
-    (web-handler req)
+  (if-let [main-handler (:main-handler zorka-app-state)]
+    (main-handler req)
     {:status 500, :body "Application not initialized."}))
 
 

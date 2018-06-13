@@ -160,6 +160,7 @@
     (let [auth (auth-uri uri)]
       (cond
         (= auth :NONE) (f req)
+        (= auth :none) (f req)
         (nil? (:user session)) (redirect "/login")
         :else (binding [*current-user* (:user session)] (f req))))))
 

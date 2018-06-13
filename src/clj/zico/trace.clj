@@ -295,7 +295,7 @@
     ; TODO weryfikacja argumentów
     (locking trace-store
       (.handleAgentData trace-store agent-uuid session-uuid data))
-    (zutl/rest-result {:status "Submitted"} 202)
+    (zutl/rest-result {:result "Submitted"} 202)
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
@@ -314,7 +314,7 @@
             (doto (ChunkMetadata.)
               (.setAppId (zobj/extract-uuid-seq (:app agent)))
               (.setEnvId (zobj/extract-uuid-seq (:env agent)))))
-          (zutl/rest-result "Submitted" 202))
+          (zutl/rest-result {:result "Submitted"} 202))
         (zutl/rest-error "No such agent." 401)))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch MissingSessionException _
