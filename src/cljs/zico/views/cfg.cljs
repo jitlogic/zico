@@ -26,7 +26,7 @@
       ]]))
 
 
-(defn btn-delete-action [sectn view uuid]
+(defn btn-delete-action [sectn view uuid name]
   [:popup/open :msgbox,
    :caption "Deleting object", :modal? true,
    :text (str "Delete object: " name " ?"),
@@ -51,7 +51,7 @@
       (zw/svg-button :awe :clone :text (str "Clone " (clojure.core/name view))
                       [:form/edit-new sectn view obj fdefs])
       (zw/svg-button :awe :trash :red (str "Delete " (clojure.core/name view))
-                     (btn-delete-action sectn view uuid))
+                     (btn-delete-action sectn view uuid name))
       (zw/svg-button :awe :edit :text (str "Edit " (clojure.core/name view))
                       [:form/edit-open sectn view uuid fdefs])
       [:div.s " "]
@@ -134,69 +134,126 @@
           ]]))))
 
 
-(def COMMON-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}])
-
-
 ; Config: Applications
 
-(def APP-FDEFS COMMON-FDEFS)
+(def APP-FDEFS
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :glyph, :label "Icon"}
+   ; TODO flags
+   ])
 
-(def APP-OBJ-TEMPLATE {:uuid :new, :class :app, :name "newapp", :comment "New Application"})
+(def APP-OBJ-TEMPLATE
+  {:uuid :new
+   :class :app
+   :name "newapp"
+   :glyph "awe/cube"
+   :comment "New Application"})
 
-(def app-list (render-list :cfg :app "Applications",
-                           :fdefs APP-FDEFS,
-                           :template APP-OBJ-TEMPLATE))
+(def app-list
+  (render-list
+    :cfg :app "Applications",
+    :fdefs APP-FDEFS,
+    :template APP-OBJ-TEMPLATE))
 
-(def app-edit (render-edit :cfg :app "Application", :fdefs APP-FDEFS))
+(def app-edit
+  (render-edit
+    :cfg :app "Application",
+    :fdefs APP-FDEFS))
 
 
 ; Config: Environments
 
-(def ENV-FDEFS COMMON-FDEFS)
+(def ENV-FDEFS
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :glyph, :label "Icon"}
+   ; TODO flags
+   ])
 
 (def ENV-OBJ-TEMPLATE
-  {:uuid :new, :class :app, :name "newenv", :comment "New Environment!!!"})
+  {:uuid :new
+   :class :env
+   :name "newenv"
+   :comment "New Environment"})
 
-(def env-list (render-list :cfg :env "Environments",
-                           :fdefs ENV-FDEFS,
-                           :template ENV-OBJ-TEMPLATE))
+(def env-list
+  (render-list
+    :cfg :env "Environments"
+    :fdefs ENV-FDEFS
+    :template ENV-OBJ-TEMPLATE))
 
-(def env-edit (render-edit :cfg :env "Environment", :fdefs ENV-FDEFS))
-
+(def env-edit
+  (render-edit
+    :cfg :env "Environment"
+    :fdefs ENV-FDEFS))
 
 
 ; Config: Hosts
 
-(def HOST-FDEFS COMMON-FDEFS)
+(def HOST-TEMPLATE
+  {:uuid :new, :class :host, :name "newhost", :comment "New Host"})
 
-(def host-list (render-list :cfg :host "Hosts", :fdefs HOST-FDEFS))
+(def HOST-FDEFS
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :authkey, :label "Auth key"}
+   {:attr   :app, :label "Application", :show :detail,
+    :widget :select, :rsub :data/cfg-app-list}
+   {:attr   :env, :label "Environment", :show :detail,
+    :widget :select, :rsub :data/cfg-env-list}
+   ; TODO flags
+   ])
 
-(def host-edit (render-edit :cfg :host "Host", :fdefs HOST-FDEFS))
+(def host-list
+  (render-list
+    :cfg :host "Hosts",
+    :fdefs HOST-FDEFS
+    :template HOST-TEMPLATE))
 
+(def host-edit
+  (render-edit
+    :cfg :host "Host",
+    :fdefs HOST-FDEFS))
 
 
 ; Config: Trace Types
 
-(def TTYPE-FDEFS COMMON-FDEFS)
+(def TTYPE-TEMPLATE
+  {:uuid :new, :class :ttype, :name "newtype",
+   :comment "New trace type", :glyph "awe/cube",
+   :descr "FIXME: ${SOME_ATTR} -> ${OTHER_ATTR}"})
 
-(def ttype-list (render-list :cfg :ttype "Trace types", :fdefs TTYPE-FDEFS))
+(def TTYPE-FDEFS
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :glyph, :label "Icon"}
+   {:attr :descr, :label "Desc template"}
+   ; TODO flags
+   ])
 
-(def ttype-edit (render-edit :cfg :ttype "Trace type", :fdefs TTYPE-FDEFS))
+(def ttype-list
+  (render-list
+    :cfg :ttype "Trace types",
+    :fdefs TTYPE-FDEFS,
+    :template TTYPE-TEMPLATE))
 
+(def ttype-edit
+  (render-edit
+    :cfg :ttype "Trace type",
+    :fdefs TTYPE-FDEFS))
 
 
 ; Config: Host Registration Rules
 
 (def HOSTREG-FDEFS
-  (into
-    COMMON-FDEFS
-    [{:attr :regkey, :label "Reg. key"}
-     {:attr :app, :label "Application", :show :detail,
-      :widget :select, :rsub :data/cfg-app-list}
-     {:attr :env, :label "Environment", :show :detail,
-      :widget :select, :rsub :data/cfg-env-list}]))
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :regkey, :label "Reg. key"}
+   {:attr   :app, :label "Application", :show :detail,
+    :widget :select, :rsub :data/cfg-app-list}
+   {:attr   :env, :label "Environment", :show :detail,
+    :widget :select, :rsub :data/cfg-env-list}])
 
 (def HOSTREG-OBJ-TEMPLATE
   {:uuid :new, :class :hostreg, :name "newreg", :comment "New Registration"})
@@ -213,17 +270,17 @@
     :fdefs HOSTREG-FDEFS))
 
 
-
 ; Admin: Users
+
 (def USER-FDEFS
-  (into
-    COMMON-FDEFS
-    [{:attr :fullname, :label "Full name", :list-col2 true}
-     {:attr :email, :label "Email"}
-     {:attr :password, :label "Password"}]))
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}
+   {:attr :fullname, :label "Full name", :list-col2 true}
+   {:attr :email, :label "Email"}
+   {:attr :password, :label "Password"}])
 
 (def USER-OBJ-TEMPLATE
-  {:uuid :new, :class :user, :name "newuser", })
+  {:uuid :new, :class :user, :name "newuser"})
 
 (def user-list
   (render-list
@@ -237,11 +294,19 @@
     :fdefs USER-FDEFS))
 
 
-
 ; Admin: Groups
-(def GROUP-FDEFS COMMON-FDEFS)
 
-(def group-list (render-list :cfg :group "Groups", :fdefs GROUP-FDEFS))
+(def GROUP-FDEFS
+  [{:attr :name, :label "Name"}
+   {:attr :comment, :label "Comment"}])
 
-(def group-edit (render-edit :cfg :group "Group", :fdefs GROUP-FDEFS))
+(def group-list
+  (render-list
+    :cfg :group "Groups",
+    :fdefs GROUP-FDEFS))
+
+(def group-edit
+  (render-edit
+    :cfg :group "Group",
+    :fdefs GROUP-FDEFS))
 

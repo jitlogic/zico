@@ -46,7 +46,7 @@ CREATE TABLE attrdesc (
 -- Registered hosts: 0x05
 CREATE TABLE host (
   uuid     VARCHAR(36) NOT NULL,      -- record UUID
-  name VARCHAR(128) NOT NULL,         -- host name (zorka.hostname from zorka.properties)
+  name     VARCHAR(128) NOT NULL,     -- host name (zorka.hostname from zorka.properties)
   comment  VARCHAR(255),              -- comment (displayed verbatim)
   authkey  VARCHAR(64) NOT NULL,      -- authentication key
   env      VARCHAR(36) NOT NULL,      -- environment UUID
