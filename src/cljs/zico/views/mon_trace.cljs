@@ -26,7 +26,7 @@
 (def DURATION-FILTER-ITEMS
   (for [[k l t] DURATIONS]
     {:key k, :text l, :icon [:awe (if t :clock :block) (if t :text :red)],
-     :on-click [::filter-list [:view :trace :list :filter :dur :selected] t]}))
+     :on-click [::filter-list [:view :trace :list :filter :min-duration :selected] t]}))
 
 
 ; Register all needed subscriptions
@@ -208,7 +208,7 @@
     (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
     (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
     (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
-    (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/ticks-to-str duration)]
+    (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/ticks-to-str duration true)]
     [:div.flexible.flex]
     ;(zw/svg-button
     ;  :awe :floppy :light "Save this trace"
@@ -332,9 +332,8 @@
          (zw/svg-button
            :awe :clock :light "Minimum duration"
            [:popup/open :menu, :position :top-right, :items DURATION-FILTER-ITEMS
-            :path [:view :trace :list :filter :dur :selected]]
-           [:toggle [:view :trace :list :filter :dur :open?]]
-           :opaque (get-in view-state [:filter :dur :selected]))
+            :path [:view :trace :list :filter :min-duration :selected]]
+           :opaque (get-in view-state [:filter :min-duration :selected]))
          (zw/svg-button :awe :list-alt :light "Trace type"
            [:popup/open :menu, :position :top-right, :items TRACE-TYPE-ITEMS]
            :opaque (get-in view-state [:filter :ttype :selected]))

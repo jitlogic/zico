@@ -70,14 +70,16 @@
     (seq? o) (filter some? o)
     :else o))
 
-(defn ticks-to-str [ticks]
-  (let [t (* ticks 65536)]
-    (cond
-      (= t 0) "0ms"
-      (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
-      (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
-      (< t 1000000000) (pp/cl-format nil "~dms" (int (/ t 1000000)))
-      (< t 1000000000000) (pp/cl-format nil "~ds" (int (/ t 1000000000))))))
+(defn ticks-to-str
+  ([ticks] (ticks-to-str ticks false))
+  ([ticks ms]
+   (let [t (* ticks 65536)]
+     (cond
+       (= t 0) "0ms"
+       (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
+       (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
+       (or ms (< t 1000000000)) (pp/cl-format nil "~dms" (int (/ t 1000000)))
+       :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))))
 
 (defn to-string [v]
   (cond

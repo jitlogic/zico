@@ -32,21 +32,23 @@
 
 
 (defn parse-qmi-node [q]
-  (doto (QmiNode.)
-    (.setAppId (zobj/extract-uuid-seq (:app q)))
-    (.setEnvId (zobj/extract-uuid-seq (:env q)))
-    (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
-    (.setMinDuration (:min-duration q 0))
-    (.setMaxDuration (:max-duration q Long/MAX_VALUE))
-    (.setMinCalls (:min-calls q 0))
-    (.setMaxCalls (:max-calls q Long/MAX_VALUE))
-    (.setMinErrs (:min-errors q 0))
-    (.setMaxErrs (:max-errors q Long/MAX_VALUE))
-    (.setMinRecs (:min-recs q 0))
-    (.setMaxRecs (:max-recs q Long/MAX_VALUE))
-    (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
-    (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
-    ))
+  (let [min-duration (:min-duration q)
+        max-duration (:max-duration q)]
+    (doto (QmiNode.)
+      (.setAppId (zobj/extract-uuid-seq (:app q)))
+      (.setEnvId (zobj/extract-uuid-seq (:env q)))
+      (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
+      (.setMinDuration (if min-duration (* min-duration 15259) 0)) ; ticks to secs: 1000000/65536 = 15259
+      (.setMaxDuration (if max-duration (* max-duration 15259) Long/MAX_VALUE))
+      (.setMinCalls (:min-calls q 0))
+      (.setMaxCalls (:max-calls q Long/MAX_VALUE))
+      (.setMinErrs (:min-errors q 0))
+      (.setMaxErrs (:max-errors q Long/MAX_VALUE))
+      (.setMinRecs (:min-recs q 0))
+      (.setMaxRecs (:max-recs q Long/MAX_VALUE))
+      (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
+      (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
+      )))
 
 
 (defn parse-search-node [q]
