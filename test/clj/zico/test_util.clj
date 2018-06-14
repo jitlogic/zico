@@ -1,6 +1,7 @@
 (ns zico.test-util
   (:require
     [zico.server :as zsvr]
+    [clojure.java.jdbc :as jdbc]
     [zico.util :as zutl])
   (:import
     (java.io File)
@@ -47,6 +48,7 @@
       (reset! cur-time-val 100)
       (rm-rf (File. root-path))
       (.mkdirs (File. root "data/trace"))
+      (jdbc/delete! (:zico-db app-state) :host ["uuid is not null"])
       (binding [zsvr/zorka-app-state app-state
                 zorka  (:main-handler app-state)
                 obj-store (:obj-store app-state)

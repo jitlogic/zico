@@ -196,7 +196,7 @@ INSERT INTO hostreg (uuid, name, regkey, flags, app, env, comment) VALUES
 
 -- Default user
 INSERT INTO user (uuid, name, fullname, comment, email, password, flags) VALUES
-  ('21c00000-0701-0000-0001-000000000000', 'admin', 'Zorka Administrator', '', 'admin@mycompany.com', 'zico', 3);
+  ('21c00000-0801-0000-0001-000000000000', 'admin', 'Zorka Administrator', '', 'admin@mycompany.com', 'zico', 3);
 
 
 -- TODO default config properties

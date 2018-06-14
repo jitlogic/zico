@@ -47,7 +47,7 @@
 (defonce ^:dynamic conf-autoreload-f (atom nil))
 
 
-(defn new-app-state [old-state conf]
+(defn  new-app-state [old-state conf]
   (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
         obj-store (zobj/jdbc-caching-store zico-db)]
     (zobj/jdbc-migrate zico-db)
