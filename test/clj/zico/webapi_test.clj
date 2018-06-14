@@ -7,7 +7,7 @@
     [clojure.test :refer :all]
     [zico.objstore :as zobj]
     [zico.trace :as ztrc])
-  (:import (com.jitlogic.zorka.be.store TraceStore)))
+  (:import (io.zorka.tdb.store TraceStore)))
 
 
 (use-fixtures :each zorka-integ-fixture)
@@ -18,12 +18,12 @@
     (testing "Check if JSON requests are parsed properly."
       (is (= {:a 1, :b "c"}
              (:data
-               (rfn {:request-method :POST, :body "{\"a\": 1, \"b\": \"c\"}",
+               (rfn {:request-method :post, :body "{\"a\": 1, \"b\": \"c\"}", :uri "/data/test"
                      :headers        {"content-type" "application/json"}})))))
     (testing "Check if EDN requests are parsed properly."
       (is (= {:a 1, :b "c"}
              (:data
-               (rfn {:request-method :POST, :body "{:a 1, :b \"c\"}",
+               (rfn {:request-method :post, :body "{:a 1, :b \"c\"}",
                      :headers {"content-type" "application/edn"}})))))))
 
 
@@ -39,10 +39,16 @@
                        :body {:type :rest, :data {:a 1, :b "c"}}}))))))
 
 
+(defn rest-post [uri data]
+  (let [r (zorka {:uri     uri, :request-method :post,
+                  :headers {"content-type" "application/edn"}
+                  :body    (pr-str data)})]
+    (if (string? (:body r)) (assoc r :data (read-string (:body r))) r)))
+
+
 (deftest test-agent-registration
   (testing "Register and check if record is present in object store."
-    (let [rslt (zorka {:uri  "/agent/register", :request-method :post,
-                      :data {:rkey "zorka", :name "test"}})
+    (let [rslt (rest-post "/agent/register" {:rkey "zorka", :name "test"})
           host (zobj/find-and-get-1 obj-store {:class :host, :name "test"})
           data {:uuid (:uuid host), :authkey (:authkey host)}]
       (is (some? host))

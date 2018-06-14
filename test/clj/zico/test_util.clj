@@ -1,8 +1,7 @@
 (ns zico.test-util
   (:require
     [zico.server :as zsvr]
-    [zico.util :as zutl]
-    [zico.libmetrics :as std :refer [metric metrics *current-host-uuid*]])
+    [zico.util :as zutl])
   (:import
     (java.io File)
     (org.apache.tomcat.dbcp.dbcp BasicDataSource)))
@@ -49,8 +48,7 @@
       (rm-rf (File. root-path))
       (.mkdirs (File. root "data/trace"))
       (binding [zsvr/zorka-app-state app-state
-                zorkav (:web-handler app-state)
-                zorka  (:web-routes app-state)
+                zorka  (:main-handler app-state)
                 obj-store (:obj-store app-state)
                 trace-store (:trace-store app-state)]
         (f)

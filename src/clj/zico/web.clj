@@ -224,7 +224,6 @@
 
 (defn web-agent-switch [web-handler agent-handler]
   (fn [{:keys [uri] :as req}]
-    (println "uri=" uri)
     (if (.startsWith uri "/agent")
       (agent-handler req)
       (web-handler req))))

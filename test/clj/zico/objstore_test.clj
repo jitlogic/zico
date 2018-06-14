@@ -12,21 +12,21 @@
 
 (deftest test-read-default-conf-objs
   (testing "Check if there is database at all"
-    (is (some? (:zorka-db zorka-app-state))))
+    (is (some? (:zico-db zorka-app-state))))
   (testing "Check if predefined data is loaded"
     (is (< 0 (count (zobj/find-obj (:obj-store zorka-app-state) {:class :ttype}))))))
 
 
 (deftest test-modify-objs
   (testing "Modify existing object"
-    (let [os (:obj-store zorka-app-state), db (:zorka-db zorka-app-state)
-          r1 (zobj/get-obj os "21c00000-0801-0000-0021-babecafe0021")
+    (let [os (:obj-store zorka-app-state), db (:zico-db zorka-app-state)
+          r1 (zobj/get-obj os "21c00000-0101-0000-0001-000000000000")
           _ (zobj/put-obj os (assoc r1 :name "BROMBA"))
           r2 (first (jdbc/query db ["select * from ttype where uuid = ?" (:uuid r1)]))]
       (is (= "BROMBA" (:name r2)))))
   (testing "Insert new object"
-    (let [os (:obj-store zorka-app-state), db (:zorka-db zorka-app-state)
-          r0 {:class :app, :name "TEST", :glyph "some/test", :comment "Some test.", :enabled 0}
+    (let [os (:obj-store zorka-app-state), db (:zico-db zorka-app-state)
+          r0 {:class :app, :name "TEST", :glyph "some/test", :comment "Some test.", :flags 1}
           r1 (zobj/put-obj os r0)
           uuid (:uuid r1)
           r2 (zobj/get-obj os uuid)
