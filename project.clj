@@ -57,7 +57,7 @@
   :resource-paths ["resources" "target/cljsbuild"]
 
 
-  :minify-assets {:assets {"resources/public/css/zorka.zico.css",    "resources/public/css/zico.css"}}
+  :minify-assets {:assets {"resources/public/css/zico.min.css" "resources/public/css/zico.css"}}
 
 
   :cljsbuild
