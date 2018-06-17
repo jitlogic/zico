@@ -1,4 +1,4 @@
-(defproject zico "1.90.2"
+(defproject zico "1.90.3-SNAPSHOT"
   :description "Trace data collection and data presentation."
   :url "http://zorka.io"
   :license {:name "GPL v3"}
