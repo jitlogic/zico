@@ -59,16 +59,31 @@
       zweb/with-zorka-web-handler)))
 
 
-(defn reload
-  ([] (reload (System/getProperty "zico.home")))
-  ([home-dir]
-   (let [conf (read-string (slurp (zutl/to-path home-dir "zico.conf")))
-         conf  (zutl/recursive-merge DEFAULT-CONF conf)
-         conf (assoc conf :home-dir home-dir)]
+(defn load-conf [home-dir]
+  (let [path (zutl/to-path home-dir "zico.conf")
+        conf (if (zutl/is-file? path)
+               (zutl/recursive-merge DEFAULT-CONF (read-string (slurp path)))
+               DEFAULT-CONF)
+        updf #(if (string? %) (.replace % "${zico.home}" home-dir))]
+    (->
+      conf
+      (assoc :home-dir home-dir)
+      (update-in [:backup-conf :path] updf)
+      (update-in [:zico-db :subname] updf)
+      (update-in [:trace-store :path] updf)
+      (update-in [:log-conf :main :path] updf))))
 
+
+(defn reload
+  ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
+  ([home-dir]
+   (let [conf (load-conf home-dir), logs (-> conf :log-conf :main)]
+     (zutl/ensure-dir (-> conf :backup-conf :path))
+     (zutl/ensure-dir (-> conf :trace-store :path))
+     (zutl/ensure-dir (-> conf :log-conf :main :path))
      ; TODO konfiguracja logów przed inicjacją serwera - tak aby logi slf4j trafiły od razu we właściwe miejsce
      (taoensso.timbre/merge-config!
-       {:appenders {:rotor   (rotor-appender (-> conf :log-conf :main))
+       {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
                     :println {:enabled? false}}})
      (taoensso.timbre/set-level! (-> conf :log-conf :level))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))

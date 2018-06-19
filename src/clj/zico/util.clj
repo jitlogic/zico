@@ -116,6 +116,17 @@
                {(.getName f) (.lastModified f)}))))
 
 
+(defn is-file? [^String path]
+  (let [f (File. path)]
+    (and (.exists f) (.isFile f))))
+
+(defn ensure-dir [^String path]
+  (let [f (File. path)]
+    (cond
+      (not (.exists f)) (if (.mkdirs f) (.getPath f) (throw (RuntimeException. (str "Cannot create directory: " f))))
+      (.isDirectory f) (.getPath f)
+      :else (throw (RuntimeException. (str "Not a directory: " f))))))
+
 (defn partition-split [n coll]
   (when coll
     (if (<= (count coll) n)
