@@ -50,18 +50,32 @@
       (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
       )))
 
+(def TYPES {"qmi" :qmi, "or" :or, "text" :text, "xtext" :xtext, "kv" :kv})
+
+
+(defn prep-search-node [q]
+  (let [t (get q "type")]
+    (cond
+      (contains? q :type) q
+      (nil? t) {}
+      (= "kv" t) (assoc q :type :kv)
+      :else
+      (let [q (into {} (for [[k v] q] {(keyword k) v}))]
+        (assoc q :type t)))))
+
 
 (defn parse-search-node [q]
-  (if (string? q)
-    (TextNode. ^String q true true)
-    (case (:type q)
-      :and (AndExprNode. (lmap parse-search-node (:args q)))
-      :or (OrExprNode. (lmap parse-search-node (:args q)))
-      :text (TextNode. (:text q) (:match-start q false) (:match-end q false))
-      :xtext (TextNode. (:text q) (:match-start q true) (:match-end q true))
-      :qmi (parse-qmi-node q)
-      :kv (KeyValSearchNode. (:key q) (parse-search-node (:val q)))
-      nil)))
+  (let [q (prep-search-node q)]
+    (if (string? q)
+      (TextNode. ^String q true true)
+      (case (TYPES (:type q) (:type q))
+        :and (AndExprNode. (lmap parse-search-node (:args q)))
+        :or (OrExprNode. (lmap parse-search-node (:args q)))
+        :text (TextNode. (:text q) (:match-start q false) (:match-end q false))
+        :xtext (TextNode. (:text q) (:match-start q true) (:match-end q true))
+        :qmi (parse-qmi-node q)
+        :kv (KeyValSearchNode. (:key q) (parse-search-node (:val q)))
+        nil))))
 
 
 (defn parse-search-query [q]
