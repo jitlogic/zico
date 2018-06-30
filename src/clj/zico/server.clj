@@ -77,7 +77,7 @@
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
-   (let [conf (load-conf home-dir), logs (-> conf :log-conf :main)]
+   (let [conf (load-conf (zutl/ensure-dir home-dir)), logs (-> conf :log-conf :main)]
      (zutl/ensure-dir (-> conf :backup-conf :path))
      (zutl/ensure-dir (-> conf :trace-store :path))
      (zutl/ensure-dir (-> conf :log-conf :main :path))

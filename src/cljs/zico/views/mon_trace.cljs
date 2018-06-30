@@ -208,7 +208,7 @@
     (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
     (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
     (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
-    (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/ticks-to-str duration true)]
+    (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/secs-to-str duration)] ; TODO more precise time from chunk here
     [:div.flexible.flex]
     ;(zw/svg-button
     ;  :awe :floppy :light "Save this trace"
@@ -239,7 +239,7 @@
           (zw/svg-icon :awe :flash :yellow) (str calls)
           (zw/svg-icon :awe :inbox :green) (str recs)
           (zw/svg-icon :awe :bug :red) (str errs)])
-       (zw/svg-icon :awe :clock :blue) (zu/ticks-to-str duration)]
+       (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)]
       (let [{:keys [family glyph mode]} (get @CFG-TTYPES ttype)]
         (zw/svg-icon (or family :awe) (or glyph :paw) (TTYPE-MODES mode :text)))
       [:div.svg-icon.btn-details.small-or-less.clickable " "]]

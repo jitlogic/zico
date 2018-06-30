@@ -24,7 +24,7 @@
 
 ;; Load basic dictionary data and initialize UI state
 
-(zs/dispatch [:once :set [:view :menu :open?] (not (small-screen?))])
+(zs/dispatch [:once :set [:view :menu :open?] false])
 
 
 

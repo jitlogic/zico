@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/core.async "0.3.465"]
 
-                 [io.zorka/zorka-tdb "1.90.2"]
+                 [io.zorka/zorka-tdb "1.90.3-SNAPSHOT"]
 
                  [http-kit "2.2.0"]
 

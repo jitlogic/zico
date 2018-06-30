@@ -81,6 +81,17 @@
        (or ms (< t 1000000000)) (pp/cl-format nil "~dms" (int (/ t 1000000)))
        :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))))
 
+(defn secs-to-str
+  ([t]
+    (cond
+      (= t 0) "<1s"
+      (< t 60) (pp/cl-format nil "~ds" t)
+      :else
+      (let [s (mod t 60)
+            m (/ (- t s) 60)
+            h (/ (- m (mod m 60)) 60)]
+        (pp/cl-format nil "~d:~d:~d" h m s)))))
+
 (defn to-string [v]
   (cond
     (string? v) v
