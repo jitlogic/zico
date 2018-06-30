@@ -35,6 +35,7 @@
   (doto (QmiNode.)
     (.setAppId (zobj/extract-uuid-seq (:app q)))
     (.setEnvId (zobj/extract-uuid-seq (:env q)))
+    (.setHostId (zobj/extract-uuid-seq (:host q)))
     (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
     (.setMinDuration (:min-duration q 0))
     (.setMaxDuration (:max-duration q Long/MAX_VALUE))
@@ -122,6 +123,7 @@
         apps (find-and-map-by-id obj-store {:class :app})
         envs (find-and-map-by-id obj-store {:class :env})
         ttps (find-and-map-by-id obj-store {:class :ttype})
+        hids (find-and-map-by-id obj-store {:class :host})
         cid-sr (seq-search-results (.search trace-store query))
         uuids (when cid-sr
                 (get-uuids
@@ -140,6 +142,7 @@
                            :ttype      (ttps (.getTypeId cm))
                            :app        (apps (.getAppId cm))
                            :env        (envs (.getEnvId cm))
+                           :host       (hids (.getHostId cm))
                            :tst        (.getTstamp cm)
                            :tstamp     (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp cm)))
                            :data-offs  (.getDataOffs cm)

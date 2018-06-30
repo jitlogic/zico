@@ -50,6 +50,9 @@
     (ra/reaction (get-in @db [:data :trace :tree]))))
 
 (def CFG-TTYPES (zs/subscribe [:get [:data :cfg :ttype]]))
+(def CFG-HOSTS (zs/subscribe [:get [:data :cfg :host]]))
+(def CFG-ENVS (zs/subscribe [:get [:data :cfg :env]]))
+(def CFG-APPS (zs/subscribe [:get [:data :cfg :app]]))
 
 (def TTYPE-MODES {:client :blue, :server :green})
 
@@ -187,13 +190,15 @@
                  [:div.f (str "(" file ":" line ")")]])]])
 
 
-(defn render-trace-list-detail [{:keys [uuid ttype tstamp descr duration recs calls errs ]
+(defn render-trace-list-detail [{:keys [uuid ttype tstamp descr duration recs calls errs host]
                                  {{:keys [package method class result args]} :method :as detail} :detail
                                  :as t}]
   ^{:key uuid}
   [:div.det
    {:data-trace-uuid uuid}
    [:div tstamp]
+   [:div.ellipsis
+    (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
    [:div.c-light.bold.wrapping descr]
    [:div.c-darker.ellipsis result]
    [:div.c-light.ellipsis (str method args)]
@@ -386,6 +391,7 @@
   (zs/dispatch [:once :data/refresh :cfg :app])
   (zs/dispatch [:once :data/refresh :cfg :env])
   (zs/dispatch [:once :data/refresh :cfg :ttype])
+  (zs/dispatch [:once :data/refresh :cfg :host])
   (zs/dispatch [::refresh-list])
   (zv/render-screen
     :toolbar [zv/list-screen-toolbar :trace :list
