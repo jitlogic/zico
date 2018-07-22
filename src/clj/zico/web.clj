@@ -184,11 +184,6 @@
           (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
           (assoc-in [:headers "Pragma"] "no-cache")))))
 
-(defn debug-handler [f text]
-  (fn [req]
-    (println "ENTER: (" text ")" req)
-    (f req)))
-
 
 (defn wrap-web-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
   (let [wrap-auth (if (= :none (:auth auth)) identity zaut/wrap-user-auth)]

@@ -75,10 +75,13 @@
                 {k (ctf/unparse PARAM-FORMATTER v)}))
         tft (if-not (empty? text) {:type :text, :text text})
         all (for [[k v] (:filter-attrs vroot) :when (string? k)] {:type :kv, :key k, :val v})
-        all (for [f (into [qmi tft] all) :when (some? f)] f)
-        q (if (> (count all) 1) {:type :and, :args (vec all)} (first all))
+        all (for [f (into [tft] all) :when (some? f)] f)
+        q (cond
+            (> (count all) 1) {:type :and, :args (vec all)}
+            (= (count all) 1) (first all)
+            :else nil)
         deep-search (= true (-> db :view :trace :list :deep-search))]
-    (merge {:limit 50, :offset offset, :deep-search deep-search, :q q})))
+    (merge {:limit 50, :offset offset, :deep-search deep-search, :node q, :qmi qmi})))
 
 
 (zs/reg-event-fx
