@@ -132,6 +132,18 @@
 
 
 (zs/reg-event-fx
+  ::dtrace-tree
+  (fn [{:keys [db]} [_ uuid]]
+    (let [dtrace-uuid (get-in db [:data :trace :list uuid :dtrace-uuid])]
+      {:db (assoc-in db [:data :dtrace :tree] [])
+       :dispatch-n
+           [[:to-screen "mon/dtrace/tree"]
+            [:rest/post "../../../data/trace/search"
+             {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
+             :on-success [:set [:data :dtrace :tree]], :map-by :uuid]]})))
+
+
+(zs/reg-event-fx
   ::handle-trace-search-result
   (fn [{:keys [db]} [_ clean data]]
     (let [d0 (if clean {} (get-in db [:data :trace :list] {}))
@@ -153,7 +165,10 @@
       {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
        :dispatch [::refresh-list]})))
 
+
 (def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
+
+(def TRACE_HISTORY [:view :trace :history])
 
 (defn render-attrs [attrs ttype]                            ; TODO ttype -> render-filter-buttons-fn
   "Renders method call attributes (if any)"
@@ -176,8 +191,14 @@
                       :awe :filter :blue "Filter by ..."
                       [:do
                        [:dissoc [:view :trace :list] :selected]
-                       [::filter-by-attr k v ttype]])]
-            ))])]))
+                       [::filter-by-attr k v ttype]])]))
+        ; TODO z poniższego zrobić tylko link do detali trace'ów;
+        (when (= k "DTRACE_OUT")
+          [:div.i
+           (zw/svg-button
+             :awe :link-ext :blue "Go to target trace..."
+             [:event/push-dispatch TRACE_HISTORY [::display-tree v]])])
+        ])]))
 
 
 (defn render-exception [exception full]
@@ -193,66 +214,74 @@
                  [:div.f (str "(" file ":" line ")")]])]])
 
 
-(defn render-trace-list-detail [{:keys [uuid ttype tstamp descr duration recs calls errs host]
-                                 {{:keys [package method class result args]} :method :as detail} :detail
-                                 :as t}]
-  ^{:key uuid}
-  [:div.det
-   {:data-trace-uuid uuid}
-   [:div tstamp]
-   [:div.ellipsis
-    (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
-   [:div.c-light.bold.wrapping descr]
-   [:div.c-darker.ellipsis result]
-   [:div.c-light.ellipsis (str method args)]
-   [:div.c-darker.ellipsis.text-rtl package "." class]
-   (cond
-     (nil? detail) [:div.wait "Wait..."]
-     (nil? (:attrs detail)) [:div.wait "No attributes here."]
-     :else (render-attrs (:attrs detail) ttype))
-   (when (:exception detail)
-     (render-exception (:exception detail) true))
-   [:div.btns
-    (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
-    (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
-    (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
-    (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/secs-to-str duration)] ; TODO more precise time from chunk here
-    [:div.flexible.flex]
-    ;(zw/svg-button
-    ;  :awe :floppy :light "Save this trace"
-    ;  [:alert "TODO nieczynne: save trace" uuid])
-    ;(zw/svg-button
-    ;  :awe :pin :light "Pin this trace"
-    ;  [:alert "TODO nieczynne: pin trace" uuid])
-    ;(zw/svg-button
-    ;  :awe :pencil :light "Annotate this trace"
-    ;  [:alert "TODO nieczynne: annotate trace" uuid])
-    (zw/svg-button
-      :awe :right-big :blue "View trace details"
-      [::display-tree uuid])]])
+(defn render-trace-list-detail-fn [& {:keys [dtrace-links attr-links]}]
+  (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host]
+        {{:keys [package method class result args]} :method :as detail} :detail :as t}]
+    ^{:key uuid}
+    [:div.det
+     {:data-trace-uuid uuid}
+     [:div tstamp]
+     [:div.ellipsis
+      (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
+     [:div.c-light.bold.wrapping descr]
+     [:div.c-darker.ellipsis result]
+     [:div.c-light.ellipsis (str method args)]
+     [:div.c-darker.ellipsis.text-rtl package "." class]
+     (cond
+       (nil? detail) [:div.wait "Wait..."]
+       (nil? (:attrs detail)) [:div.wait "No attributes here."]
+       :else (render-attrs (:attrs detail) attr-links))
+     (when (:exception detail)
+       (render-exception (:exception detail) true))
+     [:div.btns
+      (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
+      (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
+      (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
+      (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/secs-to-str duration)]
+      [:div.flexible.flex]                                  ; TODO display trace type
+      (when (and dtrace-links dtrace-uuid)           ; TODO use explicit flag, not dtrace-level check
+        (zw/svg-button
+          :ent :flow-cascade :blue "Distributed trace"
+          [:event/push-dispatch TRACE_HISTORY [::dtrace-tree uuid]]))
+      (zw/svg-button
+        :awe :right-big :blue "View trace details"
+        [:event/push-dispatch TRACE_HISTORY [::display-tree uuid]])]]))
+
 
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
-(defn render-trace-list-item [{:keys [uuid ttype tstamp descr duration recs calls errs flags] :as t}]
-  (let [[_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
-    ^{:key uuid}
-    [:div.itm
-     {:data-trace-uuid uuid}
-     [:div.seg
-      [:div.ct t]
-      [:div.flexible]
-      [:div.seg
-       (when-not @SUPPRESS-DETAILS
-         [:div.flex
-          (zw/svg-icon :awe :flash :yellow) (str calls)
-          (zw/svg-icon :awe :inbox :green) (str recs)
-          (zw/svg-icon :awe :bug :red) (str errs)])
-       (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)]
-      (let [{:keys [family glyph mode]} (get @CFG-TTYPES ttype)]
-        (zw/svg-icon (or family :awe) (or glyph :paw) (TTYPE-MODES mode :text)))
-      [:div.svg-icon.btn-details.small-or-less.clickable " "]]
-     [:div.seg.flexible [(if (:err flags) :div.c2.c-red :div.c2.c-text) descr]
-      (zw/svg-icon :awe :right-big :blue, :class " clickable btn-details")]]))
+(defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
+  (fn [{:keys [uuid ttype tstamp descr dtrace-uuid dtrace-level duration recs calls errs flags] :as t}]
+    (let [[_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
+      ^{:key uuid}
+      [:div.itm
+       {:data-trace-uuid uuid}
+       [:div.seg
+        [:div.ct t]
+        [:div.flexible]
+        [:div.seg
+         (when-not @SUPPRESS-DETAILS
+           [:div.flex
+            (zw/svg-icon :awe :flash :yellow) (str calls)
+            (zw/svg-icon :awe :inbox :green) (str recs)
+            (zw/svg-icon :awe :bug :red) (str errs)])
+         (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)]
+        (let [{:keys [family glyph mode]} (get @CFG-TTYPES ttype)]
+          (zw/svg-icon (or family :awe) (or glyph :paw) (TTYPE-MODES mode :text)))
+        [:div.svg-icon.btn-details.small-or-less.clickable " "]]
+       [:div.seg.flexible
+        {:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
+        [(if (:err flags) :div.c2.c-red :div.c2.c-text) descr]
+        (when (and dtrace-uuid dtrace-links)
+          (zw/svg-icon
+            :ent :flow-cascade :blue,
+            :class " clickable btn-dtrace",
+            :title "View distributed trace"))
+        (zw/svg-icon
+          :awe :right-big :blue,
+          :class " clickable btn-details",
+          :title "View trace details")
+        ]])))
 
 
 (defn filtered-items [path data icon]
@@ -355,8 +384,6 @@
          (zw/svg-button :awe :cancel :red "Clear filters."
                         [:popup/open :menu :position :top-right :items CLEAR-FILTER-ITEMS]
                         :opaque (> (count @CLEAR-FILTER-ITEMS) 1))
-         ;(zw/svg-button :awe :cancel :red "Clear filters."
-         ;               :opaque (some? []))
          ]))))
 
 
@@ -379,14 +406,16 @@
            :opaque suppress)]))))
 
 
-(defn trace-list-click-handler [e]
-  (zs/traverse-and-handle
-    (.-target e) "data-trace-uuid" "zorka-traces"
-    :btn-details #(zs/dispatch [::display-tree %])
-    :itm #(zs/dispatch [:do [:toggle [:view :trace :list :selected] %]
-                        [:rest/get (str "../../../data/trace/" % "/detail")
-                         [:data :trace :list % :detail]]])
-    :det #(zs/dispatch [:toggle [:view :trace :list :selected] %])))
+(defn trace-list-click-handler-fn [sect sub]
+  (fn [e]
+    (zs/traverse-and-handle
+      (.-target e) "data-trace-uuid" "zorka-traces"
+      :btn-details #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::display-tree %]])
+      :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::dtrace-tree %]])
+      :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
+                          [:rest/get (str "../../../data/trace/" % "/detail")
+                           [:data sect sub % :detail]]])
+      :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))
 
 
 (defn trace-list []
@@ -400,8 +429,11 @@
     :toolbar [zv/list-screen-toolbar :trace :list
               {:title "Traces", :add-left [toolbar-left], :add-right [toolbar-right]
                :sort-ctls {}, :on-refresh [::refresh-list]}]
-    :central [zv/list-interior [:trace :list] render-trace-list-item render-trace-list-detail
-              :id "zorka-traces", :on-scroll [::scroll-list], :on-click trace-list-click-handler]))
+    :central [zv/list-interior [:trace :list]
+              (render-trace-list-item-fn :dtrace-links true)
+              (render-trace-list-detail-fn :dtrace-links true, :attr-links true)
+              :id "zorka-traces", :on-scroll [::scroll-list],
+              :on-click (trace-list-click-handler-fn :trace :list)]))
 
 
 (defn flatten-trace [t0 lvl {:keys [children duration] :as tr}]
@@ -425,7 +457,7 @@
            (assoc-in [:data :trace :tree] nil))
      :dispatch-n
      [[:to-screen "mon/trace/tree"]
-      [:rest/get (str "../../../data/trace/" uuid "/tree")
+      [:rest/get (str "../../../data/trace/" (cs/replace uuid "/" "_") "/tree")
        [:data :trace :tree] :proc-by ::display-tree]]}))
 
 (defn render-trace-tree-detail [{:keys [pos attrs duration exception]
@@ -447,7 +479,7 @@
   [:div.itm.method {:data-trace-pos pos}
    [:div.t (zu/ticks-to-str duration)]
    [(cond attrs :div.mc.c-blue exception :div.mc.c-red :else :div.mc.c-text)
-    {:style {:margin-left (str (* level 10))}}
+    {:style {:margin-left (str (* level 10) "px")}}
     [:div.mr.medium-or-more result]
     [:div.large-or-more (str package ".")]
     [:div.small-or-more (str class ".")]
@@ -460,8 +492,9 @@
     (fn []
       (let [view-state @view-state]
         [:div.flexible
-         (zw/svg-button :awe :left-big :blue "To trace list"
-           [:to-screen "mon/trace/list"])]))))
+         (zw/svg-button
+           :awe :left-big :blue "To trace list"
+           [:event/pop-dispatch TRACE_HISTORY [:to-screen "mon/trace/list"]])]))))
 
 
 (defn toolbar-tree-right []
@@ -494,4 +527,67 @@
                :add-right [toolbar-tree-right]}]
     :central [zv/list-interior [:trace :tree] render-trace-tree-item render-trace-tree-detail
               :id-attr :pos, :id "zorka-methods", :on-click trace-tree-click-handler]))
+
+
+(defn dtrace-path-compare [p1 p2]
+  (cond
+    (nil? p1) -1
+    (nil? p2) 1
+    (< (first p1) (first p2)) -1
+    (> (first p1) (first p2)) 1
+    (= (first p1) (first p2)) (dtrace-path-compare (rest p1) (rest p2))
+    :else 0))
+
+
+(defn dtrace-compare [t1 t2]
+  (dtrace-path-compare (:dtrace-path t1) (:dtrace-path t2)))
+
+
+(defn prep-dtrace-tree-results [rslt]
+  (sort
+    dtrace-compare
+    (for [r (vals rslt)
+          :when (and (:dtrace-tid r) (not (:dtrace-out r)))
+          :let [segs (rest (cs/split (:dtrace-tid r "") #"/"))]]
+      (assoc r
+        :dtrace-level (count segs)
+        :dtrace-path (for [s segs] (js/parseInt s 16))))))
+
+
+(zs/register-sub
+  :data/dtrace-tree-list
+  (fn [db _]
+    (ra/reaction
+      (prep-dtrace-tree-results
+        (get-in @db [:data :dtrace :tree])))))
+
+
+(defn dtrace-toolbar-left []
+  [:div.flexible.flex
+   (zw/svg-button
+     :awe :left-big :blue "To trace list"
+     [:event/pop-dispatch TRACE_HISTORY [:to-screen "mon/trace/list"]])
+   (zw/svg-button
+     :awe :eye-off :light "Suppress details"
+     [:toggle [:view :trace :list :suppress]]
+     :opaque SUPPRESS-DETAILS)])
+
+
+(defn dtrace-tree []
+  "Displays distributed trace panel [:view :trace :dtrace]"
+  (zv/render-screen
+    :hide-menu-btn true
+    :toolbar [zv/list-screen-toolbar :dtrace :tree
+              {:title     "Distributed tracing",
+               :sort-ctls {}
+               :flags     #{:no-refresh, :no-bookmark}
+               :add-left  [dtrace-toolbar-left]
+               ;:add-right [:div " "]
+               }]
+    :central [zv/list-interior [:dtrace :tree]
+              (render-trace-list-item-fn :dtrace-links false)
+              (render-trace-list-detail-fn :attr-links false, :dtrace-links false)
+              :id-attr :uuid, :id "zorka-dist", :class "trace-list-list",
+              :on-click (trace-list-click-handler-fn :dtrace :tree)]
+    ))
 

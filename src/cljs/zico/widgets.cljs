@@ -12,10 +12,10 @@
 (def svg-icons (svg-compiled-icon-set "assets/icons" nil ))
 
 (defn svg-icon                                              ; TODO zamienić na macro
-  ([family glyph color & {:keys [view-box class] :or {view-box "0 0 1000 1000"}}]
+  ([family glyph color & {:keys [view-box class title] :or {view-box "0 0 1000 1000"}}]
    (let [uri (str "/img/" (zu/to-string family) ".svg#" (zu/to-string glyph))
          clazz (str "svg-icon c-" (zu/to-string color) class)]
-     [:div (merge {} {:class clazz})
+     [:div (merge {:title title} {:class clazz})
       [:svg {:viewBox view-box}
        [:use {:xlink-href uri} " "]]])))
 

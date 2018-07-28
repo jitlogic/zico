@@ -45,6 +45,7 @@
   ; Monitoring screens
   "mon/trace/list"    #'zvmt/trace-list
   "mon/trace/tree"    #'zvmt/trace-tree
+  "mon/dtrace/tree"    #'zvmt/dtrace-tree
 
   ; Config items - lists
   "cfg/app/list"     #'zvc/app-list

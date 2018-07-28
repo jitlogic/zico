@@ -40,10 +40,11 @@
           [:div.cpt.small-or-less "zorka"]
           [:div.icon-placeholder]]
          [:div.pnl
-          (menu-section monitor :monitor "MONITOR")
+          (menu-section monitor :monitor "TRACES")
           (when monitor
             [:div
-             (menu-item "awe" "paw" "Traces" "mon/trace/list" {})])
+             (menu-item "awe" "search" "Search" "mon/trace/list" {})
+             (menu-item "ent" "flow-cascade" "Distributed" "mon/dtrace/tree" {})])
           (menu-section configure :configure "CONFIGURE")
           (when configure
             [:div
@@ -91,11 +92,11 @@
           )))))
 
 
-(defn list-interior [[sectn view] render-item render-selected & {:keys [id id-attr on-scroll on-click] :or {id-attr :uuid}}]
+(defn list-interior [[sectn view] render-item render-selected & {:keys [id id-attr on-scroll on-click class] :or {id-attr :uuid}}]
   "Rennders generic list interior. To be used as :central part of screens."
   (let [subscr (keyword "data" (str (name sectn) "-" (name view) "-list")), data (zs/subscribe [subscr])
         selected (zs/subscribe [:get [:view sectn view :selected]])
-        root-tag (keyword (str "div.list." (name subscr) ".full-h"))
+        root-tag (keyword (str "div.list." (or class (name subscr)) ".full-h"))
         attrs (zu/no-nulls {:id id, :on-scroll (on-scroll-fn on-scroll), :on-click on-click})]
     (fn []
       (let [data @data, selected @selected]

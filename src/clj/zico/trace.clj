@@ -46,7 +46,9 @@
     (.setMaxRecs (:max-recs q Long/MAX_VALUE))
     (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
     (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
-    ))
+    (.setDtraceUuid (:dtrace-uuid q))
+    (.setDtraceTid (:dtrace-tid q))))
+
 
 (def TYPES {"or" :or, "text" :text, "xtext" :xtext, "kv" :kv})
 
@@ -90,7 +92,8 @@
                        :recs SortOrder/RECS,
                        :errors SortOrder/ERRORS))
       (.setSortReverse (:sort-reverse q false))
-      (.setDeepSearch (:deep-search q true)))))
+      (.setDeepSearch (:deep-search q true))
+      (.setFullInfo (:full-info q false)))))
 
 
 (defn find-and-map-by-id [obj-store fexpr]
@@ -107,23 +110,24 @@
         ttps (find-and-map-by-id obj-store {:class :ttype})
         hids (find-and-map-by-id obj-store {:class :host})
         rslt (for [^TraceSearchResultItem r (.searchTraces trace-store query)]
-               {:uuid       (.getUuid r),
-                :lcid       (.getChunkId r)
-                :descr      (.getDescription r)
-                :duration   (.getDuration r)
-                :ttype      (ttps (.getTypeId r))
-                :app        (apps (.getAppId r))
-                :env        (envs (.getEnvId r))
-                :hids       (hids (.getHostId r))
-                :tst        (.getTstamp r)
-                :tstamp     (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
-                :data-offs  (.getDataOffs r)
-                :start-offs (.getStartOffs r)
-                :flags      #{}                             ; TODO flagi
-                :recs       (.getRecs r)
-                :calls      (.getCalls r)
-                :errs       (.getErrors r)
-                })]
+               {:uuid        (.getUuid r),
+                :lcid        (.getChunkId r)
+                :descr       (.getDescription r)
+                :duration    (.getDuration r)
+                :ttype       (ttps (.getTypeId r))
+                :app         (apps (.getAppId r))
+                :env         (envs (.getEnvId r))
+                :hids        (hids (.getHostId r))
+                :tst         (.getTstamp r)
+                :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
+                :data-offs   (.getDataOffs r)
+                :start-offs  (.getStartOffs r)
+                :flags       #{}                             ; TODO flagi
+                :recs        (.getRecs r)
+                :calls       (.getCalls r)
+                :errs        (.getErrors r)
+                :dtrace-uuid (.getDtraceUuid r)
+                :dtrace-tid  (.getDtraceTid r)})]
     {:status 200, :body {:type :rest, :data (vec (take limit rslt))}}))
 
 
@@ -176,14 +180,22 @@
           )))))
 
 
-(defn trace-detail [{:keys [trace-store obj-store] :as app-state} stack-limit ctx]
-  (let [{:keys [uuid]} (-> ctx :params)
-        cids (.getChunkIds trace-store uuid)
+(defn trace-detail [{:keys [trace-store obj-store] :as app-state} stack-limit uuid]
+  (let [cids (.getChunkIds trace-store uuid)
         lcid (.get cids (- (.size cids) 1))
         cm (.getChunkMetadata trace-store lcid)
         rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
         rslt (.retrieve trace-store uuid rtr)]
     {:status 200, :body {:type :rest, :data (merge {:uuid uuid} rslt)}}))
+
+
+(defn trace-detail-tid [{:keys [trace-store obj-store] :as app-state} stack-limit is-out tid]
+  (let [query (TraceSearchQuery. (doto (QmiNode.) (.setDtraceTid tid)) nil)
+        rslt (.searchTraces trace-store query)
+        trc (first (for [r rslt :when (= is-out (.isDtraceOut r))] r))]
+    (if (some? trc)
+      (trace-detail app-state stack-limit (.getUuid trc))
+      {:status 404})))
 
 
 (defn get-or-new [{:keys [obj-store] {{reg :register} :agent-conf} :conf :as app-state} class name]

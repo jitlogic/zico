@@ -25,6 +25,9 @@
   {:user {}, :data {}, :view {}, :system {}})
 
 
+; TODO this is quite reusable namespace, document it
+
+
 (defn to-handler [code & {:keys [sink]}]                    ; TODO simplify this thing
   (let [sink (if sink sink (= :sink (first code)))
         code (if (= :sink (first code)) (vec (rest code)) code)
@@ -266,6 +269,23 @@
     db))
 
 
+(reg-event-fx
+  :event/push-dispatch
+  (fn [{:keys [db]} [_ path & events]]
+    {:db (assoc-in db path (cons events (get-in db path)))
+     :dispatch-n events}))
+
+
+(reg-event-fx
+  :event/pop-dispatch
+  (fn [{:keys [db]} [_ path & defev]]
+    (let [stack (rest (get-in db path))
+          db (if stack (assoc-in db path stack) db)]
+      (cond
+        (first stack) {:db db, :dispatch-n (first stack)}
+        defev {:db db, :dispatch-n defev}
+        :else {:db db}))))
+
 ; ---------------------------- A bunch of generic subscriptions -----------------------
 
 (register-sub
@@ -371,9 +391,15 @@
 
 (reg-event-db
   :rest/post
-  (fn set-rest-data [db [_ url rec & {:keys [on-success on-error]}]]
+  (fn set-rest-data [db [_ url rec & {:keys [on-success map-by proc-by on-error]}]]
     (xhr :POST url, :data rec,
-         :on-success #(when on-success (dispatch (conj on-success %)))
+         :on-success
+         (fn [vs]
+           (let [vp (cond
+                      map-by (into {} (for [v vs] [(map-by v) v]))
+                      proc-by (rest-process proc-by vs)
+                      :else vs)]
+             (when on-success (dispatch (conj on-success vp)))))
          :on-error #(when on-error (dispatch (conj on-error %))))
     db))
 
