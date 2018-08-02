@@ -260,23 +260,26 @@
         [:div.ct t]
         [:div.flexible]
         [:div.seg
-         (when-not @SUPPRESS-DETAILS
-           [:div.flex
-            (zw/svg-icon :awe :flash :yellow) (str calls)
-            (zw/svg-icon :awe :inbox :green) (str recs)
-            (zw/svg-icon :awe :bug :red) (str errs)])
-         (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)]
-        (let [{:keys [family glyph mode]} (get @CFG-TTYPES ttype)]
-          (zw/svg-icon (or family :awe) (or glyph :paw) (TTYPE-MODES mode :text)))
+         (let [{:keys [glyph name] :as x} (get @CFG-TTYPES ttype),
+               [_ f g] (re-matches #"(.+)/(.+)" glyph)]
+           (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text))]
         [:div.svg-icon.btn-details.small-or-less.clickable " "]]
        [:div.seg.flexible
         {:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
-        [(if (:err flags) :div.c2.c-red :div.c2.c-text) descr]
-        (when (and dtrace-uuid dtrace-links)
+        [(if (:err flags) :div.c2.c-red :div.c2.c-text) descr]]
+       [:div.seg
+        (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)
+        (when-not @SUPPRESS-DETAILS
+          [:div.flex
+           (zw/svg-icon :awe :flash :yellow) (str calls)
+           (zw/svg-icon :awe :inbox :green) (str recs)
+           (zw/svg-icon :awe :bug :red) (str errs)])
+        (if (and dtrace-uuid dtrace-links)
           (zw/svg-icon
             :ent :flow-cascade :blue,
             :class " clickable btn-dtrace",
-            :title "View distributed trace"))
+            :title "View distributed trace")
+          (zw/svg-icon :nil :nil :none))
         (zw/svg-icon
           :awe :right-big :blue,
           :class " clickable btn-details",
