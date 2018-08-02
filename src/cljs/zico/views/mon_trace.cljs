@@ -453,12 +453,12 @@
   ::display-tree
   (fn [{:keys [db]} [_ uuid]]
     {:db (-> db
-           (assoc-in [:view :trace :tree] {:uuid uuid})
-           (assoc-in [:data :trace :tree] nil))
+             (assoc-in [:view :trace :tree] {:uuid uuid})
+             (assoc-in [:data :trace :tree] nil))
      :dispatch-n
-     [[:to-screen "mon/trace/tree"]
-      [:rest/get (str "../../../data/trace/" (cs/replace uuid "/" "_") "/tree")
-       [:data :trace :tree] :proc-by ::display-tree]]}))
+         [[:to-screen "mon/trace/tree"]
+          [:rest/get (str "../../../data/trace/" uuid "/tree")
+           [:data :trace :tree] :proc-by ::display-tree]]}))
 
 (defn render-trace-tree-detail [{:keys [pos attrs duration exception]
                                  {:keys [result package class method args]} :method}]
@@ -531,8 +531,8 @@
 
 (defn dtrace-path-compare [p1 p2]
   (cond
-    (nil? p1) -1
-    (nil? p2) 1
+    (empty? p1) -1
+    (empty? p2) 1
     (< (first p1) (first p2)) -1
     (> (first p1) (first p2)) 1
     (= (first p1) (first p2)) (dtrace-path-compare (rest p1) (rest p2))
@@ -543,14 +543,14 @@
   (dtrace-path-compare (:dtrace-path t1) (:dtrace-path t2)))
 
 
-(defn prep-dtrace-tree-results [rslt]
+(defn prep-dtrace-tree-results [rslt dt-out]
   (sort
     dtrace-compare
     (for [r (vals rslt)
-          :when (and (:dtrace-tid r) (not (:dtrace-out r)))
-          :let [segs (rest (cs/split (:dtrace-tid r "") #"/"))]]
+          :when (and (:dtrace-tid r) (or dt-out (not (:dtrace-out r))))
+          :let [segs (rest (cs/split (:dtrace-tid r "") #"_"))]]
       (assoc r
-        :dtrace-level (count segs)
+        :dtrace-level (+ (count segs) (if (:dtrace-out r) 1 0))
         :dtrace-path (for [s segs] (js/parseInt s 16))))))
 
 
@@ -559,8 +559,10 @@
   (fn [db _]
     (ra/reaction
       (prep-dtrace-tree-results
-        (get-in @db [:data :dtrace :tree])))))
+        (get-in @db [:data :dtrace :tree])
+        (get-in @db [:view :dtrace :tree :dtrace-out] false)))))
 
+(def DISPLAY-DTRACE-OUT (zs/subscribe [:get [:view :dtrace :tree :dtrace-out]]))
 
 (defn dtrace-toolbar-left []
   [:div.flexible.flex
@@ -570,7 +572,12 @@
    (zw/svg-button
      :awe :eye-off :light "Suppress details"
      [:toggle [:view :trace :list :suppress]]
-     :opaque SUPPRESS-DETAILS)])
+     :opaque SUPPRESS-DETAILS)
+   (zw/svg-button
+     :awe :link-ext :light "Display output traces."
+     [:toggle [:view :dtrace :tree :dtrace-out]]
+     :opaque DISPLAY-DTRACE-OUT)
+   ])
 
 
 (defn dtrace-tree []

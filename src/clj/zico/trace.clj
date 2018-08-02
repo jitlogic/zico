@@ -127,7 +127,8 @@
                 :calls       (.getCalls r)
                 :errs        (.getErrors r)
                 :dtrace-uuid (.getDtraceUuid r)
-                :dtrace-tid  (.getDtraceTid r)})]
+                :dtrace-tid  (.getDtraceTid r)
+                :dtrace-out  (.isDtraceOut r)})]
     {:status 200, :body {:type :rest, :data (vec (take limit rslt))}}))
 
 

@@ -119,13 +119,13 @@
     (GET "/data/trace/:uuid/detail" req
       (let [^String uuid (-> req :params :uuid)]
         (if (.contains uuid "_")
-          (ztrc/trace-detail-tid app-state 1, false (.replace uuid "_" "/"))
+          (ztrc/trace-detail-tid app-state 1, false uuid)
           (ztrc/trace-detail app-state 1 uuid))))
 
     (GET "/data/trace/:uuid/tree" req
       (let [^String uuid (-> req :params :uuid)]
         (if (.contains uuid "_")
-          (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false (.replace uuid "_" "/"))
+          (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false uuid)
           (ztrc/trace-detail app-state Integer/MAX_VALUE uuid))))
 
     ; Configuration data API
