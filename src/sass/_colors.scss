@@ -14,6 +14,8 @@
 .c-text    { @include text-color($c-text); }   // Normal text (depending on theme)
 .c-light   { @include text-color($c-light); }  // Highlighted text
 .c-darker  { @include text-color($c-darker); } // Darkened text
+.c-dark    { @include text-color($c-dark); }
+.c-none    { @include text-color($b-normal); } // Invisible on normal background
 .c-red     { @include text-color($c-red); }
 .c-green   { @include text-color($c-green); }
 .c-blue    { @include text-color($c-blue); }

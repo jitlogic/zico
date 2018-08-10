@@ -63,7 +63,7 @@
         text (-> vroot :search :text)
         qmi (into
               {:type :qmi}
-              (for [k [:ttype :app :env :min-duration]
+              (for [k [:ttype :app :env :min-duration :host]
                     :let [v (-> vroot :filter k :selected)]
                     :when v]
                 {k v}))
@@ -213,16 +213,46 @@
                  [:div.c (str class "." method)]
                  [:div.f (str "(" file ":" line ")")]])]])
 
+(def FILTER-STATE (zs/subscribe [:get [:view :trace :list :filter]]))
 
 (defn render-trace-list-detail-fn [& {:keys [dtrace-links attr-links]}]
-  (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host]
+  (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host ttype app env]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
     ^{:key uuid}
     [:div.det
      {:data-trace-uuid uuid}
-     [:div tstamp]
-     [:div.ellipsis
-      (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
+     [:div.flex
+      [:div tstamp]
+      (let [{:keys [glyph name] :as x} (get @CFG-TTYPES ttype),
+            [_ f g] (re-matches #"(.+)/(.+)" glyph)]
+        [:div.flex
+         [:div.i (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text)]
+         [:div.ellipsis name]])
+      (let [name (get-in @CFG-APPS [app :name])]
+        [:div.flex
+         [:div.i (zw/svg-icon :awe :cubes :text)]
+         [:div.ellipsis name]])
+      (let [name (get-in @CFG-ENVS [env :name])]
+        [:div.flex
+         [:div.i (zw/svg-icon :awe :sitemap :text)]
+         [:div.ellipsis name]])]
+
+     [:div.flex
+      [:div.ellipsis (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
+      [:div.i
+       (if (-> @FILTER-STATE :host :selected)
+         (zw/svg-button
+           :awe :cancel :red "Remove filter ..."
+           [:do
+            [:dissoc [:view :trace :list] :selected]
+            [:dissoc [:view :trace :list :filter :host] :selected]
+            [::refresh-list]])
+         (zw/svg-button
+           :awe :filter :blue "Filter by ..."
+           [:do
+            [:dissoc [:view :trace :list] :selected]
+            [:set [:view :trace :list :filter :host :selected] host]
+            [::refresh-list]]))]]
      [:div.c-light.bold.wrapping descr]
      [:div.c-darker.ellipsis result]
      [:div.c-light.ellipsis (str method args)]
@@ -274,12 +304,19 @@
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)
            (zw/svg-icon :awe :bug :red) (str errs)])
-        (if (and dtrace-uuid dtrace-links)
+        (cond
+          (not dtrace-links)
+          (zw/svg-icon
+            :ent :flow-cascade  :none)
+          (some? dtrace-uuid)
           (zw/svg-icon
             :ent :flow-cascade :blue,
             :class " clickable btn-dtrace",
             :title "View distributed trace")
-          (zw/svg-icon :nil :nil :none))
+          :else
+          (zw/svg-icon
+            :ent :flow-cascade  :dark
+            :title "This is single trace"))
         (zw/svg-icon
           :awe :right-big :blue,
           :class " clickable btn-details",
@@ -328,7 +365,7 @@
         fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
     (ra/reaction
       (let [filter @filter, search @search, fattrs @fattrs,
-            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt]]
+            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt] [:host "Host: " :sitemap]]
                      :let [uuid (get-in filter [k :selected])] :when uuid]
                  {:key      (str k), :text (str lbl (get-in @cfg [k uuid :name])), :icon [:awe ic :red],
                   :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list]]})

@@ -117,7 +117,7 @@
                 :ttype       (ttps (.getTypeId r))
                 :app         (apps (.getAppId r))
                 :env         (envs (.getEnvId r))
-                :hids        (hids (.getHostId r))
+                :host        (hids (.getHostId r))
                 :tst         (.getTstamp r)
                 :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
                 :data-offs   (.getDataOffs r)
@@ -128,7 +128,8 @@
                 :errs        (.getErrors r)
                 :dtrace-uuid (.getDtraceUuid r)
                 :dtrace-tid  (.getDtraceTid r)
-                :dtrace-out  (.isDtraceOut r)})]
+                :dtrace-out  (.isDtraceOut r)
+                })]
     {:status 200, :body {:type :rest, :data (vec (take limit rslt))}}))
 
 
