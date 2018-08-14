@@ -78,9 +78,20 @@
               :source-map true
               :optimizations :none
               :pretty-print  true}}
+            :test
+            {:source-paths ["src/cljs" "env/test/cljs" "test/cljs"]
+             :compiler
+             {:main "zico.test-runner"
+              :asset-path "target/cljstest/public/js/out"
+              :output-to "target/cljstest/public/test.js"
+              :output-dir "target/cljstest/public/js/out"
+              :source-map true
+              :optimizations :none
+              :pretty-print  true}}
             }
    }
 
+  :doo {:build "test", :alias {:default [:phantom]}}
 
   :figwheel
   {:http-server-root "public"
@@ -97,11 +108,13 @@
 
                         :dependencies [[figwheel-sidecar "0.5.14"]
                                        [org.clojure/test.check "0.9.0"]
-                                       [com.cemerick/piggieback "0.2.2"]]
+                                       [com.cemerick/piggieback "0.2.2"]
+                                       [day8.re-frame/test "0.1.5"]]
 
                         :source-paths ["env/dev/clj"]
                         :plugins      [[lein-figwheel "0.5.14"]
-                                       [lein-sassy "1.0.8"]]
+                                       [lein-sassy "1.0.8"]
+                                       [lein-doo "0.1.10"]]
 
                         :env          {:dev true}}
 

@@ -25,3 +25,5 @@ log
 Procfile
 system.properties
 zorka/
+node_modules/
+doo-index.html

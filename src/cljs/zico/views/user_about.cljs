@@ -11,10 +11,10 @@
 
 
 (defn about-refresh []
-  (zs/dispatch [:rest/get "/system/info" [:data :user :about]]))
+  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil]))
 
 
-(defonce about-timer (js/setInterval about-refresh 30000))
+(defonce about-timer (js/setInterval about-refresh 30000))  ; TODO this is stateful
 
 
 (defn render-about-interior []

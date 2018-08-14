@@ -32,8 +32,8 @@
    :text (str "Delete object: " name " ?"),
    :buttons
    [{:id :ok, :text "Delete", :icon [:awe :ok :green]
-     :on-click [:rest/delete
-                (str "../../../data/" (clojure.core/name sectn) "/" (clojure.core/name view) "/" uuid)
+     :on-click [:xhr/delete
+                (str "../../../data/" (clojure.core/name sectn) "/" (clojure.core/name view) "/" uuid) nil nil
                 :on-success [:dissoc [:data sectn view] uuid]]}
     {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
 

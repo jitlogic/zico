@@ -6,7 +6,7 @@
     [zico.widgets :as zw]
     [zico.views.common :as zv]))
 
-(def REFRESH-EVENT [:rest/get "/admin/backup" [:data :admin :backup]])
+(def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil])
 
 (defn btn-restore-action [id]
   (println "id = " id)
@@ -15,7 +15,7 @@
    :text ["Restore will override current configuration.", "Proceed ?"],
    :buttons
    [{:id :ok, :text "Restore", :icon [:awe :upload :yellow]
-     :on-click [:rest/post (str "/admin/backup/" id "/restore") {}
+     :on-click [:xhr/post (str "/admin/backup/" id "/restore") nil {}
               :on-success [:alert "Database restored."]
               :on-error [:alert "Error restoring database."]]}
     {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
@@ -34,7 +34,7 @@
           [:div.col1
            [zw/button
             {:icon [:awe :download :green], :text "Backup",
-             :on-click [:rest/post "/admin/backup" {}
+             :on-click [:xhr/post "/admin/backup" nil {}
                         :on-success REFRESH-EVENT
                         :on-error [:alert "Error performing backup."]]}]]
           [:div.col2

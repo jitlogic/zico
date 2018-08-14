@@ -109,7 +109,7 @@
   (fn [{:keys [db]} _]
     {:db db
      :dispatch
-         [:rest/post "../../../data/trace/search"
+         [:xhr/post "../../../data/trace/search" nil
           (make-filter db (count (get-in db [:data :trace :list])))
           :on-success [::handle-trace-search-result false]]}))
 
@@ -127,7 +127,7 @@
   (fn [{:keys [db]} _]
     {:db db
      :dispatch
-     [:rest/post "../../../data/trace/search" (make-filter db 0)
+     [:xhr/post "../../../data/trace/search" nil (make-filter db 0)
       :on-success [::handle-trace-search-result true]]}))
 
 
@@ -138,7 +138,7 @@
       {:db (assoc-in db [:data :dtrace :tree] [])
        :dispatch-n
            [[:to-screen "mon/dtrace/tree"]
-            [:rest/post "../../../data/trace/search"
+            [:xhr/post "../../../data/trace/search" nil
              {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
              :on-success [:set [:data :dtrace :tree]], :map-by :uuid]]})))
 
@@ -150,7 +150,7 @@
           sel (get-in db [:view :trace :list :selected])
           uuids (into #{} (map :uuid data))
           evt (if (and sel (contains? uuids sel))
-                [:rest/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail]]
+                [:xhr/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail] nil]
                 [:nop])]
       {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))
        :dispatch [:do evt [::extend-list-notification data]]})))
@@ -452,8 +452,8 @@
       :btn-details #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::display-tree %]])
       :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::dtrace-tree %]])
       :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
-                          [:rest/get (str "../../../data/trace/" % "/detail")
-                           [:data sect sub % :detail]]])
+                          [:xhr/get (str "../../../data/trace/" % "/detail")
+                           [:data sect sub % :detail] nil]])
       :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))
 
 
@@ -496,8 +496,9 @@
              (assoc-in [:data :trace :tree] nil))
      :dispatch-n
          [[:to-screen "mon/trace/tree"]
-          [:rest/get (str "../../../data/trace/" uuid "/tree")
-           [:data :trace :tree] :proc-by ::display-tree]]}))
+          [:xhr/get (str "../../../data/trace/" uuid "/tree")
+           [:data :trace :tree] nil,
+           :proc-by ::display-tree]]}))
 
 (defn render-trace-tree-detail [{:keys [pos attrs duration exception]
                                  {:keys [result package class method args]} :method}]

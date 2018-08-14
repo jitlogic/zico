@@ -5,21 +5,13 @@
     [secretary.core :as sc :include-macros true]
     [accountant.core :as ac]
     [zico.state :as zs]
+    [zico.io :as io]
     [zico.views.cfg :as zvc]
     [zico.views.mon-trace :as zvmt]
     [zico.views.adm-backup :as zvbkp]
     [zico.views.user-about :as zvabt]
     [zico.views.user-prefs :as zvupr]))
 
-
-(defn small-screen? []
-  (< (.-innerWidth js/window) 512))
-
-(zs/reg-event-db
-  :to-screen
-  (fn switch-screen-handler [db [_ name params]]
-    (sc/dispatch! (str "/view/" name))
-    (if (small-screen?) (assoc-in db [:view :menu :open?] false) db)))
 
 
 ;; Load basic dictionary data and initialize UI state

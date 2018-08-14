@@ -51,7 +51,7 @@
          [:div.button-row
           [zw/button
            {:text     "Change", :icon [:ent :key :yellow], :enabled? ready?,
-            :on-click [:rest/post "/user/password"
+            :on-click [:xhr/post "/user/password" nil
                        {:oldPassword (:value old), :newPassword (:value new), :repeatPassword (:value rep)}
                        :on-success [:set [:view :user :prefs]
                                     {:status :ok :msg "Password changed."}]

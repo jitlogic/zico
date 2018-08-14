@@ -122,12 +122,6 @@
 
 ; ---------------------------- A bunch of generic handlers ----------------------------
 
-(reg-event-db
-  :println
-  (fn println-fn [db [_ & args]]
-    (println (str args))
-    db))
-
 
 ; No-op handler. Does nothing.
 (reg-event-db
@@ -142,13 +136,6 @@
   (fn [{:keys [db]} [_ & ev]]
     {:db db,
      :dispatch (vec ev)}))
-
-
-(reg-event-db
-  :alert
-  (fn alert-handler [db [_ msg]]
-    (js/alert msg)
-    db))
 
 
 ; Groups multiple handlers into one
@@ -183,62 +170,62 @@
       (assoc-in db path (not (get-in db path))))))
 
 
-(reg-event-db
-  :form/set-value
-  (fn set-value-fn [db [_ path type value]]
-    (let [text (value-unparse type value)
-          db (assoc-in db (flatten (conj path :text)) text)]
-      (assoc-in db (flatten (conj path :value)) value))))
+(defn form-set-value-db [db [_ path type value]]
+  (let [text (value-unparse type value)
+        db (assoc-in db (flatten (conj path :text)) text)]
+    (assoc-in db (flatten (conj path :value)) value)))
+
+(reg-event-db :form/set-value form-set-value-db)
 
 
-(reg-event-db
-  :form/set-text
-  (fn set-text-fn [db [_ path type text]]
-    (let [value (value-parse type text)
-          db (if value (assoc-in db (conj path :value) value) db)]
-      (assoc-in db (conj path :text) text))))
+(defn form-set-text-db [db [_ path type text]]
+  (let [value (value-parse type text)
+        db (if value (assoc-in db (conj path :value) value) db)]
+    (assoc-in db (conj path :text) text)))
+
+(reg-event-db :form/set-text form-set-text-db)
 
 
-(reg-event-fx
-  :form/edit-open
-  (fn [{:keys [db]} [_ sectn view uuid fdefs]]
-    {:db (let [obj (get-in db [:data sectn view uuid])]
-           (assoc-in db [:view sectn view :edit] {:uuid uuid, :form (form-parse fdefs obj)}))
+(defn form-edit-open-fx [{:keys [db]} [_ sectn view uuid fdefs]]
+  {:db (let [obj (get-in db [:data sectn view uuid])]
+         (assoc-in db [:view sectn view :edit] {:uuid uuid, :form (form-parse fdefs obj)}))
+   :dispatch [:to-screen (str (name sectn) "/" (name view) "/edit")]})
+
+(reg-event-fx :form/edit-open form-edit-open-fx)
+
+
+(defn form-edit-new-fx [{:keys [db]} [_ sectn view nobj fdefs]]
+  (let [nobj (assoc nobj :uuid :new)]
+    {:db (-> db
+             (assoc-in [:data sectn view :new] nobj)
+             (assoc-in [:view sectn view :edit] {:uuid :new, :form (form-parse fdefs nobj)}))
      :dispatch [:to-screen (str (name sectn) "/" (name view) "/edit")]}))
 
-
-(reg-event-fx
-  :form/edit-new
-  (fn [{:keys [db]} [_ sectn view nobj fdefs]]
-    (let [nobj (assoc nobj :uuid :new)]
-      {:db (-> db
-               (assoc-in [:data sectn view :new] nobj)
-               (assoc-in [:view sectn view :edit] {:uuid :new, :form (form-parse fdefs nobj)}))
-       :dispatch [:to-screen (str (name sectn) "/" (name view) "/edit")]})))
+(reg-event-fx :form/edit-new form-edit-new-fx)
 
 
-(reg-event-fx
-  :form/edit-commit
-  (fn [{:keys [db]} [_ sectn view fdefs on-refresh]]
-    (let [{:keys [uuid form]} (get-in db [:view sectn view :edit])
-          orig (get-in db [:data sectn view uuid])
-          newv (merge orig (form-unparse fdefs form))]
-      (merge
-        {:db         (-> db (assoc-in [:data sectn view uuid] newv) (assoc-in [:view sectn view :edit] nil))
-         :dispatch-n [[:to-screen (str (name sectn) "/" (name view) "/list")]
-                      (if (= :new uuid)
-                        [:rest/post (str "../../../data/" (name sectn) "/" (name view)) (dissoc newv :uuid)
-                         :on-success on-refresh
-                         :on-error [:dissoc [:data sectn view] :new]]
-                        [:rest/put (str "../../../data/" (name sectn) "/" (name view) "/" uuid) newv]
-                        )]}))))
+(defn form-edit-commit-fx [{:keys [db]} [_ sectn view fdefs on-refresh]]
+  (let [{:keys [uuid form]} (get-in db [:view sectn view :edit])
+        orig (get-in db [:data sectn view uuid])
+        newv (merge orig (form-unparse fdefs form))]
+    (merge
+      {:db         (-> db (assoc-in [:data sectn view uuid] newv) (assoc-in [:view sectn view :edit] nil))
+       :dispatch-n [[:to-screen (str (name sectn) "/" (name view) "/list")]
+                    (if (= :new uuid)
+                      [:xhr/post (str "../../../data/" (name sectn) "/" (name view)) nil (dissoc newv :uuid)
+                       :on-success on-refresh
+                       :on-error [:dissoc [:data sectn view] :new]]
+                      [:xhr/put (str "../../../data/" (name sectn) "/" (name view) "/" uuid) nil newv]
+                      )]})))
+
+(reg-event-fx :form/edit-commit form-edit-commit-fx)
 
 
-(reg-event-fx
-  :form/edit-cancel
-  (fn [{:keys [db]} [_ sectn view]]
-    {:db       (assoc-in db [:view sectn view :edit] nil)
-     :dispatch [:to-screen (str (name sectn) "/" (name view) "/list")]}))
+(defn form-edit-cancel-fx [{:keys [db]} [_ sectn view]]
+  {:db       (assoc-in db [:view sectn view :edit] nil)
+   :dispatch [:to-screen (str (name sectn) "/" (name view) "/list")]})
+
+(reg-event-fx :form/edit-cancel form-edit-cancel-fx)
 
 
 (defonce once-events (atom {}))
@@ -352,84 +339,46 @@
     (let [trec (get-in db path {})]
       (assoc-in db path (dissoc trec :timeout :action)))))
 
-; ------------------------------- REST I/O  ------------------------------------
-
-(def ^:private crud-methods {:GET "GET" :PUT "PUT" :POST "POST" :DELETE "DELETE"})
-
-(defn xhr [method url & {:keys [data on-success on-error]}]
-  (let [xhr (XhrIo.)]
-    (when on-success
-      (ge/listen xhr goog.net.EventType.SUCCESS
-                 (fn [_] (on-success (read-string (.getResponseText xhr))))))
-    (when on-error
-      (ge/listen xhr goog.net.EventType.ERROR
-                 (fn [_] (on-error {:msg (.getResponseText xhr)}))))
-    (.send  xhr  url (crud-methods method) (when data (pr-str data))
-            #js {"Content-Type" "application/edn; charset=utf-8"
-                 "Accept" "application/edn; charset=utf-8"})))
-
+; ------------------------------- XHR I/O  ------------------------------------
 
 (defmulti rest-process (fn [by _] by))
 
 
-(reg-event-db
-  :rest/get
-  (fn get-rest-data [db [_ url dest-path & {:keys [on-success map-by proc-by merge-by]}]]
-    (xhr
-      :GET url,
-      :on-success
-      (fn [vs]
-        (let [vp (cond
-                   map-by (into {} (for [v vs] [(map-by v) v]))
-                   proc-by (rest-process proc-by vs)
-                   :else vs)]
-          (dispatch
-            [:set dest-path (if merge-by (merge-by (get-in db dest-path) vp) vp)]))
-        (when on-success (dispatch (conj on-success vs)))))
-    db))
+(defn xhr-success-handler [{:keys [db]} [_ dest-path {:keys [on-success map-by proc-by merge-by]} data]]
+  (let [vs (read-string data)
+        vp (cond
+             map-by (into {} (for [v vs] [(map-by v) v]))
+             proc-by (rest-process proc-by vs)
+             :else vs)
+        vm (if merge-by (merge-by (get-in db dest-path) vp) vp)]
+    (merge
+      {:db (assoc-in db dest-path vm)}
+      (if on-success {:dispatch (conj on-success vm)}))))
 
 
-(reg-event-db
-  :rest/post
-  (fn set-rest-data [db [_ url rec & {:keys [on-success map-by proc-by on-error]}]]
-    (xhr :POST url, :data rec,
-         :on-success
-         (fn [vs]
-           (let [vp (cond
-                      map-by (into {} (for [v vs] [(map-by v) v]))
-                      proc-by (rest-process proc-by vs)
-                      :else vs)]
-             (when on-success (dispatch (conj on-success vp)))))
-         :on-error #(when on-error (dispatch (conj on-error %))))
-    db))
+(defn xhr-error-handler [{:keys [db]} [_ _ {:keys [on-error]} data]]
+  (merge
+    {:db db}
+    (if on-error {:dispatch (conj on-error data)})))
 
 
-(reg-event-db
-  :rest/put
-  (fn set-rest-data [db [_ url rec & {:keys [on-success on-error]}]]
-    (xhr :PUT url, :data rec,
-         :on-success #(when on-success (dispatch (conj on-success %)))
-         :on-error #(when on-error (dispatch (conj on-error %))))
-    db))
+(defn xhr-handler-fn [method]
+  (fn [{:keys [db]} [_ url dest-path post-data & {:as opts}]]
+    (let [data (when post-data (pr-str post-data))]
+      {:db       db
+       :dispatch [:xhr method url, :data data,
+                  :on-success [:xhr/success dest-path opts]
+                  :on-error [:xhr/error dest-path opts]
+                  :content-type "application/edn; charset=utf-8"]})))
 
 
-(reg-event-db
-  :rest/delete
-  (fn delete-rest-data [db [_ url & {:keys [on-success on-error]}]]
-    (xhr :DELETE url, :data nil,
-         :on-success #(when on-success (dispatch (conj on-success %)))
-         :on-error #(when on-error (dispatch (conj on-error %))))
-    db))
+(rfc/reg-event-fx :xhr/get (xhr-handler-fn :GET))
+(rfc/reg-event-fx :xhr/post (xhr-handler-fn :POST))
+(rfc/reg-event-fx :xhr/put (xhr-handler-fn :PUT))
+(rfc/reg-event-fx :xhr/delete (xhr-handler-fn :DELETE))
 
-
-(reg-event-db
-  :update-record
-  (fn commit-form-data [db [_ dpath idattr id rec]]
-    (assoc-in
-      db dpath
-      (for [r (get-in db dpath)]
-        (if (= (idattr rec) (idattr r)) (merge r rec) r)))))
-
+(rfc/reg-event-fx :xhr/success xhr-success-handler)
+(rfc/reg-event-fx :xhr/error xhr-error-handler)
 
 ; --------------------------- REST Data interface functions specific to zorka ------------------------
 
@@ -449,7 +398,8 @@
   (fn zorka-refresh-data [{:keys [db]} [_ sectn view]]
     {:db db
      :dispatch
-     [:rest/get (str "../../../data/" (name sectn) "/" (name view))
-      [:data sectn view] :map-by :uuid]}))
+     [:xhr/get (str "../../../data/" (name sectn) "/" (name view))
+      [:data sectn view] nil,
+      :map-by :uuid]}))
 
 
