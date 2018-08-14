@@ -230,13 +230,12 @@
          [:div.ellipsis name]])
       (let [name (get-in @CFG-APPS [app :name])]
         [:div.flex
-         [:div.i (zw/svg-icon :awe :cubes :text)]
+         [:div.i (zw/svg-icon :awe :cubes :yellow)]
          [:div.ellipsis name]])
       (let [name (get-in @CFG-ENVS [env :name])]
         [:div.flex
-         [:div.i (zw/svg-icon :awe :sitemap :text)]
+         [:div.i (zw/svg-icon :awe :sitemap :green)]
          [:div.ellipsis name]])]
-
      [:div.flex
       [:div.ellipsis (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
       [:div.i
