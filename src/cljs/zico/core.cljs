@@ -7,7 +7,9 @@
     [zico.state :as zs]
     [zico.io :as io]
     [zico.views.cfg :as zvc]
-    [zico.views.mon-trace :as zvmt]
+    [zico.views.mon-trace-list]
+    [zico.views.mon-trace-dist]
+    [zico.views.mon-trace-tree]
     [zico.views.adm-backup :as zvbkp]
     [zico.views.user-about :as zvabt]
     [zico.views.user-prefs :as zvupr]))
@@ -35,9 +37,9 @@
 
 (main-routes
   ; Monitoring screens
-  "mon/trace/list"    #'zvmt/trace-list
-  "mon/trace/tree"    #'zvmt/trace-tree
-  "mon/dtrace/tree"    #'zvmt/dtrace-tree
+  "mon/trace/list"    #'zico.views.mon-trace-list/trace-list
+  "mon/trace/tree"    #'zico.views.mon-trace-tree/trace-tree
+  "mon/dtrace/tree"   #'zico.views.mon-trace-dist/dtrace-tree
 
   ; Config items - lists
   "cfg/app/list"     #'zvc/app-list
