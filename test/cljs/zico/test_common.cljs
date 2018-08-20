@@ -16,7 +16,7 @@
     id
     (fn [db args] (assoc-in db [:test :io id] (cons (rest args) (get-in db [:test :io id]))))))
 
-(doseq [id [:to-screen :alert :println]]
+(doseq [id [:to-screen :alert :println :set-timeout]]
   (setup-io-mockup id))
 
 

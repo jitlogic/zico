@@ -27,6 +27,11 @@
   db)
 
 
+(defn debug-handler [db v]
+  (println "DEBUG: " (str v))
+  db)
+
+
 (defn to-screen-handler [db [_ name params]]
   (sc/dispatch! (str "/view/" name))
   (if (small-screen?) (assoc-in db [:view :menu :open?] false) db))
@@ -58,8 +63,20 @@
   db)
 
 
+(defn set-timeout-handler [db [_ timeout event]]
+  (js/setTimeout (fn [] (rfc/dispatch event) timeout))
+  db)
+
+
+(defn set-location-handler [db [_ url]]
+  (set! (.-location js/window) url)
+  db)
+
+
 (rfc/reg-event-db :alert alert-handler)
 (rfc/reg-event-db :println println-handler)
+(rfc/reg-event-db :debug debug-handler)
 (rfc/reg-event-db :to-screen to-screen-handler)
 (rfc/reg-event-db :xhr xhr-handler)
-
+(rfc/reg-event-db :set-timeout set-timeout-handler)
+(rfc/reg-event-db :set-location set-location-handler)

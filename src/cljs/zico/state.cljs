@@ -242,20 +242,6 @@
           {:dispatch ev})))))
 
 
-(reg-event-db
-  :debug
-  (fn debug-handler [db v]
-    (println "DEBUG: " (str v))
-    db))
-
-; TODO get rid of this here, move somewhere to application code
-(reg-event-db
-  :logout
-  (fn logout-handler [db [_]]
-    (set! (.-location js/window) "/logout")
-    db))
-
-
 (reg-event-fx
   :event/push-dispatch
   (fn [{:keys [db]} [_ path & events]]
@@ -296,53 +282,42 @@
 
 ; ------------------ Timer handing and deferred actions  -------------------------------
 
+(defn timer-update-handler [{:keys [db]} [_ path timeout ctime action]]
+  (let [t0 (+ (or ctime (.getTime (js/Date.))) timeout)
+        {t1 :timeout :as trec} (get-in db path)]
+    (if (some? t1)
+      {:db (assoc-in db path (assoc trec :timeout (max t0 t1) :action action))}
+      {:db       (assoc-in db path (assoc trec :timeout t0, :action action))
+       :dispatch [:set-timeout timeout [:timer/tick path nil]]})))
+
+(defn timer-tick-handler [{:keys [db]} [_ path ctime]]
+  (let [t (or ctime (.getTime (js/Date.))),
+        {:keys [timeout action] :as trec} (get-in db path)]
+    (cond
+      (nil? timeout) {:db db}
+      (<= timeout t) {:db (assoc-in db path (dissoc trec :timeout :action)), :dispatch action}
+      :else
+      {:db db, :dispatch [:set-timeout (- timeout t) [:timer/tick path nil]]})))
+
+(defn timer-flush-handler [{:keys [db]} [_ path]]
+  (let [{:keys [action] :as trec} (get-in db path {})]
+    (merge
+      {:db (assoc-in db path (dissoc trec :timeout :action))}
+      (when action {:dispatch action}))))
+
+(defn timer-cancel-handler [db [_ path]]
+  (let [trec (get-in db path {})]
+    (assoc-in db path (dissoc trec :timeout :action))))
+
 ; Starts or updates timer
-(reg-event-fx
-  :timer/update
-  (fn [{:keys [db]} [_ path timeout action]]
-    (let [t0 (+ (.getTime (js/Date.)) timeout)
-          {t1 :timeout :as trec} (get-in db path)]
-      (if (some? t1)
-        {:db (assoc-in db path (assoc trec :timeout (max t0 t1) :action action))}
-        (do
-          (js/setTimeout (fn [] (dispatch [:timer/tick path])) timeout)
-          {:db (assoc-in db path (assoc trec :timeout t0, :action action))}))
-      )))
-
-
-(reg-event-fx
-  :timer/tick
-  (fn [{:keys [db]} [_ path]]
-    (let [t (.getTime (js/Date.)),
-          {:keys [timeout action] :as trec} (get-in db path)]
-      (cond
-        (nil? timeout) {:db db}
-        (<= timeout t) {:db (assoc-in db path (dissoc trec :timeout :action)) :dispatch action}
-        :else
-        (do
-          (js/setTimeout (fn [] (dispatch [:timer/tick path])) (- timeout t))
-          {:db db})))))
-
-
-(reg-event-fx
-  :timer/flush
-  (fn [{:keys [db]} [_ path]]
-    (let [{:keys [action] :as trec} (get-in db path {})]
-      (merge
-        {:db (assoc-in db path (dissoc trec :timeout :action))}
-        (when action {:dispatch action})))))
-
-
-(reg-event-db
-  :timer/cancel
-  (fn [db [_ path]]
-    (let [trec (get-in db path {})]
-      (assoc-in db path (dissoc trec :timeout :action)))))
+(reg-event-fx :timer/update timer-update-handler)
+(reg-event-fx :timer/tick timer-tick-handler)
+(reg-event-fx :timer/flush timer-flush-handler)
+(reg-event-db :timer/cancel timer-cancel-handler)
 
 ; ------------------------------- XHR I/O  ------------------------------------
 
 (defmulti rest-process (fn [by _] by))
-
 
 (defn xhr-success-handler [{:keys [db]} [_ dest-path {:keys [on-success map-by proc-by merge-by]} data]]
   (let [vs (read-string data)

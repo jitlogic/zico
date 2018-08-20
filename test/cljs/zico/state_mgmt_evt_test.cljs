@@ -1,4 +1,4 @@
-(ns zico.test-state
+(ns zico.state-mgmt-evt-test
   (:require
     [cljs.test :refer-macros [is are deftest testing use-fixtures]]
     [day8.re-frame.test :as rft]
@@ -84,4 +84,65 @@
         (rf/dispatch [:form/edit-cancel :cfg :host])
         (is (= "cfg/host/list" (first (first @screens))))
         ))))
+
+
+(deftest test-timer-update-tick-update-flush
+  (testing "Basic timer update-tick-update-flush cycle."
+    (rft/run-test-sync
+      (tc/setup-fixture)
+      (let [state (rf/subscribe [:get [:view :test]])
+            timer (rf/subscribe [:get [:test :io :set-timeout]])
+            event [:set [:view :test] :foo]]
+        (testing "Issue update event for the first time"
+          (rf/dispatch [:timer/update [:my-timer] 100 10 event])
+          (is (nil? @state))
+          (is (= '(100 [:timer/tick [:my-timer] nil]) (first @timer))))
+        (testing "Issue tick event"
+          (rf/dispatch [:timer/tick [:my-timer] 50])
+          (is (= '(60 [:timer/tick [:my-timer] nil]) (first @timer)))
+          (is (nil? @state)))
+        (testing "Issue update event for the second time"
+          (rf/dispatch [:timer/update [:my-timer] 100 100 event])
+          (is (nil? @state))
+          (is (= '(60 [:timer/tick [:my-timer] nil]) (first @timer))))
+        (testing "Issue flush event and check "
+          (rf/dispatch [:timer/flush [:my-timer]])
+          (is (= :foo @state))))
+      )))
+
+
+(deftest test-timer-update-tick-timeout
+  (testing "Basic timer update-tick-timeout cycle."
+    (rft/run-test-sync
+      (tc/setup-fixture)
+      (let [state (rf/subscribe [:get [:view :test]])
+            timer (rf/subscribe [:get [:test :io :set-timeout]])
+            event [:set [:view :test] :foo]]
+        (testing "Issue update event for the first time"
+          (rf/dispatch [:timer/update [:my-timer] 100 10 event])
+          (is (nil? @state))
+          (is (= '(100 [:timer/tick [:my-timer] nil]) (first @timer))))
+        (testing "Issue tick event"
+          (rf/dispatch [:timer/tick [:my-timer] 150])
+          (is (= :foo @state)))))
+    ))
+
+
+(deftest test-timer-update-cancel-tick
+  (testing "Basic timer update-tick-timeout cycle."
+    (rft/run-test-sync
+      (tc/setup-fixture)
+      (let [state (rf/subscribe [:get [:view :test]])
+            timer (rf/subscribe [:get [:test :io :set-timeout]])
+            event [:set [:view :test] :foo]]
+        (testing "Issue update event for the first time"
+          (rf/dispatch [:timer/update [:my-timer] 100 10 event])
+          (is (nil? @state))
+          (is (= '(100 [:timer/tick [:my-timer] nil]) (first @timer))))
+        (testing "Cancel timer event"
+          (rf/dispatch [:timer/cancel [:my-timer]]))
+        (testing "Issue tick event"
+          (rf/dispatch [:timer/tick [:my-timer] 150])
+          (is (nil? @state)))))
+    ))
 

@@ -77,7 +77,7 @@
     :icon [:awe :user], :on-click [:to-screen "user/prefs" {}]}
    ;{:key :sep1, :separator? true}
    {:key :logout, :text "Logout",
-    :icon [:awe :logout], :on-click [:logout]}])
+    :icon [:awe :logout], :on-click [:set-location "/logout"]}])
 
 
 (defn on-scroll-fn [on-scroll]
@@ -150,7 +150,7 @@
             (let [path [:view sectn view :search]]
               [zw/input
                {:path path, :tag-ok :input.search, :autofocus true,
-                :on-update [:timer/update path 1000 on-refresh]
+                :on-update [:timer/update path 1000 nil on-refresh]
                 :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
                 :on-key-enter [:do [:timer/flush path] [:set (conj path :open?) false]]}])
             [:div.cpt                                       ; TODO przenieść tę część do search boxa

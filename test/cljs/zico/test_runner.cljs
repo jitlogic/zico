@@ -1,10 +1,10 @@
 (ns zico.test-runner
   (:require
     [doo.runner :refer-macros [doo-tests]]
-    [zico.test-state]))
+    [zico.state-mgmt-evt-test]))
 
 (enable-console-print!)
 
-(doo-tests 'zico.test-state)
+(doo-tests 'zico.state-mgmt-evt-test)
 
 
