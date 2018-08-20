@@ -25,6 +25,20 @@
   display: flex;
 }
 
+.flex-on-medium-or-more {
+  @media screen and (min-width: $small) {
+    display: flex;
+  }
+}
+
+.lpad {
+  padding-left: 0.5em;
+}
+
+.rpad {
+  padding-right: 0.5em;
+}
+
 .ellipsis {
   white-space: nowrap;
   overflow: hidden;

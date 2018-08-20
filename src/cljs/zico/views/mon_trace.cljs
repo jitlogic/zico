@@ -221,23 +221,24 @@
     ^{:key uuid}
     [:div.det
      {:data-trace-uuid uuid}
-     [:div.flex
+     [:div.flex-on-medium-or-more
       [:div tstamp]
       (let [{:keys [glyph name] :as x} (get @CFG-TTYPES ttype),
             [_ f g] (re-matches #"(.+)/(.+)" glyph)]
         [:div.flex
-         [:div.i (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text)]
+         [:div.i.lpad.rpad (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text)]
          [:div.ellipsis name]])
       (let [name (get-in @CFG-APPS [app :name])]
         [:div.flex
-         [:div.i (zw/svg-icon :awe :cubes :yellow)]
+         [:div.i.lpad.rpad (zw/svg-icon :awe :cubes :yellow)]
          [:div.ellipsis name]])
       (let [name (get-in @CFG-ENVS [env :name])]
         [:div.flex
-         [:div.i (zw/svg-icon :awe :sitemap :green)]
+         [:div.i.lpad.rpad (zw/svg-icon :awe :sitemap :green)]
          [:div.ellipsis name]])]
      [:div.flex
-      [:div.ellipsis (str "Host: " (:name (@CFG-HOSTS host)) "   (" host ")")]
+      [:div.lpad.rpad (zw/svg-icon :awe :desktop :text)]
+      [:div.ellipsis (str (:name (@CFG-HOSTS host)) "   (" host ")")]
       [:div.i
        (if (-> @FILTER-STATE :host :selected)
          (zw/svg-button

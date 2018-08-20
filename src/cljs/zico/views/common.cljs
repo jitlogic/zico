@@ -44,7 +44,8 @@
           (when monitor
             [:div
              (menu-item "awe" "search" "Search" "mon/trace/list" {})
-             (menu-item "ent" "flow-cascade" "Distributed" "mon/dtrace/tree" {})])
+             ;(menu-item "ent" "flow-cascade" "Distributed" "mon/dtrace/tree" {})
+             ])
           (menu-section configure :configure "CONFIGURE")
           (when configure
             [:div
