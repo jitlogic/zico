@@ -9,7 +9,7 @@
     [zico.macros :refer [svg-compiled-icon-set]]))
 
 
-(def svg-icons (svg-compiled-icon-set "assets/icons" nil ))
+(def svg-icons (svg-compiled-icon-set "assets/icons" nil))
 
 (defn svg-icon                                              ; TODO zamienić na macro
   ([family glyph color & {:keys [view-box class title] :or {view-box "0 0 1000 1000"}}]

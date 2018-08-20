@@ -65,6 +65,10 @@
     .mr {
       margin-right: 0.25em;
     }
+    .ml {
+      overflow-y: hidden;
+      overflow-x: hidden;
+    }
     .m {  // method description
       flex-grow: 10;
       white-space: nowrap;

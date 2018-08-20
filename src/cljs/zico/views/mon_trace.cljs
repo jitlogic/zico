@@ -2,7 +2,6 @@
   (:require
     [reagent.ratom :as ra]
     [clojure.string :as cs]
-
     [zico.util :as zu]
     [zico.state :as zs]
     [zico.widgets :as zw]))
@@ -14,19 +13,7 @@
   (zs/data-list-sfn :trace :type :name))
 
 
-(zs/register-sub
-  :data/trace-list-list
-  (fn [db _]
-    (let [data (ra/reaction (get-in @db [:data :trace :list]))
-          order (ra/reaction (get-in @db [:view :trace :list :sort :dur]))]
-      (ra/reaction
-        (reverse (sort-by (if @order :duration :tstamp) (vals @data))))
-      )))
 
-(zs/register-sub
-  :data/trace-tree-list
-  (fn [db [_]]
-    (ra/reaction (get-in @db [:data :trace :tree]))))
 
 (def CFG-TTYPES (zs/subscribe [:get [:data :cfg :ttype]]))
 (def CFG-HOSTS (zs/subscribe [:get [:data :cfg :host]]))
@@ -39,8 +26,8 @@
   (fn [e]
     (zs/traverse-and-handle
       (.-target e) "data-trace-uuid" "zorka-traces"
-      :btn-details #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::display-tree %]])
-      :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [::dtrace-tree %]])
+      :btn-details #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree %]])
+      :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-dist/dtrace-tree %]])
       :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
                           [:xhr/get (str "../../../data/trace/" % "/detail")
                            [:data sect sub % :detail] nil]])
@@ -87,7 +74,7 @@
           [:div.i
            (zw/svg-button
              :awe :link-ext :blue "Go to target trace..."
-             [:event/push-dispatch TRACE_HISTORY [::display-tree v]])])
+             [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree v]])])
         ])]))
 
 
@@ -162,10 +149,10 @@
       (when (and dtrace-links dtrace-uuid)           ; TODO use explicit flag, not dtrace-level check
         (zw/svg-button
           :ent :flow-cascade :blue "Distributed trace"
-          [:event/push-dispatch TRACE_HISTORY [::dtrace-tree uuid]]))
+          [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-dist/dtrace-tree uuid]]))
       (zw/svg-button
         :awe :right-big :blue "View trace details"
-        [:event/push-dispatch TRACE_HISTORY [::display-tree uuid]])]]))
+        [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree uuid]])]]))
 
 
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))

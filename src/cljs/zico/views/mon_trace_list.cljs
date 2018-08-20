@@ -9,6 +9,16 @@
     [zico.util :as zu]))
 
 
+(zs/register-sub
+  :data/trace-list-list
+  (fn [db _]
+    (let [data (ra/reaction (get-in @db [:data :trace :list]))
+          order (ra/reaction (get-in @db [:view :trace :list :sort :dur]))]
+      (ra/reaction
+        (reverse (sort-by (if @order :duration :tstamp) (vals @data))))
+      )))
+
+
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
 
 (defn make-filter [db offset]

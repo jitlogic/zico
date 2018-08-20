@@ -1,5 +1,6 @@
 (ns zico.views.mon-trace-tree
   (:require
+    [reagent.ratom :as ra]
     [zico.views.common :as zv]
     [zico.state :as zs]
     [zico.widgets :as zw]
@@ -7,35 +8,45 @@
     [zico.util :as zu]))
 
 
+(defn flatten-trace [collapsed t0 lvl {:keys [children duration pos] :as tr}]
+  (let [open (not (collapsed pos)), state (cond (nil? children) nil, open :open, :else :closed)]
+    (cons
+      (assoc (dissoc tr :children) :level lvl, :state state, :pct (* 100 (/ duration t0)))
+      (when (and children open)
+        (reduce concat
+                (for [c children]
+                  (flatten-trace collapsed t0 (inc lvl) c)))))))
 
-(defn flatten-trace [t0 lvl {:keys [children duration] :as tr}]
-  (cons
-    (assoc (dissoc tr :children) :level lvl :pct (* 100 (/ duration t0)))
-    (when children
-      (reduce concat
-              (for [c children]
-                (flatten-trace t0 (inc lvl) c))))))
+
+(defn trace-tree-list-ra [db [_]]
+  (let [data (ra/reaction (get-in @db [:data :trace :tree]))
+        collapsed (ra/reaction (get-in @db [:view :trace :tree :collapsed]))]
+    (ra/reaction
+      (let [tr @data]
+        (when tr (flatten-trace (or @collapsed {}) (:duration tr 1) 1 tr))
+        ))))
 
 
-(defmethod zs/rest-process ::display-tree [_ tr]
-  (when tr (flatten-trace (:duration tr) 1 tr)))
+(zs/register-sub
+  :data/trace-tree-list
+  trace-tree-list-ra)
 
 
 (zs/reg-event-fx
   ::display-tree
   (fn [{:keys [db]} [_ uuid]]
     {:db (-> db
-             (assoc-in [:view :trace :tree] {:uuid uuid})
+             (assoc-in [:view :trace :tree] {:uuid uuid, :collapsed {}})
              (assoc-in [:data :trace :tree] nil))
      :dispatch-n
          [[:to-screen "mon/trace/tree"]
           [:xhr/get (str "../../../data/trace/" uuid "/tree")
            [:data :trace :tree] nil,
-           :proc-by ::display-tree]]}))
+           ]]}))
 
 
-(defn render-trace-tree-detail [{:keys [pos attrs duration exception]
-                                 {:keys [result package class method args]} :method}]
+(defn render-trace-tree-detail [{{:keys [result package class method args]} :method
+                                 :keys [pos attrs duration exception] :as tr}]
   ^{:key pos}
   [:div.det {:data-trace-pos pos}
    [:div.method
@@ -47,18 +58,23 @@
    (when exception (zvmt/render-exception exception true))])
 
 
-(defn render-trace-tree-item [{:keys [pos level duration attrs exception]
-                               {:keys [result package class method args]} :method}]
+(defn render-trace-tree-item [{{:keys [result package class method args]} :method,
+                               :keys [pos level duration attrs exception state] :as tr}]
   ^{:key pos}
   [:div.itm.method {:data-trace-pos pos}
    [:div.t (zu/ticks-to-str duration)]
    [(cond attrs :div.mc.c-blue exception :div.mc.c-red :else :div.mc.c-text)
     {:style {:margin-left (str (* level 10) "px")}}
-    [:div.mr.medium-or-more result]
-    [:div.large-or-more (str package ".")]
-    [:div.small-or-more (str class ".")]
-    [:div.m.medium-or-less (str method (if (= args "()") "()" "(...)"))]
-    [:div.m.medium-or-more (str method args)]]])
+    [:div.flex.ml
+     (case state
+       :open (zw/svg-button :awe :minus-squared-alt :text "Collapse" [:toggle [:view :trace :tree :collapsed pos]])
+       :closed (zw/svg-button :awe :plus-squared-alt :text "Expand" [:toggle [:view :trace :tree :collapsed pos]])
+       (zw/svg-icon :awe :null :text))
+     [:div.mr.medium-or-more result]
+     [:div.large-or-more (str package ".")]
+     [:div.small-or-more (str class ".")]
+     [:div.m.medium-or-less (str method (if (= args "()") "()" "(...)"))]
+     [:div.m.medium-or-more (str method args)]]]])
 
 
 (defn toolbar-tree-left []
@@ -94,10 +110,10 @@
   (zv/render-screen
     :hide-menu-btn true
     :toolbar [zv/list-screen-toolbar :trace :tree
-              {:title "Call tree",
+              {:title     "Call tree",
                :sort-ctls {}
-               :flags #{:no-refresh :no-bookmark}
-               :add-left [toolbar-tree-left]
+               :flags     #{:no-refresh :no-bookmark}
+               :add-left  [toolbar-tree-left]
                :add-right [toolbar-tree-right]}]
     :central [zv/list-interior [:trace :tree] render-trace-tree-item render-trace-tree-detail
               :id-attr :pos, :id "zorka-methods", :on-click trace-tree-click-handler]))
