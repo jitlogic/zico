@@ -28,6 +28,15 @@
         ))))
 
 
+(defn init-collapse-nodes [t0 pmin {:keys [children duration pos] :as tr}]
+  (let [pct (/ duration t0)]
+    (apply
+      merge
+      (if (< pct pmin) {pos true})
+      (for [c children :when (:children c)]
+        (init-collapse-nodes t0 pmin c)))))
+
+
 (zs/register-sub
   :data/trace-tree-list
   trace-tree-list-ra)
@@ -41,9 +50,20 @@
              (assoc-in [:data :trace :tree] nil))
      :dispatch-n
          [[:to-screen "mon/trace/tree"]
-          [:xhr/get (str "../../../data/trace/" uuid "/tree")
-           [:data :trace :tree] nil,
-           ]]}))
+          [:xhr/get (str "../../../data/trace/" uuid "/tree") nil nil,
+           :on-success [::handle-xhr-result nil]]]}))
+
+
+(zs/reg-event-db
+  ::handle-xhr-result
+  (fn [db [_ _ tr]]
+    (let [cl (init-collapse-nodes (:duration tr 15259) 0.1 tr)]
+      (println (str cl))
+      (->
+        db
+        (assoc-in [:data :trace :tree] tr)
+        (assoc-in [:view :trace :tree :collapsed] cl)
+        ))))
 
 
 (defn pct-color [pct]
