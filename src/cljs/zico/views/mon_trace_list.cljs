@@ -263,8 +263,8 @@
               {:title "Traces", :add-left [toolbar-left], :add-right [toolbar-right]
                :sort-ctls {}, :on-refresh [::refresh-list]}]
     :central [zv/list-interior [:trace :list]
-              (zvmt/render-trace-list-item-fn :dtrace-links true)
-              (zvmt/render-trace-list-detail-fn :dtrace-links true, :attr-links true)
+              (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)
+              (zvmt/render-trace-list-detail-fn true true)
               :id "zorka-traces", :on-scroll [::scroll-list],
               :on-click (zvmt/trace-list-click-handler-fn :trace :list)]))
 

@@ -47,29 +47,30 @@
 (def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
 
 
-(defn render-attrs [attrs ttype]                            ; TODO ttype -> render-filter-buttons-fn
+(defn render-attrs [attrs ttype]
   "Renders method call attributes (if any)"
   (let [filter-attrs @FILTER-ATTRS]
     [:div.trace-attrs
      (for [[n l k v] (map cons (range) (zu/map-to-seq attrs))]
        ^{:key n}
        [:div.a {:style {:margin-left (str l "em")}}
-        [:div.k k]
-        [:div.v v]
         (when ttype
           (if (contains? filter-attrs k)
-            [:div.i (zw/svg-button
-                      :awe :cancel :red "Clear filter ..."
-                      [:do
-                       [:dissoc [:view :trace :list :filter-attrs] k]
-                       [:dissoc [:view :trace :list] :selected]
-                       [:zico.views.mon-trace-list/refresh-list]])]
-            [:div.i (zw/svg-button
-                      :awe :filter :blue "Filter by ..."
-                      [:do
-                       [:dissoc [:view :trace :list] :selected]
-                       [::filter-by-attr k v ttype]])]))
-        ; TODO z poniższego zrobić tylko link do detali trace'ów;
+            [:div.i
+             (zw/svg-button
+               :awe :cancel :red "Clear filter ..."
+               [:do
+                [:dissoc [:view :trace :list :filter-attrs] k]
+                ;[:dissoc [:view :trace :list] :selected]
+                [:zico.views.mon-trace-list/refresh-list]])]
+            [:div.i
+             (zw/svg-button
+               :awe :filter :blue "Filter by ..."
+               [:do
+                ;[:dissoc [:view :trace :list] :selected]
+                [::filter-by-attr k v ttype]])]))
+        [:div.k k]
+        [:div.v v]
         (when (= k "DTRACE_OUT")
           [:div.i
            (zw/svg-button
@@ -90,9 +91,8 @@
                  [:div.c (str class "." method)]
                  [:div.f (str "(" file ":" line ")")]])]])
 
-(def FILTER-STATE (zs/subscribe [:get [:view :trace :list :filter]]))
 
-(defn render-trace-list-detail-fn [& {:keys [dtrace-links attr-links]}]
+(defn render-trace-list-detail-fn [enable-filters dtrace-links]
   (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host ttype app env]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
     ^{:key uuid}
@@ -100,36 +100,47 @@
      {:data-trace-uuid uuid}
      [:div.flex-on-medium-or-more
       [:div tstamp]
-      (let [{:keys [glyph name] :as x} (get @CFG-TTYPES ttype),
+      (let [{:keys [glyph name uuid] :as x} (get @CFG-TTYPES ttype),
             [_ f g] (re-matches #"(.+)/(.+)" glyph)]
         [:div.flex
-         [:div.i.lpad.rpad (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text)]
+         [:div.i.lpad.rpad
+          (if enable-filters
+            (zw/svg-button
+              (if f (keyword f) :awe) (if g (keyword g) :paw) :text (str "Show only " name " traces.")
+              [:do [:set [:view :trace :list :filter :ttype :selected] uuid]
+               [:zico.views.mon-trace-list/refresh-list]])
+            (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text :opaque false))]
          [:div.ellipsis name]])
-      (let [name (get-in @CFG-APPS [app :name])]
+      (let [{:keys [name uuid]} (get @CFG-APPS app)]
         [:div.flex
-         [:div.i.lpad.rpad (zw/svg-icon :awe :cubes :yellow)]
+         [:div.i.lpad.rpad
+          (if enable-filters
+            (zw/svg-button
+              :awe :cubes :yellow (str "Show only " name " application.")
+              [:do [:set [:view :trace :list :filter :app :selected] uuid]
+               [:zico.views.mon-trace-list/refresh-list]])
+            (zw/svg-icon :awe :cubes :yellow :opaque false))]
          [:div.ellipsis name]])
-      (let [name (get-in @CFG-ENVS [env :name])]
+      (let [{:keys [name uuid]} (get @CFG-ENVS env)]
         [:div.flex
-         [:div.i.lpad.rpad (zw/svg-icon :awe :sitemap :green)]
+         [:div.i.lpad.rpad
+          (if enable-filters
+            (zw/svg-button
+              :awe :sitemap :green (str "Show only " name " environment.")
+              [:do [:set [:view :trace :list :filter :env :selected] uuid]
+               [:zico.views.mon-trace-list/refresh-list]])
+            (zw/svg-icon :awe :sitemap :green :opaque false))]
          [:div.ellipsis name]])]
-     [:div.flex
-      [:div.lpad.rpad (zw/svg-icon :awe :desktop :text)]
-      [:div.ellipsis (str (:name (@CFG-HOSTS host)) "   (" host ")")]
-      [:div.i
-       (if (-> @FILTER-STATE :host :selected)
-         (zw/svg-button
-           :awe :cancel :red "Remove filter ..."
-           [:do
-            [:dissoc [:view :trace :list] :selected]
-            [:dissoc [:view :trace :list :filter :host] :selected]
-            [:zico.views.mon-trace-list/refresh-list]])
-         (zw/svg-button
-           :awe :filter :blue "Filter by ..."
-           [:do
-            [:dissoc [:view :trace :list] :selected]
-            [:set [:view :trace :list :filter :host :selected] host]
-            [:zico.views.mon-trace-list/refresh-list]]))]]
+     (let [{:keys [name uuid]} (get @CFG-HOSTS host)]
+       [:div.flex
+        [:div.lpad.rpad
+         (if enable-filters
+           (zw/svg-button
+             :awe :desktop :blue (str "Show only " name " host.")
+             [:do [:set [:view :trace :list :filter :host :selected] uuid]
+              [:zico.views.mon-trace-list/refresh-list]])
+           (zw/svg-icon :awe :desktop :text))]
+        [:div.ellipsis (str name "   (" uuid ")")]])
      [:div.c-light.bold.wrapping descr]
      [:div.c-darker.ellipsis result]
      [:div.c-light.ellipsis (str method args)]
@@ -137,7 +148,7 @@
      (cond
        (nil? detail) [:div.wait "Wait..."]
        (nil? (:attrs detail)) [:div.wait "No attributes here."]
-       :else (render-attrs (:attrs detail) attr-links))
+       :else (render-attrs (:attrs detail) enable-filters))
      (when (:exception detail)
        (render-exception (:exception detail) true))
      [:div.btns

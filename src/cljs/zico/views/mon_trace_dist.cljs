@@ -86,7 +86,7 @@
                }]
     :central [zv/list-interior [:dtrace :tree]
               (zvmt/render-trace-list-item-fn :dtrace-links false)
-              (zvmt/render-trace-list-detail-fn :attr-links false, :dtrace-links false)
+              (zvmt/render-trace-list-detail-fn false false)
               :id-attr :uuid, :id "zorka-dist", :class "trace-list-list",
               :on-click (zvmt/trace-list-click-handler-fn :dtrace :tree)]
     ))
