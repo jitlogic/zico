@@ -128,6 +128,10 @@
           (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false uuid)
           (ztrc/trace-detail app-state Integer/MAX_VALUE uuid))))
 
+    (GET "/data/trace/:uuid/stats" req
+      (let [^String uuid (-> req :params :uuid)]
+        (ztrc/trace-stats app-state uuid)))
+
     ; Configuration data API
     (GET "/data/cfg/:class" [class]
       (if (OBJ-CLASSES class)

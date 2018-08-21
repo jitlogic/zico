@@ -58,12 +58,10 @@
   ::handle-xhr-result
   (fn [db [_ _ tr]]
     (let [cl (init-collapse-nodes (:duration tr 15259) 0.1 tr)]
-      (println (str cl))
-      (->
-        db
-        (assoc-in [:data :trace :tree] tr)
-        (assoc-in [:view :trace :tree :collapsed] cl)
-        ))))
+      (-> db
+          (assoc-in [:data :trace :tree] tr)
+          (assoc-in [:view :trace :tree :collapsed] cl)
+          ))))
 
 
 (defn pct-color [pct]
@@ -75,6 +73,7 @@
     (> pct 20) "#c99"
     :else "#aaa"
     ))
+
 
 (defn render-trace-tree-detail [{{:keys [result package class method args]} :method
                                  :keys [pos attrs duration exception pct] :as tr}]
@@ -113,13 +112,11 @@
 
 
 (defn toolbar-tree-left []
-  (let [view-state (zs/subscribe [:get [:view :trace :tree]])]
-    (fn []
-      (let [view-state @view-state]
-        [:div.flexible
-         (zw/svg-button
-           :awe :left-big :blue "To trace list"
-           [:event/pop-dispatch zvmt/TRACE_HISTORY [:to-screen "mon/trace/list"]])]))))
+  [:div.flexible
+   (zw/svg-button
+     :awe :left-big :blue "To trace list"
+     [:event/pop-dispatch zvmt/TRACE_HISTORY
+      [:to-screen "mon/trace/list"]])])
 
 
 (defn toolbar-tree-right []

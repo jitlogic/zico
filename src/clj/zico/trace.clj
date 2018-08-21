@@ -10,7 +10,7 @@
     (java.io File)
     (io.zorka.tdb.store
       RotatingTraceStore TraceStore TemplatingMetadataProcessor TraceRecordFilter
-      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceTypeResolver TraceSearchResultItem)
+      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceTypeResolver TraceSearchResultItem TraceStatsRecordFilter TraceStatsResultItem)
     (java.util HashMap Map List ArrayList)
     (io.zorka.tdb.meta ChunkMetadata StructuredTextIndex)
     (io.zorka.tdb MissingSessionException)
@@ -183,10 +183,7 @@
 
 
 (defn trace-detail [{:keys [trace-store obj-store] :as app-state} stack-limit uuid]
-  (let [cids (.getChunkIds trace-store uuid)
-        lcid (.get cids (- (.size cids) 1))
-        cm (.getChunkMetadata trace-store lcid)
-        rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
+  (let [rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
         rslt (.retrieve trace-store uuid rtr)]
     {:status 200, :body {:type :rest, :data (merge {:uuid uuid} rslt)}}))
 
@@ -198,6 +195,22 @@
     (if (some? trc)
       (trace-detail app-state stack-limit (.getUuid trc))
       {:status 404})))
+
+
+(defn trace-stats [{:keys [trace-store obj-store] :as app-state} uuid]
+  (let [f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
+    (.retrieve trace-store uuid rtr)
+    {:status 200,
+     :body {:type :rest,
+            :data (for [^TraceStatsResultItem s (.getStats f)]
+                    {:mid (.getMid s),
+                     :recs (.getRecs s),
+                     :errors (.getErrors s),
+                     :sum-duration (.getSumDuration s),
+                     :max-duration (.getMinDuration s),
+                     :min-duration (.getMaxDuration s),
+                     :method (.getMethod s)})
+            }}))
 
 
 (defn get-or-new [{:keys [obj-store] {{reg :register} :agent-conf} :conf :as app-state} class name]

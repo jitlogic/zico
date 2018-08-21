@@ -146,6 +146,9 @@
       (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
       (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/secs-to-str duration)]
       [:div.flexible.flex]                                  ; TODO display trace type
+      (zw/svg-button
+        :awe :chart-bar :text "Method call stats"
+        [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-stats/display-stats uuid]])
       (when (and dtrace-links dtrace-uuid)           ; TODO use explicit flag, not dtrace-level check
         (zw/svg-button
           :ent :flow-cascade :blue "Distributed trace"

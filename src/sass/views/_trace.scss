@@ -101,6 +101,28 @@
   } // .itm
 } // .trace-tree-list
 
+.trace-stats-list {
+  .mstat {
+    .n {
+      min-width: 4em;
+      max-width: 4em;
+      text-align: center;
+      margin-right: 0.5em;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+    .t {
+      margin-left: 0.5em;
+      overflow-x: hidden;
+    }
+    .m {
+      flex-grow: 10;
+      white-space: nowrap;
+      overflow-x: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+} // .trace-stats-list
 
 .trace-attrs {
   margin-top: 0.5em;
