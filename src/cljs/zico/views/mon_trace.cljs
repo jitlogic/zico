@@ -41,7 +41,7 @@
           fattrs (if (= ttype (:ttype fattrs)) fattrs {:ttype ttype})
           fattrs (if (contains? fattrs k) (dissoc fattrs k) (assoc fattrs k v))]
       {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
-       :dispatch [::refresh-list]})))
+       :dispatch [:zico.views.mon-trace-list/refresh-list]})))
 
 
 (def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
@@ -63,7 +63,7 @@
                       [:do
                        [:dissoc [:view :trace :list :filter-attrs] k]
                        [:dissoc [:view :trace :list] :selected]
-                       [::refresh-list]])]
+                       [:zico.views.mon-trace-list/refresh-list]])]
             [:div.i (zw/svg-button
                       :awe :filter :blue "Filter by ..."
                       [:do
@@ -123,13 +123,13 @@
            [:do
             [:dissoc [:view :trace :list] :selected]
             [:dissoc [:view :trace :list :filter :host] :selected]
-            [::refresh-list]])
+            [:zico.views.mon-trace-list/refresh-list]])
          (zw/svg-button
            :awe :filter :blue "Filter by ..."
            [:do
             [:dissoc [:view :trace :list] :selected]
             [:set [:view :trace :list :filter :host :selected] host]
-            [::refresh-list]]))]]
+            [:zico.views.mon-trace-list/refresh-list]]))]]
      [:div.c-light.bold.wrapping descr]
      [:div.c-darker.ellipsis result]
      [:div.c-light.ellipsis (str method args)]

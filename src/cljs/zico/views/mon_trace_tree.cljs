@@ -5,7 +5,8 @@
     [zico.state :as zs]
     [zico.widgets :as zw]
     [zico.views.mon-trace :as zvmt]
-    [zico.util :as zu]))
+    [zico.util :as zu]
+    [cljs.pprint :as pp]))
 
 
 (defn flatten-trace [collapsed t0 lvl {:keys [children duration pos] :as tr}]
@@ -45,13 +46,24 @@
            ]]}))
 
 
+(defn pct-color [pct]
+  (cond
+    (> pct 90) "#f00"
+    (> pct 80) "#f33"
+    (> pct 60) "#e44"
+    (> pct 40) "#d66"
+    (> pct 20) "#c99"
+    :else "#aaa"
+    ))
+
 (defn render-trace-tree-detail [{{:keys [result package class method args]} :method
-                                 :keys [pos attrs duration exception] :as tr}]
+                                 :keys [pos attrs duration exception pct] :as tr}]
   ^{:key pos}
   [:div.det {:data-trace-pos pos}
    [:div.method
     [:div.c-darker.flexible result]
-    [:div.ti (zw/svg-icon :awe :clock :blue) [:div.flexible] (zu/ticks-to-str duration)]]
+    [:div.ti {:style {:color (pct-color pct)}} (zw/svg-icon :awe :clock :blue) [:div.flexible]
+     (str (zu/ticks-to-str duration) " (" (pp/cl-format nil "~,2f" pct) "%)")]]
    [:div.c-light.ellipsis (str method args)]
    [:div.c-darker.text-rtl.ellipsis package "." class]
    (when attrs (zvmt/render-attrs attrs nil))
@@ -59,10 +71,13 @@
 
 
 (defn render-trace-tree-item [{{:keys [result package class method args]} :method,
-                               :keys [pos level duration attrs exception state] :as tr}]
+                               :keys [pos level duration attrs exception state pct] :as tr}]
   ^{:key pos}
   [:div.itm.method {:data-trace-pos pos}
-   [:div.t (zu/ticks-to-str duration)]
+   [:div.flex {:style {:color (pct-color pct)}}
+    [:div.t (zu/ticks-to-str duration)]
+    ;[:div.p (if (= pct 100.0) "100.0" (pp/cl-format nil "~,2f" pct))]
+    ]
    [(cond attrs :div.mc.c-blue exception :div.mc.c-red :else :div.mc.c-text)
     {:style {:margin-left (str (* level 10) "px")}}
     [:div.flex.ml

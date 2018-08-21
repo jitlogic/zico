@@ -24,7 +24,6 @@
 .c-black   { @include text-color($c-black); }
 .c-white   { @include text-color($c-white); }
 
-
 // Background colors
 .b-text { background: $b-normal; }             // Background (depending on theme)
 
