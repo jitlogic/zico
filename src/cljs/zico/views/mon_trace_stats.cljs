@@ -12,16 +12,16 @@
   (fn [{:keys [db]} [_ uuid]]
     {:db (assoc-in db [:data :trace :stats] nil),
      :dispatch-n
-     [[:to-screen "mon/trace/stats"]
-      [:xhr/get (str "../../../data/trace/" uuid "/stats")
-       [:data :trace :stats] nil]]}))
+         [[:to-screen "mon/trace/stats"]
+          [:xhr/get (str "../../../data/trace/" uuid "/stats")
+           [:data :trace :stats] nil
+           :on-error zv/DEFAULT-SERVER-ERROR]]}))
 
 
 (defn trace-stats-list-ra [db [_]]
   (let [stats (zs/subscribe [:get [:data :trace :stats]])
         order (zs/subscribe [:get [:view :trace :stats :sort]])]
     (ra/reaction
-      ;(println (str (get-in @db [:data :trace :stats])))
       (reverse (sort-by (if (:duration @order) :sum-duration :recs) @stats))
       )))
 

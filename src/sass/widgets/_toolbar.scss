@@ -8,8 +8,6 @@
   .svg-icon {
     margin-right: 0.12em;
     margin-left: 0.12em;
-    //width: 1.25em;
-    //height: 1em;
   }
   .cpt {
     flex: 10;
@@ -40,3 +38,25 @@
   }
 }
 
+.status-bar {
+  border: 1px solid $c-line;
+  bottom: 0;
+  display: flex;
+  position: fixed;
+  background: $b-light;
+  align-items: center;
+  padding: 0.125em 0.25em 0.125em 1em;
+  .svg-icon {
+    margin-left: 0.75em;
+  }
+  @media screen and (max-width: $small) {
+    left: 0;
+    right: 0;
+    transform: translate(0,0);
+  }
+  @media screen and (min-width: $small) {
+    left: 50%;
+    border-radius: 0.25em 0.25em 0.25em 0.25em;
+    transform: translate(-50%,-10%);
+  }
+}

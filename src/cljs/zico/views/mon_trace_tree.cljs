@@ -51,7 +51,8 @@
      :dispatch-n
          [[:to-screen "mon/trace/tree"]
           [:xhr/get (str "../../../data/trace/" uuid "/tree") nil nil,
-           :on-success [::handle-xhr-result nil]]]}))
+           :on-success [::handle-xhr-result nil]
+           :on-error zv/DEFAULT-SERVER-ERROR]]}))
 
 
 (zs/reg-event-db

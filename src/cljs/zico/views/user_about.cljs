@@ -11,7 +11,8 @@
 
 
 (defn about-refresh []
-  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil]))
+  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil
+                :on-error zv/DEFAULT-SERVER-ERROR]))
 
 
 (defonce about-timer (js/setInterval about-refresh 30000))  ; TODO this is stateful

@@ -164,9 +164,38 @@
          ]))))
 
 
+(defn render-status-bar [{:keys [level message]}]
+  (when level
+    [:div.status-bar
+     [(case level :error :div.c-red :div.c-text) message]
+     (zw/svg-button
+       :awe :cancel :red "Close"
+       [:set [:view :status-bar] nil])])
+  )
+
+
+(defn status-message-handler [{:keys [db]} [_ level timeout prefix message ctime]]
+  (let [tstamp (or ctime (.getTime (js/Date.)))]
+    {:db       (assoc-in db [:view :status-bar] {:level level, :message (str prefix message), :tstamp tstamp})
+     :dispatch [:set-timeout timeout [:status/clean tstamp]]
+     }))
+
+(defn status-clean-handler [db [_ tstamp]]
+  (if (= tstamp (-> db :view :status-bar :tstamp))
+    (assoc-in db [:view :status-bar] nil)
+    db))
+
+(zs/reg-event-fx :status/message status-message-handler)
+(zs/reg-event-db :status/clean status-clean-handler)
+
+(def DEFAULT-SERVER-ERROR [:status/message :error 5000 "Server error: "])
+(def DEFAULT-STATUS-ERROR [:status/message :error 5000 "Error: "])
+(def DEFAULT-STATUS-INFO [:status/message :info 5000 ""])
+
 (defn render-screen [& {:keys [toolbar caption central hide-menu-btn]}]
   "Renders whole screen that consists of main panel, toolbar and menu bar."
-  (let [menu-state (zs/subscribe [:get [:view :menu]])]
+  (let [menu-state (zs/subscribe [:get [:view :menu]])
+        status-bar (zs/subscribe [:get [:view :status-bar]])]
     (fn []
       (let [{:keys [open?]} @menu-state]
         [:div.top-container
@@ -180,7 +209,8 @@
              :awe :logout :light "User settings & logout"
              [:popup/open :menu, :caption "User Menu",
               :position :top-right, :items USER-MENU-ITEMS])]
-          [:div.central-panel central]]
+          [:div.central-panel central]
+          (render-status-bar @status-bar)]
          [zp/render-popup-stack]
          ]))))
 

@@ -34,7 +34,8 @@
    [{:id :ok, :text "Delete", :icon [:awe :ok :green]
      :on-click [:xhr/delete
                 (str "../../../data/" (clojure.core/name sectn) "/" (clojure.core/name view) "/" uuid) nil nil
-                :on-success [:dissoc [:data sectn view] uuid]]}
+                :on-success [:dissoc [:data sectn view] uuid]
+                :on-error zv/DEFAULT-SERVER-ERROR]}
     {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
 
 (defn render-detail [[sectn view] fdefs]

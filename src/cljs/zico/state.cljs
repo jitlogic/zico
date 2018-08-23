@@ -215,7 +215,9 @@
                       [:xhr/post (str "../../../data/" (name sectn) "/" (name view)) nil (dissoc newv :uuid)
                        :on-success on-refresh
                        :on-error [:dissoc [:data sectn view] :new]]
-                      [:xhr/put (str "../../../data/" (name sectn) "/" (name view) "/" uuid) nil newv]
+                      [:xhr/put (str "../../../data/" (name sectn) "/" (name view) "/" uuid) nil newv
+                       ; TODO move this to dedicated module :on-error zv/DEFAULT-SERVER-ERROR
+                       ]
                       )]})))
 
 (reg-event-fx :form/edit-commit form-edit-commit-fx)

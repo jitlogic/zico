@@ -17,7 +17,10 @@
            [[:to-screen "mon/dtrace/tree"]
             [:xhr/post "../../../data/trace/search" nil
              {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
-             :on-success [:set [:data :dtrace :tree]], :map-by :uuid]]})))
+             :on-success [:set [:data :dtrace :tree]],
+             :on-error zv/DEFAULT-SERVER-ERROR,
+             :map-by :uuid]
+            ]})))
 
 
 (defn dtrace-path-compare [p1 p2]

@@ -6,7 +6,8 @@
     [zico.widgets :as zw]
     [zico.views.common :as zv]))
 
-(def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil])
+(def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil
+                    :on-error zv/DEFAULT-SERVER-ERROR])
 
 (defn btn-restore-action [id]
   (println "id = " id)
@@ -16,8 +17,8 @@
    :buttons
    [{:id :ok, :text "Restore", :icon [:awe :upload :yellow]
      :on-click [:xhr/post (str "/admin/backup/" id "/restore") nil {}
-              :on-success [:alert "Database restored."]
-              :on-error [:alert "Error restoring database."]]}
+                :on-success [:alert "Database restored."]
+                :on-error zv/DEFAULT-SERVER-ERROR]}
     {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
 
 ; TODO popups z informacjami i handlery - to po wdrożeniu uniweralnego popupu starowanego eventami;
@@ -36,7 +37,7 @@
             {:icon [:awe :download :green], :text "Backup",
              :on-click [:xhr/post "/admin/backup" nil {}
                         :on-success REFRESH-EVENT
-                        :on-error [:alert "Error performing backup."]]}]]
+                        :on-error zv/DEFAULT-SERVER-ERROR]}]]
           [:div.col2
            [:div.label.ellipsis
             (str "Last: " (if (some? id) tstamp "<none>") )]]]

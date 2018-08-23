@@ -74,7 +74,8 @@
      :dispatch
          [:xhr/post "../../../data/trace/search" nil
           (make-filter db (count (get-in db [:data :trace :list])))
-          :on-success [::handle-trace-search-result false]]}))
+          :on-success [::handle-trace-search-result false]
+          :on-error zv/DEFAULT-SERVER-ERROR]}))
 
 
 (zs/reg-event-db
@@ -91,7 +92,8 @@
     {:db db
      :dispatch
          [:xhr/post "../../../data/trace/search" nil (make-filter db 0)
-          :on-success [::handle-trace-search-result true]]}))
+          :on-success [::handle-trace-search-result true]
+          :on-error zv/DEFAULT-SERVER-ERROR]}))
 
 
 (zs/reg-event-fx
@@ -101,7 +103,8 @@
           sel (get-in db [:view :trace :list :selected])
           uuids (into #{} (map :uuid data))
           evt (if (and sel (contains? uuids sel))
-                [:xhr/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail] nil]
+                [:xhr/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail] nil
+                 :on-error zv/DEFAULT-SERVER-ERROR]
                 [:nop])]
       {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))
        :dispatch [:do evt [::extend-list-notification data]]})))

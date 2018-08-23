@@ -4,7 +4,8 @@
     [clojure.string :as cs]
     [zico.util :as zu]
     [zico.state :as zs]
-    [zico.widgets :as zw]))
+    [zico.widgets :as zw]
+    [zico.views.common :as zv]))
 
 
 ; Register all needed subscriptions
@@ -30,7 +31,8 @@
       :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-dist/dtrace-tree %]])
       :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
                           [:xhr/get (str "../../../data/trace/" % "/detail")
-                           [:data sect sub % :detail] nil]])
+                           [:data sect sub % :detail] nil
+                           :on-error zv/DEFAULT-SERVER-ERROR]])
       :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))
 
 

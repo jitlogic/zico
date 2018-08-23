@@ -64,7 +64,7 @@
 
 
 (defn set-timeout-handler [db [_ timeout event]]
-  (js/setTimeout (fn [] (rfc/dispatch event) timeout))
+  (js/setTimeout (fn [] (rfc/dispatch event)) timeout)
   db)
 
 
