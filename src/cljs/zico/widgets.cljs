@@ -26,9 +26,6 @@
    (svg-icon family glyph color)])
 
 
-(def value-parse identity)
-
-
 ; Renders input box
 ; TODO validation-fn, validation-re: przejść na reaction, przygotować funkcje usługowe do typowych przypadków (regex itd.);
 (defn input [{:keys [id path type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update autofocus on-key-enter on-key-esc]

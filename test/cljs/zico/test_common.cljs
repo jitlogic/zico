@@ -1,5 +1,6 @@
 (ns zico.test-common
   (:require
+    [zico.forms :as zf]
     [re-frame.core :as rfc]
     [cljs.reader :refer [read-string]]
     [clojure.string :as cs]))
