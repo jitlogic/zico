@@ -150,10 +150,12 @@
           (if (:open? search-state)
             (let [path [:view sectn view :search]]
               [zw/input
-               {:path path, :tag-ok :input.search, :autofocus true,
-                :on-update [:timer/update path 1000 nil on-refresh]
-                :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
-                :on-key-enter [:do [:timer/flush path] [:set (conj path :open?) false]]}])
+               :path path, :tag-ok :input.search, :autofocus true,
+               :getter (zs/subscribe [:get path]),
+               :setter [:form/set-text path :nil]
+               :on-update [:timer/update path 1000 nil on-refresh]
+               :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
+               :on-key-enter [:do [:timer/flush path] [:set (conj path :open?) false]]])
             [:div.cpt                                       ; TODO przenieść tę część do search boxa
              {:on-click (zs/to-handler [:toggle [:view sectn view :search :open?]])}
              (str title (if (:text search-state) (str " (" (:text search-state) ")") ""))])]

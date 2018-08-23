@@ -28,25 +28,24 @@
 
 ; Renders input box
 ; TODO validation-fn, validation-re: przejść na reaction, przygotować funkcje usługowe do typowych przypadków (regex itd.);
-(defn input [{:keys [id path type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update autofocus on-key-enter on-key-esc]
+(defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update autofocus on-key-enter on-key-esc]
               :or {tag-ok :input.input, tag-err :input.input.error, type :string, valid? true, partial-fn? (constantly true), attrs {}}}]
   "Renders input box. Parameters:
    :id - element ID
+   :getter - value getter (ref, subscription, reaction, string)
    :path - path to edited value
    :type - data type
    :tag-ok - HTML tag when in normal mode
    :tag-err - HTML tag when in error mode
    :valid? - valid/invalid flag (ref, reaction, boolean)
-   :partial-fn? - function that receives text and returns true if
+   :partial-fn? - function that receives text and returns true if text is valid but incomplete
    :on-update - value update handler
    :autofocus - if true, input will automatically receive focus when displayed
    :on-key-enter - ENTER key handler
-   :on-key-esc - ESC key handler
-   "
-  (let [state (zs/subscribe [:get path])
-        on-change #(let [text (.. % -target -value)]
-                     (when (partial-fn? text) ; TODO widgety zmieszane z formami - rozszyć i nie używać :form/set-text tutaj
-                       (zs/dispatch-sync [:do [:form/set-text path type text] (conj on-update text)])))
+   :on-key-esc - ESC key handler"
+  (let [on-change #(let [text (.. % -target -value)]
+                     (when (partial-fn? text)
+                       (zs/dispatch-sync [:do (conj setter text) (conj on-update text)])))
         on-key-down (when (or on-key-enter on-key-esc)
                       #(case (.-keyCode %)
                          13 (when on-key-enter (zs/dispatch on-key-enter))
@@ -60,7 +59,7 @@
       (merge
         {:reagent-render
          (fn []
-           (let [{:keys [text]} @state]
+           (let [{:keys [text]} @getter]
              [(if (zu/deref? valid?) tag-ok tag-err)
               (assoc attrs :value text)]))}
         (when autofocus
@@ -72,7 +71,7 @@
 
 ; Renders option box
 ; TODO rozważyć przejście ze ścieżek w widgetach na subskrypcje i akcje - to znacznie silniejsza abstrakcja
-(defn select [{:keys [id style path type tag-ok rsub rvfn rnfn attrs]
+(defn select [&{:keys [id getter setter style type tag-ok rsub rvfn rnfn attrs]
                :or {tag-ok :select.select, type :nil, rsub identity, rvfn first, rnfn second}}]
   "Renders select box. Parameters:
    :id - element ID
@@ -82,13 +81,13 @@
    :rvfn - value function - maps subscribed data to edited value
    :rnfn - name function - renders visible option names
    :on-change - change value handler"
-  (let [state (zs/subscribe [:get path]),
+  (let [
         rdata (zs/subscribe (if (vector? rsub) rsub [rsub]))
         on-change #(let [text (.. % -target -value)]
-                     (zs/dispatch-sync [:form/set-text path type text]))
+                     (zs/dispatch-sync (conj setter text)))
         attrs (merge attrs {:style style, :on-change on-change} (when id {:id id}))]
     (fn []
-      (let [{:keys [text]} @state, data @rdata]
+      (let [{:keys [text]} @getter, data @rdata]
         [tag-ok (assoc attrs :value text)
          (for [d data :let [v (rvfn d), n (rnfn d)]]
            ^{:key v} [:option {:value v} n])]))))

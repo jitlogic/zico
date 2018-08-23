@@ -2,6 +2,7 @@
   (:require
     [zico.state :as zs]
     [zico.popups :as zp]
+    [zico.forms :as zf]
     [zico.widgets :as zw]
     [zico.views.common :as zv]))
 
@@ -80,60 +81,6 @@
         :central [zv/list-interior [sectn view] env-item env-details]))))
 
 
-(defn render-form [sectn view title {:keys [fdefs]} {:keys [uuid] :as view-state}]
-  (let [rnfn #(str (:name %) " - " (:comment %))]
-    (fn []
-      [:div.form-screen
-       (for [{:keys [id attr widget type label rsub]} fdefs]
-         ^{:key (or id attr)}
-         [:div.form-row
-          [:div.col1.label (str label ":")]
-          [:div.col2
-           (case widget                                     ; TODO pozbyć się tego case i wyeliminować pośrednią warstwę niżej - dodatkowe atrybuty do kontrolkek przekazywać bezpośrednio w fdefs
-             :select
-             [zw/select
-              {:path [:view sectn view :edit :form attr], :type (or type :nil), :rsub rsub, :rvfn :uuid, :rnfn rnfn}]
-             [zw/input
-              {:path [:view sectn view :edit :form attr],
-               :type (or type :nil)}])]])
-       [:div.button-row
-        [zw/button
-         {:icon [:awe :ok :green], :text "Save",
-          :on-click [:form/edit-commit sectn view fdefs
-                     [:do [:data/refresh sectn view]
-                      [:set [:view sectn view :selected] nil]]]}]
-        [zw/button
-         {:icon [:awe :cancel :red], :text "Cancel"
-          :on-click [:form/edit-cancel sectn view]}]]]
-      )))
-
-
-(defn render-edit [sectn view title & {:keys [fdefs] :as params}]
-  "Renders object editor screen. Editor allows for modifying configuration objects."
-  (let [menu-open? (zs/subscribe [:get [:view :menu :open?]])
-        view-state (zs/subscribe [:get [:view sectn view :edit]])]
-    (fn []
-      (let [view-state @view-state]
-        [:div.top-container
-         [zv/main-menu]
-         [:div.main
-          [:div.toolbar
-           [(if @menu-open? :div.itm.display-none :div.itm)
-            (zw/svg-button :awe :menu :text "Open menu" [:toggle [:view :menu :open?]])]
-           [:div.flexible.flex.itm [:div.s " "]]
-           [:div.flexible [:div.cpt title]]
-           [:div.flexible.flex.itm
-            (zw/svg-button :awe :ok :green "Save changes"
-                           [:form/edit-commit sectn view fdefs
-                            :on-refresh [(keyword "data" (str "cfg-" (name view) "-list"))]])
-            (zw/svg-button :awe :cancel :red "Cancel editing" [:form/edit-cancel sectn view])]
-           (zw/svg-button :awe :logout :text "User settings & logout"
-                          [:toggle [:view :main :user-menu :open?]])
-           ; TODO [zp/menu-popup "User menu" [:view :main :user-menu] :tr zv/USER-MENU-ITEMS]
-           ]
-          [:div.central-panel [render-form sectn view title params view-state]]
-          ]]))))
-
 
 ; Config: Applications
 
@@ -158,7 +105,7 @@
     :template APP-OBJ-TEMPLATE))
 
 (def app-edit
-  (render-edit
+  (zf/render-edit
     :cfg :app "Application",
     :fdefs APP-FDEFS))
 
@@ -185,7 +132,7 @@
     :template ENV-OBJ-TEMPLATE))
 
 (def env-edit
-  (render-edit
+  (zf/render-edit
     :cfg :env "Environment"
     :fdefs ENV-FDEFS))
 
@@ -213,7 +160,7 @@
     :template HOST-TEMPLATE))
 
 (def host-edit
-  (render-edit
+  (zf/render-edit
     :cfg :host "Host",
     :fdefs HOST-FDEFS))
 
@@ -240,7 +187,7 @@
     :template TTYPE-TEMPLATE))
 
 (def ttype-edit
-  (render-edit
+  (zf/render-edit
     :cfg :ttype "Trace type",
     :fdefs TTYPE-FDEFS))
 
@@ -266,7 +213,7 @@
     :template HOSTREG-OBJ-TEMPLATE))
 
 (def hostreg-edit
-  (render-edit
+  (zf/render-edit
     :cfg :hostreg "Host registration",
     :fdefs HOSTREG-FDEFS))
 
@@ -290,7 +237,7 @@
     :template USER-OBJ-TEMPLATE))
 
 (def user-edit
-  (render-edit
+  (zf/render-edit
     :cfg :user "User",
     :fdefs USER-FDEFS))
 
@@ -307,7 +254,7 @@
     :fdefs GROUP-FDEFS))
 
 (def group-edit
-  (render-edit
+  (zf/render-edit
     :cfg :group "Group",
     :fdefs GROUP-FDEFS))
 

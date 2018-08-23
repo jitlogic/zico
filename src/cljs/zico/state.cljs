@@ -266,3 +266,11 @@
       :map-by :uuid]}))
 
 
+(defn val-getter [path]
+  (subscribe [:get path]))
+
+
+(defn val-setter [path]
+  [:set path])
+
+

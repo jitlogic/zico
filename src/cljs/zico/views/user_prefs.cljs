@@ -36,16 +36,28 @@
          [:div.form-row
           [:div.col1.label "Old password:"]
           [:div.col2
-           [zw/input {:path [:view :user :prefs :old], :attrs {:type :password}}]]]
+           [zw/input
+            :path [:view :user :prefs :old],
+            :getter (zs/subscribe [:get [:view :user :prefs :old]]),
+            :setter [:form/set-text [:view :user :prefs :old] :nil],
+            :attrs {:type :password}]]]
          [:div.form-row
           [:div.col1.label "New password:"]
           [:div.col2
-           [zw/input {:path [:view :user :prefs :new], :attrs {:type :password}, :valid? match?}]]
+           [zw/input
+            :path [:view :user :prefs :new],
+            :getter (zs/subscribe [:get [:view :user :prefs :new]]),
+            :setter [:form/set-text [:view :user :prefs :new] :nil],
+            :attrs {:type :password}, :valid? match?]]
           [:div.aux (passwd-strength (:value new))]]
          [:div.form-row
           [:div.col1.label "Repeat password:"]
           [:div.col2
-           [zw/input {:path [:view :user :prefs :rep], :attrs {:type :password}, :valid? match?}]]
+           [zw/input
+            :path [:view :user :prefs :rep],
+            :getter (zs/subscribe [:get [:view :user :prefs :rep]]),
+            :setter [:form/set-text [:view :user :prefs :new] :nil],
+            :attrs {:type :password}, :valid? match?]]
           (when-not @match?
             [:div.aux [:div.i.c-red "Passwords don't match"]])]
          [:div.button-row
