@@ -26,6 +26,12 @@
    (svg-icon family glyph color)])
 
 
+(defn autofocus [widget]
+  (rc/create-class
+    {:reagent-render      (fn [] widget)
+     :component-did-mount (fn [this] (.focus (rc/dom-node this)))}))
+
+
 ; Renders input box
 ; TODO validation-fn, validation-re: przejść na reaction, przygotować funkcje usługowe do typowych przypadków (regex itd.);
 (defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update autofocus on-key-enter on-key-esc]
@@ -33,7 +39,7 @@
   "Renders input box. Parameters:
    :id - element ID
    :getter - value getter (ref, subscription, reaction, string)
-   :path - path to edited value
+   :setter - value setter (event)
    :type - data type
    :tag-ok - HTML tag when in normal mode
    :tag-err - HTML tag when in error mode
@@ -55,18 +61,10 @@
                      (when tooltip {:title tooltip})
                      (when id {:id id})
                      (when on-key-down {:on-key-down on-key-down}))]
-    (rc/create-class
-      (merge
-        {:reagent-render
-         (fn []
-           (let [{:keys [text]} @getter]
-             [(if (zu/deref? valid?) tag-ok tag-err)
-              (assoc attrs :value text)]))}
-        (when autofocus
-          {:component-did-mount
-           (fn [this]
-             (.focus (rc/dom-node this)))})
-        ))))
+    (fn []
+      (let [{:keys [text]} @getter]
+        [(if (zu/deref? valid?) tag-ok tag-err)
+         (assoc attrs :value text)]))))
 
 
 ; Renders option box

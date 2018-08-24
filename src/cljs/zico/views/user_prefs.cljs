@@ -36,11 +36,12 @@
          [:div.form-row
           [:div.col1.label "Old password:"]
           [:div.col2
-           [zw/input
-            :path [:view :user :prefs :old],
-            :getter (zs/subscribe [:get [:view :user :prefs :old]]),
-            :setter [:form/set-text [:view :user :prefs :old] :nil],
-            :attrs {:type :password}]]]
+           [zw/autofocus
+            [zw/input
+             :path [:view :user :prefs :old],
+             :getter (zs/subscribe [:get [:view :user :prefs :old]]),
+             :setter [:form/set-text [:view :user :prefs :old] :nil],
+             :attrs {:type :password}]]]]
          [:div.form-row
           [:div.col1.label "New password:"]
           [:div.col2
