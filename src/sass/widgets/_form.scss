@@ -31,8 +31,8 @@
 
 
   .error {
-    color: $c-red;
-    border: 1px solid $c-red;
+    color: $c-red !important;
+    border: 1px solid $c-red !important;
   }
 
   .select {

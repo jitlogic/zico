@@ -1,7 +1,6 @@
 (ns zico.views.cfg
   (:require
     [zico.state :as zs]
-    [zico.popups :as zp]
     [zico.forms :as zf]
     [zico.widgets :as zw]
     [zico.views.common :as zv]))
@@ -19,12 +18,7 @@
     ^{:key uuid}
     [:div.itm {:on-click (zs/to-handler [:toggle [:view sectn view :selected] uuid])}
      [:div.c1.dsc [:div.n (list-col1 obj)]]
-     [:div.c2.cmt (list-col2 obj)]
-     [:div.c3.icn
-      (zw/svg-button
-        :awe :toggle-on :blue "Disable"
-        [:alert "TODO nieczynne - disable object" uuid])
-      ]]))
+     [:div.c2.cmt (list-col2 obj)]]))
 
 
 (defn btn-delete-action [sectn view uuid name]
@@ -56,10 +50,6 @@
                      (btn-delete-action sectn view uuid name))
       (zw/svg-button :awe :edit :text (str "Edit " (clojure.core/name view))
                       [:form/edit-open sectn view uuid fdefs])
-      [:div.s " "]
-      (zw/svg-button
-        :awe :toggle-on :blue "Disable"
-        [:alert "TODO nieczynne disable" uuid])
       ]]))
 
 
@@ -85,11 +75,11 @@
 ; Config: Applications
 
 (def APP-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :glyph, :label "Icon"}
-   ; TODO flags
-   ])
+  (zf/validated-fdefs
+    :cfg :app
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :glyph, :label "Icon"}))
 
 (def APP-OBJ-TEMPLATE
   {:uuid :new
@@ -113,11 +103,12 @@
 ; Config: Environments
 
 (def ENV-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :glyph, :label "Icon"}
-   ; TODO flags
-   ])
+  (zf/validated-fdefs
+    :cfg :env
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :glyph, :label "Icon"}))
+
 
 (def ENV-OBJ-TEMPLATE
   {:uuid :new
@@ -143,15 +134,15 @@
   {:uuid :new, :class :host, :name "newhost", :comment "New Host"})
 
 (def HOST-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :authkey, :label "Auth key"}
-   {:attr   :app, :label "Application", :show :detail,
-    :widget :select, :rsub :data/cfg-app-list}
-   {:attr   :env, :label "Environment", :show :detail,
-    :widget :select, :rsub :data/cfg-env-list}
-   ; TODO flags
-   ])
+  (zf/validated-fdefs
+    :cfg :host
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :authkey, :label "Auth key"}
+    {:attr   :app, :label "Application", :show :detail,
+     :widget :select, :rsub :data/cfg-app-list}
+    {:attr   :env, :label "Environment", :show :detail,
+     :widget :select, :rsub :data/cfg-env-list}))
 
 (def host-list
   (render-list
@@ -173,12 +164,12 @@
    :descr "FIXME: ${SOME_ATTR} -> ${OTHER_ATTR}"})
 
 (def TTYPE-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :glyph, :label "Icon"}
-   {:attr :descr, :label "Desc template"}
-   ; TODO flags
-   ])
+  (zf/validated-fdefs
+    :cfg :ttype
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :glyph, :label "Icon"}
+    {:attr :descr, :label "Desc template"}))
 
 (def ttype-list
   (render-list
@@ -195,13 +186,15 @@
 ; Config: Host Registration Rules
 
 (def HOSTREG-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :regkey, :label "Reg. key"}
-   {:attr   :app, :label "Application", :show :detail,
-    :widget :select, :rsub :data/cfg-app-list}
-   {:attr   :env, :label "Environment", :show :detail,
-    :widget :select, :rsub :data/cfg-env-list}])
+  (zf/validated-fdefs
+    :cfg :hostreg
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :regkey, :label "Reg. key",}
+    {:attr   :app, :label "Application", :show :detail,
+     :widget :select, :rsub :data/cfg-app-list,}
+    {:attr   :env, :label "Environment", :show :detail,
+     :widget :select, :rsub :data/cfg-env-list}))
 
 (def HOSTREG-OBJ-TEMPLATE
   {:uuid :new, :class :hostreg, :name "newreg", :comment "New Registration"})
@@ -221,11 +214,13 @@
 ; Admin: Users
 
 (def USER-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}
-   {:attr :fullname, :label "Full name", :list-col2 true}
-   {:attr :email, :label "Email"}
-   {:attr :password, :label "Password"}])
+  (zf/validated-fdefs
+    :cfg :user
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}
+    {:attr :fullname, :label "Full name", :list-col2 true}
+    {:attr :email, :label "Email"}
+    {:attr :password, :label "Password"}))
 
 (def USER-OBJ-TEMPLATE
   {:uuid :new, :class :user, :name "newuser"})
@@ -245,8 +240,10 @@
 ; Admin: Groups
 
 (def GROUP-FDEFS
-  [{:attr :name, :label "Name"}
-   {:attr :comment, :label "Comment"}])
+  (zf/validated-fdefs
+    :cfg :group
+    {:attr :name, :label "Name"}
+    {:attr :comment, :label "Comment"}))
 
 (def group-list
   (render-list

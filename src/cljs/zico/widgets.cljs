@@ -20,9 +20,9 @@
        [:use {:xlink-href uri} " "]]])))
 
 
-(defn svg-button [family glyph color title event & {:keys [opaque]}]
-  [(if (zu/deref? opaque) :div :div.clickable)
-   (merge {:title title} (when event {:on-click (zs/to-handler event :sink true)}))
+(defn svg-button [family glyph color title event & {:keys [opaque enabled?] :or {enabled? true}}]
+  [(cond (zu/deref? opaque) :div (zu/deref? enabled?) :div.clickable :else :div.disabled)
+   (merge {:title title} (when (and event (zu/deref? enabled?)) {:on-click (zs/to-handler event :sink true)}))
    (svg-icon family glyph color)])
 
 
@@ -33,9 +33,9 @@
 
 
 ; Renders input box
-; TODO validation-fn, validation-re: przejść na reaction, przygotować funkcje usługowe do typowych przypadków (regex itd.);
-(defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update autofocus on-key-enter on-key-esc]
-              :or {tag-ok :input.input, tag-err :input.input.error, type :string, valid? true, partial-fn? (constantly true), attrs {}}}]
+(defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update on-key-enter on-key-esc]
+              :or {tag-ok :input.input, tag-err :input.input.error, type :string,
+                   valid? true, partial-fn? (constantly true), attrs {}}}]
   "Renders input box. Parameters:
    :id - element ID
    :getter - value getter (ref, subscription, reaction, string)
@@ -46,7 +46,6 @@
    :valid? - valid/invalid flag (ref, reaction, boolean)
    :partial-fn? - function that receives text and returns true if text is valid but incomplete
    :on-update - value update handler
-   :autofocus - if true, input will automatically receive focus when displayed
    :on-key-enter - ENTER key handler
    :on-key-esc - ESC key handler"
   (let [on-change #(let [text (.. % -target -value)]
@@ -68,9 +67,9 @@
 
 
 ; Renders option box
-; TODO rozważyć przejście ze ścieżek w widgetach na subskrypcje i akcje - to znacznie silniejsza abstrakcja
-(defn select [&{:keys [id getter setter style type tag-ok rsub rvfn rnfn attrs]
-               :or {tag-ok :select.select, type :nil, rsub identity, rvfn first, rnfn second}}]
+(defn select [&{:keys [id getter setter style type tag-ok tag-err rsub rvfn rnfn attrs valid?]
+               :or {tag-ok :select.select, tag-err :select.error.select type :nil,
+                    rsub identity, rvfn first, rnfn second, valid? true}}]
   "Renders select box. Parameters:
    :id - element ID
    :path - path to edited value
@@ -86,13 +85,14 @@
         attrs (merge attrs {:style style, :on-change on-change} (when id {:id id}))]
     (fn []
       (let [{:keys [text]} @getter, data @rdata]
-        [tag-ok (assoc attrs :value text)
+        [(if (zu/deref? valid?) tag-ok tag-err)
+         (assoc attrs :value text)
+         [:option {:value nil} "-"]
          (for [d data :let [v (rvfn d), n (rnfn d)]]
            ^{:key v} [:option {:value v} n])]))))
 
 
-; TODO wyrównać - albo rozwijamy argumenty (kwmap) albo podajemy mapę explicite; w tej chwili jest różnie dla różnych kontrolek i eventów
-(defn button [{:keys [path icon text enabled? on-click]
+(defn button [&{:keys [path icon text enabled? on-click]
                :or {enabled? true}}]
   (let [on-click (zs/to-handler (or on-click [:println "FIXME: button click handler:" path]) :sink true)
         on-click (fn [e] (when (zu/deref? enabled?) (on-click e)))]

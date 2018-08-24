@@ -57,8 +57,8 @@
         (for [{:keys [id icon text on-click]} buttons]
           ^{:key id}
           [zw/button
-           {:icon     icon, :text text,
-            :on-click [:do on-click (or on-action [:popup/close])]}])])]))
+           :icon     icon, :text text,
+           :on-click [:do on-click (or on-action [:popup/close])]])])]))
 
 
 (def MENU-ITEM-STATES

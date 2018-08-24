@@ -10,7 +10,6 @@
                     :on-error zv/DEFAULT-SERVER-ERROR])
 
 (defn btn-restore-action [id]
-  (println "id = " id)
   [:popup/open :msgbox, :modal? true,
    :caption "Restoring database",
    :text ["Restore will override current configuration.", "Proceed ?"],
@@ -34,10 +33,10 @@
          [:div.button-row
           [:div.col1
            [zw/button
-            {:icon [:awe :download :green], :text "Backup",
-             :on-click [:xhr/post "/admin/backup" nil {}
-                        :on-success REFRESH-EVENT
-                        :on-error zv/DEFAULT-SERVER-ERROR]}]]
+            :icon [:awe :download :green], :text "Backup",
+            :on-click [:xhr/post "/admin/backup" nil {}
+                       :on-success REFRESH-EVENT
+                       :on-error zv/DEFAULT-SERVER-ERROR]]]
           [:div.col2
            [:div.label.ellipsis
             (str "Last: " (if (some? id) tstamp "<none>") )]]]
@@ -45,8 +44,8 @@
          [:div.button-row
           [:div.col1
            [zw/button
-            {:icon [:awe :upload :yellow], :text "Restore", :enabled? can-restore?
-             :on-click (btn-restore-action selected)}]]
+            :icon [:awe :upload :yellow], :text "Restore", :enabled? can-restore?
+            :on-click (btn-restore-action selected)]]
           [:div.col2
            [:select.select.label {:value (or selected ""), :on-change backup-sel}
             [:option {:value "0"} "-- select backup --"]

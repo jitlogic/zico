@@ -57,20 +57,25 @@
            [zw/input
             :path [:view :user :prefs :rep],
             :getter (zs/subscribe [:get [:view :user :prefs :rep]]),
-            :setter [:form/set-text [:view :user :prefs :new] :nil],
+            :setter [:form/set-text [:view :user :prefs :rep] :nil],
             :attrs {:type :password}, :valid? match?]]
           (when-not @match?
             [:div.aux [:div.i.c-red "Passwords don't match"]])]
          [:div.button-row
           [zw/button
-           {:text     "Change", :icon [:ent :key :yellow], :enabled? ready?,
-            :on-click [:xhr/post "/user/password" nil
-                       {:oldPassword (:value old), :newPassword (:value new), :repeatPassword (:value rep)}
-                       :on-success [:set [:view :user :prefs]
-                                    {:status :ok :msg "Password changed."}]
-                       :on-error [:do
-                                  [:set [:view :user :prefs :status] :error]
-                                  [:set [:view :user :prefs :msg] "Password change failed."]]]}]]]
+           :text     "Change", :icon [:ent :key :yellow], :enabled? ready?,
+           :on-click
+           [:xhr/post "/user/password" nil
+            {:oldPassword (:value old),
+             :newPassword (:value new),
+             :repeatPassword (:value rep)}
+            :on-success
+            [:set [:view :user :prefs]
+             {:status :ok :msg "Password changed."}]
+            :on-error
+            [:do
+             [:set [:view :user :prefs :status] :error]
+             [:set [:view :user :prefs :msg] "Password change failed."]]]]]]
         ))))
 
 (defn render-user-prefs []
