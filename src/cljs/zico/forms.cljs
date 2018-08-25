@@ -74,41 +74,53 @@
     (assoc-in db (conj path :text) text)))
 
 
-(defn form-edit-open-fx [{:keys [db]} [_ sectn view uuid fdefs]]
-  {:db (let [obj (get-in db [:data sectn view uuid])]
-         (assoc-in db [:view sectn view :edit] {:uuid uuid, :form (form-parse fdefs obj)}))
-   :dispatch [:to-screen (str (name sectn) "/" (name view) "/edit")]})
+(defn form-edit-open-fx [{:keys [db]} [_ vpath dpath url uuid fdefs]]
+  {:db (let [obj (get-in db (concat dpath [uuid]))]
+         (assoc-in db (concat vpath [:edit]) {:uuid uuid, :form (form-parse fdefs obj)}))
+   :dispatch [:to-screen url]})
 
 
-(defn form-edit-new-fx [{:keys [db]} [_ sectn view nobj fdefs]]
+(defn form-edit-new-fx [{:keys [db]} [_ vpath dpath url nobj fdefs]]
   (let [nobj (assoc nobj :uuid :new)]
     {:db (-> db
-             (assoc-in [:data sectn view :new] nobj)
-             (assoc-in [:view sectn view :edit] {:uuid :new, :form (form-parse fdefs nobj)}))
-     :dispatch [:to-screen (str (name sectn) "/" (name view) "/edit")]}))
+             (assoc-in (concat dpath [:new]) nobj)
+             (assoc-in (concat vpath [:edit]) {:uuid :new, :form (form-parse fdefs nobj)}))
+     :dispatch [:to-screen url]}))
 
 
-(defn form-edit-commit-fx [{:keys [db]} [_ sectn view fdefs on-refresh]]
-  (let [{:keys [uuid form]} (get-in db [:view sectn view :edit])
-        orig (get-in db [:data sectn view uuid])
+(defn form-edit-commit-fx [{:keys [db]} [_ vpath dpath url xhr-url fdefs on-refresh]]
+  (let [{:keys [uuid form]} (get-in db (concat vpath [:edit]))
+        orig (get-in db (concat dpath [uuid]))
         newv (merge orig (form-unparse fdefs form))]
     (merge
-      {:db         (-> db (assoc-in [:data sectn view uuid] newv) (assoc-in [:view sectn view :edit] nil))
-       :dispatch-n [[:to-screen (str (name sectn) "/" (name view) "/list")]
+      {:db (-> db
+               (assoc-in (concat dpath [uuid]) newv)
+               (assoc-in (concat vpath [:edit]) nil))
+       :dispatch-n [[:to-screen url]
                     (if (= :new uuid)
-                      [:xhr/post (str "../../../data/" (name sectn) "/" (name view)) nil (dissoc newv :uuid)
+                      [:xhr/post xhr-url nil (dissoc newv :uuid)
                        :on-success on-refresh
-                       :on-error [:dissoc [:data sectn view] :new]]
-                      [:xhr/put (str "../../../data/" (name sectn) "/" (name view) "/" uuid) nil newv
+                       :on-error [:dissoc dpath :new]]
+                      [:xhr/put (str xhr-url "/" uuid) nil newv
                        ; TODO move this to dedicated module :on-error zv/DEFAULT-SERVER-ERROR
                        ]
                       )]})))
 
 
-(defn form-edit-cancel-fx [{:keys [db]} [_ sectn view]]
-  {:db       (assoc-in db [:view sectn view :edit] nil)
-   :dispatch [:to-screen (str (name sectn) "/" (name view) "/list")]})
+(defn form-edit-cancel-fx [{:keys [db]} [_  vpath dpath url]]
+  {:db       (assoc-in db (concat vpath [:edit]) nil)
+   :dispatch [:to-screen url]})
 
+
+(defn zorka-refresh-data [{:keys [db]} [_ sectn view]]
+  {:db db
+   :dispatch
+       [:xhr/get (str "../../../data/" (name sectn) "/" (name view))
+        [:data sectn view] nil,
+        :map-by :uuid]})
+
+
+(zs/reg-event-fx :data/refresh zorka-refresh-data)
 
 (zs/reg-event-fx :form/edit-cancel form-edit-cancel-fx)
 (zs/reg-event-fx :form/edit-new form-edit-new-fx)
@@ -117,14 +129,20 @@
 (zs/reg-event-db :form/set-value form-set-value-db)
 (zs/reg-event-fx :form/edit-commit form-edit-commit-fx)
 
+; TODO do czego to w ogole potrzebne ?
+(zs/register-sub
+  :form/get-value
+  (fn [db [_ path]]
+    (ra/reaction (get-in @db (conj path :value)))))
 
 ; -------------------------- Basic widgets ----------------------
 
-(defn render-form [sectn view title {:keys [fdefs]} {:keys [uuid] :as view-state} form-valid?]
+(defn render-form [&{:keys [vpath dpath url xhr-url title fdefs form-valid?]}]
   (let [rnfn #(str (:name %) " - " (:comment %))]
     (fn []
       [:div.form-screen
-       (for [{:keys [id attr widget type label rsub valid?]} fdefs]
+       (for [{:keys [id attr widget type label rsub valid?]} fdefs
+             :let [vpa (vec (concat vpath [:edit :form attr]))]]
          ^{:key (or id attr)}
          [:div.form-row
           [:div.col1.label (str label ":")]
@@ -132,60 +150,62 @@
            (case widget                                     ; TODO pozbyć się tego case i wyeliminować pośrednią warstwę niżej - dodatkowe atrybuty do kontrolkek przekazywać bezpośrednio w fdefs
              :select
              [zw/select
-              :getter (zs/subscribe [:get [:view sectn view :edit :form attr]]),
-              :setter [:form/set-text [:view sectn view :edit :form attr] (or type :nil)]
+              :getter (zs/subscribe [:get vpa]),
+              :setter [:form/set-text vpa (or type :nil)]
               :type (or type :nil), :rsub rsub, :rvfn :uuid, :rnfn rnfn, :valid? (or valid? true)]
              [zw/input
-              :getter (zs/subscribe [:get [:view sectn view :edit :form attr]]),
-              :setter [:form/set-text [:view sectn view :edit :form attr] (or type :nil)]
+              :getter (zs/subscribe [:get vpa]),
+              :setter [:form/set-text vpa (or type :nil)]
               :type (or type :nil), :valid? (or valid? true)])]])
        [:div.button-row
         [zw/button
          :icon [:awe :ok :green], :text "Save", :enabled? form-valid?,
-         :on-click [:form/edit-commit sectn view fdefs
-                    [:do [:data/refresh sectn view]
-                     [:set [:view sectn view :selected] nil]]]]
+         :on-click [:form/edit-commit vpath dpath (str url "/list") xhr-url fdefs
+                    [:set (concat vpath [:selected]) nil]]]
         [zw/button
          :icon     [:awe :cancel :red], :text "Cancel"
-         :on-click [:do [:form/edit-cancel sectn view]
-                    [:data/refresh sectn view]]]]]
+         :on-click [:form/edit-cancel vpath dpath (str url "/list")]]]]
       )))
 
 
-(defn render-edit [sectn view title & {:keys [fdefs] :as params}]
+(defn render-edit [& {:keys [vpath dpath title fdefs url xhr-url] :as params}]
   "Renders object editor screen. Editor allows for modifying configuration objects."
   (let [menu-open? (zs/subscribe [:get [:view :menu :open?]])
-        view-state (zs/subscribe [:get [:view sectn view :edit]])
+        ;[_ sectn view] vpath
+        ;url (str (name sectn) "/" (name view))
+        ;xhr-url (str "../../../data/" (name sectn) "/" (name view))
         form-valid? (ra/reaction
                       (let [vs (filter some? (map zu/deref? (map :valid? fdefs)))]
                         (empty? (for [v vs :when (not v)] v))))]
     (fn []
-      (let [view-state @view-state]
-        [:div.top-container
-         [zv/main-menu]
-         [:div.main
-          [:div.toolbar
-           [(if @menu-open? :div.itm.display-none :div.itm)
-            (zw/svg-button :awe :menu :text "Open menu" [:toggle [:view :menu :open?]])]
-           [:div.flexible.flex.itm [:div.s " "]]
-           [:div.flexible [:div.cpt title]]
-           [:div.flexible.flex.itm
-            (zw/svg-button
-              :awe :ok :green "Save changes"
-              [:form/edit-commit sectn view fdefs
-               :on-refresh [(keyword "data" (str "cfg-" (name view) "-list"))]]
-              :enabled? form-valid?)
-            (zw/svg-button :awe :cancel :red "Cancel editing" [:form/edit-cancel sectn view])]
-           (zw/svg-button :awe :logout :text "User settings & logout"
-                          [:toggle [:view :main :user-menu :open?]])
-           ; TODO [zp/menu-popup "User menu" [:view :main :user-menu] :tr zv/USER-MENU-ITEMS]
-           ]
-          [:div.central-panel [render-form sectn view title params view-state form-valid?]]
-          ]]))))
+      [:div.top-container
+       [zv/main-menu]
+       [:div.main
+        [:div.toolbar
+         [(if @menu-open? :div.itm.display-none :div.itm)
+          (zw/svg-button :awe :menu :text "Open menu" [:toggle [:view :menu :open?]])]
+         [:div.flexible.flex.itm [:div.s " "]]
+         [:div.flexible [:div.cpt title]]
+         [:div.flexible.flex.itm
+          (zw/svg-button
+            :awe :ok :green "Save changes"
+            [:form/edit-commit vpath dpath (str url "/list") xhr-url
+             fdefs
+             :on-refresh [(keyword "data" (str "cfg-" (name (last vpath)) "-list"))]] ; TODO reimplement refresh / subscription event
+            :enabled? form-valid?)
+          (zw/svg-button
+            :awe :cancel :red "Cancel editing"
+            [:form/edit-cancel vpath dpath (str url "/list")])]
+         (zw/svg-button :awe :logout :text "User settings & logout"
+                        [:toggle [:view :main :user-menu :open?]])]
+        [:div.central-panel
+         [render-form :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url,
+          :title title, :form-valid? form-valid?, :fdefs fdefs]]
+        ]])))
 
 
-(defn validator [sectn view field vfn]
-  (let [text (zs/subscribe [:get [:view sectn view :edit :form field :text]])]
+(defn validator [vpath field vfn]
+  (let [text (zs/subscribe [:get (concat vpath [:edit :form field :text])])]
     (ra/reaction
       (vfn @text))))
 
@@ -198,11 +218,13 @@
   (not (or (empty? v) (= v "-"))))
 
 
-(defn validated-fdefs [sectn view & fdefs]
+(defn validated-fdefs [vpath & fdefs]
   "Applies default set of validators."
   (for [{:keys [attr widget valid?] :as f} fdefs]
     (cond
       (some? valid?) f
-      (= :select widget) (assoc f :valid? (validator sectn view attr option-selected-vfn))
-      :else (assoc f :valid? (validator sectn view attr text-not-empty-vfn)))))
+      (= :select widget) (assoc f :valid? (validator vpath attr option-selected-vfn))
+      :else (assoc f :valid? (validator vpath attr text-not-empty-vfn)))))
+
+
 

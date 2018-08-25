@@ -262,12 +262,20 @@
   (zs/dispatch [:once :data/refresh :cfg :host])
   (zs/dispatch [::refresh-list])
   (zv/render-screen
-    :toolbar [zv/list-screen-toolbar :trace :list
-              {:title "Traces", :add-left [toolbar-left], :add-right [toolbar-right]
-               :sort-ctls {}, :on-refresh [::refresh-list]}]
-    :central [zv/list-interior [:trace :list]
-              (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)
-              (zvmt/render-trace-list-detail-fn true true)
-              :id "zorka-traces", :on-scroll [::scroll-list],
+    :toolbar [zv/list-screen-toolbar
+              :vpath [:view :trace :list]
+              :title "Traces",
+              :add-left [toolbar-left],
+              :add-right [toolbar-right]
+              :sort-ctls {},
+              :on-refresh [::refresh-list]]
+    :central [zv/list-interior
+              :vpath [:view :trace :list]
+              :data [:data/trace-list-list]
+              :render-item (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)
+              :render-details (zvmt/render-trace-list-detail-fn true true)
+              :id "zorka-traces",
+              :class "trace-list-list",
+              :on-scroll [::scroll-list],
               :on-click (zvmt/trace-list-click-handler-fn :trace :list)]))
 

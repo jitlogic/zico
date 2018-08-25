@@ -80,17 +80,19 @@
   "Displays distributed trace panel [:view :trace :dtrace]"
   (zv/render-screen
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar :dtrace :tree
-              {:title     "Distributed tracing",
-               :sort-ctls {}
-               :flags     #{:no-refresh, :no-bookmark}
-               :add-left  [dtrace-toolbar-left]
-               ;:add-right [:div " "]
-               }]
-    :central [zv/list-interior [:dtrace :tree]
-              (zvmt/render-trace-list-item-fn :dtrace-links false)
-              (zvmt/render-trace-list-detail-fn false false)
-              :id-attr :uuid, :id "zorka-dist", :class "trace-list-list",
+    :toolbar [zv/list-screen-toolbar
+              :vpath [:view :dtrace :tree]
+              :title     "Distributed tracing",
+              :sort-ctls {}
+              :add-left  [dtrace-toolbar-left]]
+    :central [zv/list-interior
+              :vpath [:view :dtrace :tree]
+              :data [:data/dtrace-tree-list]
+              :render-item (zvmt/render-trace-list-item-fn :dtrace-links false)
+              :render-details (zvmt/render-trace-list-detail-fn false false)
+              :id-attr :uuid,
+              :id "zorka-dist",
+              :class "trace-list-list",
               :on-click (zvmt/trace-list-click-handler-fn :dtrace :tree)]
     ))
 

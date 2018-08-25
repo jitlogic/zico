@@ -1,42 +1,39 @@
 (ns zico.views.cfg
   (:require
+    [reagent.ratom :as ra]
     [zico.state :as zs]
     [zico.forms :as zf]
     [zico.widgets :as zw]
     [zico.views.common :as zv]))
 
+(defn data-list-sfn [sectn view sort-attr]
+  (fn [db [_]]
+    (let [data (ra/reaction (get-in @db [:data sectn view]))
+          srev (ra/reaction (get-in @db [:view sectn view :sort :rev]))]
+      (ra/reaction
+        (let [rfn (if @srev reverse identity)]
+          (rfn (sort-by sort-attr (vals @data)))))
+      )))
 
 ; Register all needed subscriptions
 (doseq [k [:env :app :host :metric :poller :output :user :group :ttype :hostreg]]
   (zs/register-sub
     (keyword "data" (str "cfg-" (name k) "-list"))
-    (zs/data-list-sfn :cfg k :name)))
+    (data-list-sfn :cfg k :name)))
 
 
-(defn render-item [[sectn view] & {:keys [list-col1 list-col2] :or {list-col1 :name, list-col2 :comment}}]
+(defn render-item [&{:keys [vpath list-col1 list-col2] :or {list-col1 :name, list-col2 :comment}}]
   (fn [{:keys [uuid] :as obj}]
     ^{:key uuid}
-    [:div.itm {:on-click (zs/to-handler [:toggle [:view sectn view :selected] uuid])}
+    [:div.itm {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
      [:div.c1.dsc [:div.n (list-col1 obj)]]
      [:div.c2.cmt (list-col2 obj)]]))
 
 
-(defn btn-delete-action [sectn view uuid name]
-  [:popup/open :msgbox,
-   :caption "Deleting object", :modal? true,
-   :text (str "Delete object: " name " ?"),
-   :buttons
-   [{:id :ok, :text "Delete", :icon [:awe :ok :green]
-     :on-click [:xhr/delete
-                (str "../../../data/" (clojure.core/name sectn) "/" (clojure.core/name view) "/" uuid) nil nil
-                :on-success [:dissoc [:data sectn view] uuid]
-                :on-error zv/DEFAULT-SERVER-ERROR]}
-    {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
-
-(defn render-detail [[sectn view] fdefs]
+(defn render-detail [&{:keys [vpath dpath fdefs url xhr-url]}]
   (fn [{:keys [uuid name comment] :as obj}]
     ^{:key uuid}
-    [:div.det {:on-click (zs/to-handler [:toggle [:view sectn view :selected] uuid])}
+    [:div.det {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
      [:div.dsc
       [:div.kv
        [:div.c1.k "Name:"]
@@ -44,31 +41,76 @@
        [:div.c2.c.hide-s comment]]]
      [:div.btns
       [:div.ellipsis.c-gray uuid]
-      (zw/svg-button :awe :clone :text (str "Clone " (clojure.core/name view))
-                      [:form/edit-new sectn view obj fdefs])
-      (zw/svg-button :awe :trash :red (str "Delete " (clojure.core/name view))
-                     (btn-delete-action sectn view uuid name))
-      (zw/svg-button :awe :edit :text (str "Edit " (clojure.core/name view))
-                      [:form/edit-open sectn view uuid fdefs])
+      (zw/svg-button
+        :awe :clone :text "Clone item"
+        [:form/edit-new vpath dpath
+         (str url "/edit") obj fdefs])
+      (zw/svg-button
+        :awe :trash :red "Delete item"
+        [:popup/open :msgbox,
+         :caption "Deleting object", :modal? true,
+         :text (str "Delete object: " name " ?"),
+         :buttons
+         [{:id :ok, :text "Delete", :icon [:awe :ok :green]
+           :on-click [:xhr/delete
+                      (str xhr-url "/" uuid) nil nil
+                      :on-success [:dissoc dpath uuid]
+                      :on-error zv/DEFAULT-SERVER-ERROR]}
+          {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
+      (zw/svg-button
+        :awe :edit :text "Edit item"
+        [:form/edit-open vpath dpath
+         (str url "/edit") uuid fdefs])
       ]]))
 
 
-(defn render-list [sectn view title & {:keys [fdefs template]}]
+(defn render-list [&{:keys [vpath dpath data class fdefs url xhr-url template title on-refresh]}]
   (let [list-col1 (last (cons :name (for [fd fdefs :when (:list-col1 fd)] (:attr fd))))
         list-col2 (last (cons :comment (for [fd fdefs :when (:list-col2 fd)] (:attr fd))))
-        env-item (render-item [sectn view] :list-col1 list-col1, :list-col2 list-col2)
-        env-details (render-detail [sectn view] fdefs)]
+        env-item (render-item :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
+        env-details (render-detail :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)]
     (fn [_]
-      (zs/dispatch [:once :data/refresh sectn view])
+      (when on-refresh
+        (zs/dispatch (vec (concat [:once] on-refresh))))
       (zv/render-screen
-        :toolbar [zv/list-screen-toolbar sectn view
-                  {:title title,
-                   :add-left
-                          (when template
-                            [:div (zw/svg-button
-                                    :awe :plus :green (str "New " (name view))
-                                    [:form/edit-new sectn view template fdefs])])}]
-        :central [zv/list-interior [sectn view] env-item env-details]))))
+        :toolbar [zv/list-screen-toolbar
+                  :vpath vpath
+                  :title title,
+                  :on-refresh on-refresh,
+                  :add-left (when template
+                              [:div (zw/svg-button
+                                      :awe :plus :green "New"
+                                      [:form/edit-new vpath dpath
+                                       (str url "/edit") template fdefs])])]
+        :central [zv/list-interior
+                  :vpath vpath,
+                  :data data,
+                  :render-item env-item
+                  :render-details env-details
+                  :class class]))))
+
+
+(defn cfg-object [class title fdefs template]
+  {:list
+   (render-list
+     :vpath [:view :cfg class]
+     :dpath [:data :cfg class]
+     :data [(keyword "data" (str "cfg-" (name class) "-list"))]
+     :on-refresh [:data/refresh :cfg class]
+     :class (str "cfg-" (name class) "-list")
+     :url (str "cfg/" (name class))
+     :xhr-url (str "/data/cfg/" (name class))
+     :title title
+     :fdefs fdefs
+     :template template)
+   :edit
+   (zf/render-edit
+     :title title
+     :url (str "cfg/" (name class))
+     :xhr-url (str "/data/cfg/" (name class))
+     :vpath [:view :cfg class]
+     :dpath [:data :cfg class]
+     :fdefs fdefs)})
 
 
 
@@ -76,7 +118,7 @@
 
 (def APP-FDEFS
   (zf/validated-fdefs
-    :cfg :app
+    [:view :cfg :app]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :glyph, :label "Icon"}))
@@ -88,23 +130,16 @@
    :glyph "awe/cube"
    :comment "New Application"})
 
-(def app-list
-  (render-list
-    :cfg :app "Applications",
-    :fdefs APP-FDEFS,
-    :template APP-OBJ-TEMPLATE))
-
-(def app-edit
-  (zf/render-edit
-    :cfg :app "Application",
-    :fdefs APP-FDEFS))
+(let [cfo (cfg-object :app "Application" APP-FDEFS APP-OBJ-TEMPLATE)]
+  (def app-list (:list cfo))
+  (def app-edit (:edit cfo)))
 
 
 ; Config: Environments
 
 (def ENV-FDEFS
   (zf/validated-fdefs
-    :cfg :env
+    [:view :cfg :env]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :glyph, :label "Icon"}))
@@ -116,16 +151,9 @@
    :name "newenv"
    :comment "New Environment"})
 
-(def env-list
-  (render-list
-    :cfg :env "Environments"
-    :fdefs ENV-FDEFS
-    :template ENV-OBJ-TEMPLATE))
-
-(def env-edit
-  (zf/render-edit
-    :cfg :env "Environment"
-    :fdefs ENV-FDEFS))
+(let [cfo (cfg-object :env "Environment" ENV-FDEFS ENV-OBJ-TEMPLATE)]
+  (def env-list (:list cfo))
+  (def env-edit (:edit cfo)))
 
 
 ; Config: Hosts
@@ -135,7 +163,7 @@
 
 (def HOST-FDEFS
   (zf/validated-fdefs
-    :cfg :host
+    [:view :cfg :host]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :authkey, :label "Auth key"}
@@ -144,16 +172,9 @@
     {:attr   :env, :label "Environment", :show :detail,
      :widget :select, :rsub :data/cfg-env-list}))
 
-(def host-list
-  (render-list
-    :cfg :host "Hosts",
-    :fdefs HOST-FDEFS
-    :template HOST-TEMPLATE))
-
-(def host-edit
-  (zf/render-edit
-    :cfg :host "Host",
-    :fdefs HOST-FDEFS))
+(let [cfo (cfg-object :host "Host" HOST-FDEFS HOST-TEMPLATE)]
+  (def host-list (:list cfo))
+  (def host-edit (:edit cfo)))
 
 
 ; Config: Trace Types
@@ -165,29 +186,23 @@
 
 (def TTYPE-FDEFS
   (zf/validated-fdefs
-    :cfg :ttype
+    [:view :cfg :ttype]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :glyph, :label "Icon"}
     {:attr :descr, :label "Desc template"}))
 
-(def ttype-list
-  (render-list
-    :cfg :ttype "Trace types",
-    :fdefs TTYPE-FDEFS,
-    :template TTYPE-TEMPLATE))
 
-(def ttype-edit
-  (zf/render-edit
-    :cfg :ttype "Trace type",
-    :fdefs TTYPE-FDEFS))
+(let [cfo (cfg-object :ttype "Trace type" TTYPE-FDEFS TTYPE-TEMPLATE)]
+  (def ttype-list (:list cfo))
+  (def ttype-edit (:edit cfo)))
 
 
 ; Config: Host Registration Rules
 
 (def HOSTREG-FDEFS
   (zf/validated-fdefs
-    :cfg :hostreg
+    [:view :cfg :hostreg]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :regkey, :label "Reg. key",}
@@ -199,23 +214,17 @@
 (def HOSTREG-OBJ-TEMPLATE
   {:uuid :new, :class :hostreg, :name "newreg", :comment "New Registration"})
 
-(def hostreg-list
-  (render-list
-    :cfg :hostreg "Host registrations",
-    :fdefs HOSTREG-FDEFS,
-    :template HOSTREG-OBJ-TEMPLATE))
 
-(def hostreg-edit
-  (zf/render-edit
-    :cfg :hostreg "Host registration",
-    :fdefs HOSTREG-FDEFS))
+(let [cfo (cfg-object :hostreg "Registration" HOSTREG-FDEFS HOSTREG-OBJ-TEMPLATE)]
+  (def hostreg-list (:list cfo))
+  (def hostreg-edit (:edit cfo)))
 
 
 ; Admin: Users
 
 (def USER-FDEFS
   (zf/validated-fdefs
-    :cfg :user
+    [:view :cfg :user]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}
     {:attr :fullname, :label "Full name", :list-col2 true}
@@ -225,33 +234,23 @@
 (def USER-OBJ-TEMPLATE
   {:uuid :new, :class :user, :name "newuser"})
 
-(def user-list
-  (render-list
-    :cfg :user "Users",
-    :fdefs USER-FDEFS,
-    :template USER-OBJ-TEMPLATE))
-
-(def user-edit
-  (zf/render-edit
-    :cfg :user "User",
-    :fdefs USER-FDEFS))
+(let [cfo (cfg-object :user "User" USER-FDEFS USER-OBJ-TEMPLATE)]
+  (def user-list (:list cfo))
+  (def user-edit (:edit cfo)))
 
 
 ; Admin: Groups
 
 (def GROUP-FDEFS
   (zf/validated-fdefs
-    :cfg :group
+    [:view :cfg :group]
     {:attr :name, :label "Name"}
     {:attr :comment, :label "Comment"}))
 
-(def group-list
-  (render-list
-    :cfg :group "Groups",
-    :fdefs GROUP-FDEFS))
+(def GROUP-OBJ-TEMPLATE
+  {:name "NEW_GROUP" :comment "New Group"})
 
-(def group-edit
-  (zf/render-edit
-    :cfg :group "Group",
-    :fdefs GROUP-FDEFS))
+(let [cfo (cfg-object :group "Group" GROUP-FDEFS GROUP-OBJ-TEMPLATE)]
+  (def group-list (:list cfo))
+  (def group-edit (:edit cfo)))
 

@@ -162,11 +162,6 @@
       (ra/reaction (sort-by (deref? sort-fn) @data)))))
 
 
-(register-sub
-  :form/get-value
-  (fn [db [_ path]]
-    (ra/reaction (get-in @db (conj path :value)))))
-
 
 ; ------------------ Timer handing and deferred actions  -------------------------------
 
@@ -242,35 +237,4 @@
 
 (rfc/reg-event-fx :xhr/success xhr-success-handler)
 (rfc/reg-event-fx :xhr/error xhr-error-handler)
-
-; --------------------------- REST Data interface functions specific to zorka ------------------------
-
-; TODO get rid of this, move to application code
-(defn data-list-sfn [sectn view sort-attr]
-  (fn [db [_]]
-    (let [data (ra/reaction (get-in @db [:data sectn view]))
-          srev (ra/reaction (get-in @db [:view sectn view :sort :rev]))]
-      (ra/reaction
-        (let [rfn (if @srev reverse identity)]
-          (rfn (sort-by sort-attr (vals @data)))))
-      )))
-
-; TODO get rid of this, move to application code
-(reg-event-fx
-  :data/refresh
-  (fn zorka-refresh-data [{:keys [db]} [_ sectn view]]
-    {:db db
-     :dispatch
-     [:xhr/get (str "../../../data/" (name sectn) "/" (name view))
-      [:data sectn view] nil,
-      :map-by :uuid]}))
-
-
-(defn val-getter [path]
-  (subscribe [:get path]))
-
-
-(defn val-setter [path]
-  [:set path])
-
 

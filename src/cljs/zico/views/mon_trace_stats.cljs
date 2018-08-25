@@ -68,11 +68,16 @@
   "Trace call stats panel [:view :trace :stats]"
   (zv/render-screen
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar :trace :stats
-              {:title     "Method Call Stats"
-               :sort-ctls {}
-               :flags     #{:no-refresh :no-bookmark}
-               :add-left  [toolbar-stats-left]
-               }]
-    :central [zv/list-interior [:trace :stats] render-trace-stats-item render-trace-stats-item
-              :id-attr :mid, :id "zorka-method-stats"]))
+    :toolbar [zv/list-screen-toolbar
+              :vpath [:view :trace :stats]
+              :title     "Method Call Stats"
+              :sort-ctls {}
+              :add-left  [toolbar-stats-left]]
+    :central [zv/list-interior
+              :vpath [:view :trace :stats]
+              :data [:data/trace-stats-list]
+              :render-item render-trace-stats-item
+              :render-details render-trace-stats-item
+              :id-attr :mid,
+              :class "trace-stats-list",
+              :id "zorka-method-stats"]))

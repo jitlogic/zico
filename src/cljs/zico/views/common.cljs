@@ -93,11 +93,11 @@
           )))))
 
 
-(defn list-interior [[sectn view] render-item render-selected & {:keys [id id-attr on-scroll on-click class] :or {id-attr :uuid}}]
+(defn list-interior [&{:keys [vpath data id id-attr on-scroll on-click class render-item render-details] :or {id-attr :uuid}}]
   "Rennders generic list interior. To be used as :central part of screens."
-  (let [subscr (keyword "data" (str (name sectn) "-" (name view) "-list")), data (zs/subscribe [subscr])
-        selected (zs/subscribe [:get [:view sectn view :selected]])
-        root-tag (keyword (str "div.list." (or class (name subscr)) ".full-h"))
+  (let [data (if (vector? data) (zs/subscribe data) data)
+        selected (zs/subscribe [:get (vec (concat vpath [:selected]))])
+        root-tag (keyword (str "div.list." class ".full-h"))
         attrs (zu/no-nulls {:id id, :on-scroll (on-scroll-fn on-scroll), :on-click on-click})]
     (fn []
       (let [data @data, selected @selected]
@@ -106,7 +106,7 @@
            (for [obj data :let [id (id-attr obj)]]
              ^{:key id}
              (if (= selected id)
-               (render-selected obj)
+               (render-details obj)
                (render-item obj))))]))))
 
 
@@ -114,53 +114,54 @@
 
 
 ; TODO dopracować logikę sort - zrobić osobny handler do tej logiki
-(defn sort-event [sectn view order]
+(defn sort-event [vpath order]
   [:do
-   [:toggle [:view sectn view :sort :rev]]
-   [:set [:view sectn view :sort :order] order]])
+   [:toggle (concat vpath [:sort :rev])]
+   [:set (concat vpath [:sort :order]) order]])
 
 
 ; TODO sort-ctrs - powinno być puste by default
 ; TODO wyłączyć search by default
-(defn list-screen-toolbar [sectn view {:keys [title add-left add-right sort-ctls flags on-refresh]}]
+(defn list-screen-toolbar [&{:keys [vpath title add-left add-right sort-ctls on-refresh]}]
   "Renders toolbar interior for list screen (with search box, filters etc.)"
-  (let [view-state (zs/subscribe [:get [:view sectn view]])
+  (let [view-state (zs/subscribe [:get vpath])
         sort-ctls (or sort-ctls DEFAULT-SORT-CTLS)]
     (fn []
       (let [view-state @view-state, search-state (:search view-state), sort-state (:sort view-state)]
         [:div.flexible.flex
          [:div.flexible.flex.itm
-          (when-not (:no-refresh flags)
-            (zw/svg-button :awe :arrows-cw :blue "Refresh" (or on-refresh [:data/refresh sectn view])))
+          (when on-refresh
+            (zw/svg-button :awe :arrows-cw :blue "Refresh" on-refresh))
           ; TODO sort-ctrls is bad abstraction in current form; refactor or remove;
           (when (:alt sort-ctls)
             (zw/svg-button
               :awe (if (and (= :alt (:order sort-state)) (-> view-state :sort :rev)) :sort-alt-down :sort-alt-up)
-              :light (:alt sort-ctls "Sort order"), (sort-event sectn view :alt), :opaque (= :alt (:order sort-state))))
+              :light (:alt sort-ctls "Sort order"), (sort-event vpath :alt), :opaque (= :alt (:order sort-state))))
           (when (:name sort-ctls)
             (zw/svg-button
               :awe (if (and (= :name (:order sort-state)) (-> view-state :sort :rev)) :sort-name-down :sort-name-up)
-              :light (:name sort-ctls "Sort order"), (sort-event sectn view :number), :opaque (= :name (:order sort-state))))
+              :light (:name sort-ctls "Sort order"), (sort-event vpath :number), :opaque (= :name (:order sort-state))))
           (when (:number sort-ctls)
             (zw/svg-button
               :awe (if (and (= :number (:order sort-state)) (-> view-state :sort :rev)) :sort-number-down :sort-number-up)
-              :light (:number sort-ctls "Sort order") (sort-event sectn view :number) :opaque (= :number (:order sort-state))))
+              :light (:number sort-ctls "Sort order") (sort-event vpath :number) :opaque (= :number (:order sort-state))))
           add-left]
          [:div.flexible.flex
           (if (:open? search-state)
-            (let [path [:view sectn view :search]]
-              [zw/input
-               :path path, :tag-ok :input.search, :autofocus true,
-               :getter (zs/subscribe [:get path]),
-               :setter [:form/set-text path :nil]
-               :on-update [:timer/update path 1000 nil on-refresh]
-               :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
-               :on-key-enter [:do [:timer/flush path] [:set (conj path :open?) false]]])
+            (let [path (concat vpath [:search])]
+              [zw/autofocus
+               [zw/input
+                :path path, :tag-ok :input.search, :autofocus true,
+                :getter (zs/subscribe [:get path]),
+                :setter [:form/set-text path :nil]
+                :on-update [:timer/update path 1000 nil on-refresh]
+                :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
+                :on-key-enter [:do [:timer/flush path] [:set (concat path [:open?]) false]]]])
             [:div.cpt                                       ; TODO przenieść tę część do search boxa
-             {:on-click (zs/to-handler [:toggle [:view sectn view :search :open?]])}
+             {:on-click (zs/to-handler [:toggle (concat vpath [:search :open?])])}
              (str title (if (:text search-state) (str " (" (:text search-state) ")") ""))])]
          [:div.flexible.flex.itm
-          (zw/svg-button :awe :search :light "Search hosts." [:toggle [:view sectn view :search :open?]]
+          (zw/svg-button :awe :search :light "Search hosts." [:toggle (concat vpath [:search :open?])]
                          :opaque (:open? search-state))
           add-right]
          ]))))

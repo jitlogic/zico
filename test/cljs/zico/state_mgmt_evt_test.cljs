@@ -78,10 +78,11 @@
       (tc/setup-fixture)
       (let [state (rf/subscribe [:get [:view :cfg :host]])
             screens (rf/subscribe [:get [:test :io :to-screen]])]
-        (rf/dispatch [:form/edit-new :cfg :host zvc/HOST-TEMPLATE zvc/HOST-FDEFS])
+        (rf/dispatch [:form/edit-new [:view :cfg :host] [:data :cfg :host] "cfg/host/edit" zvc/HOST-TEMPLATE zvc/HOST-FDEFS])
         (is (= :new (-> @state :edit :uuid)))
         (is (= "cfg/host/edit" (first (first @screens))))
-        (rf/dispatch [:form/edit-cancel :cfg :host])
+        (rf/dispatch [:form/edit-cancel [:view :cfg :host] [:data :cfg :host] "cfg/host/list"])
+        (is (nil? (-> @state :edit)))
         (is (= "cfg/host/list" (first (first @screens))))
         ))))
 

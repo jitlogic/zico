@@ -142,11 +142,18 @@
   "Trace call tree display panel [:view :trace :tree]"
   (zv/render-screen
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar :trace :tree
-              {:title     "Call tree",
-               :sort-ctls {}
-               :flags     #{:no-refresh :no-bookmark}
-               :add-left  [toolbar-tree-left]
-               :add-right [toolbar-tree-right]}]
-    :central [zv/list-interior [:trace :tree] render-trace-tree-item render-trace-tree-detail
-              :id-attr :pos, :id "zorka-methods", :on-click trace-tree-click-handler]))
+    :toolbar [zv/list-screen-toolbar
+              :vpath [:view :trace :tree],
+              :title     "Call tree",
+              :sort-ctls {},
+              :add-left  [toolbar-tree-left],
+              :add-right [toolbar-tree-right]]
+    :central [zv/list-interior
+              :vpath [:view :trace :tree]
+              :data [:data/trace-tree-list]
+              :render-item render-trace-tree-item,
+              :render-details render-trace-tree-detail,
+              :id-attr :pos,
+              :id "zorka-methods",
+              :class "trace-tree-list",
+              :on-click trace-tree-click-handler]))

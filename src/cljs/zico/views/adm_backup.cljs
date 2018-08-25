@@ -9,16 +9,6 @@
 (def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil
                     :on-error zv/DEFAULT-SERVER-ERROR])
 
-(defn btn-restore-action [id]
-  [:popup/open :msgbox, :modal? true,
-   :caption "Restoring database",
-   :text ["Restore will override current configuration.", "Proceed ?"],
-   :buttons
-   [{:id :ok, :text "Restore", :icon [:awe :upload :yellow]
-     :on-click [:xhr/post (str "/admin/backup/" id "/restore") nil {}
-                :on-success [:alert "Database restored."]
-                :on-error zv/DEFAULT-SERVER-ERROR]}
-    {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
 
 ; TODO popups z informacjami i handlery - to po wdrożeniu uniweralnego popupu starowanego eventami;
 (defn backup-panel []
@@ -45,7 +35,15 @@
           [:div.col1
            [zw/button
             :icon [:awe :upload :yellow], :text "Restore", :enabled? can-restore?
-            :on-click (btn-restore-action selected)]]
+            :on-click [:popup/open :msgbox, :modal? true,
+                       :caption (str "Restoring database from snapshot: " selected),
+                       :text ["Restore will override current configuration.", "Proceed ?"],
+                       :buttons
+                       [{:id :ok, :text "Restore", :icon [:awe :upload :yellow]
+                         :on-click [:xhr/post (str "/admin/backup/" selected "/restore") nil {}
+                                    :on-success [:alert "Database restored."]
+                                    :on-error zv/DEFAULT-SERVER-ERROR]}
+                        {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]]]]
           [:div.col2
            [:select.select.label {:value (or selected ""), :on-change backup-sel}
             [:option {:value "0"} "-- select backup --"]
