@@ -22,77 +22,9 @@
     (data-list-sfn :cfg k :name)))
 
 
-(defn render-item [&{:keys [vpath list-col1 list-col2] :or {list-col1 :name, list-col2 :comment}}]
-  (fn [{:keys [uuid] :as obj}]
-    ^{:key uuid}
-    [:div.itm {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
-     [:div.c1.dsc [:div.n (list-col1 obj)]]
-     [:div.c2.cmt (list-col2 obj)]]))
-
-
-(defn render-detail [&{:keys [vpath dpath fdefs url xhr-url]}]
-  (fn [{:keys [uuid name comment] :as obj}]
-    ^{:key uuid}
-    [:div.det {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
-     [:div.dsc
-      [:div.kv
-       [:div.c1.k "Name:"]
-       [:div.c2.v name]
-       [:div.c2.c.hide-s comment]]]
-     [:div.btns
-      [:div.ellipsis.c-gray uuid]
-      (zw/svg-button
-        :awe :clone :text "Clone item"
-        [:form/edit-new vpath dpath
-         (str url "/edit") obj fdefs])
-      (zw/svg-button
-        :awe :trash :red "Delete item"
-        [:popup/open :msgbox,
-         :caption "Deleting object", :modal? true,
-         :text (str "Delete object: " name " ?"),
-         :buttons
-         [{:id :ok, :text "Delete", :icon [:awe :ok :green]
-           :on-click [:xhr/delete
-                      (str xhr-url "/" uuid) nil nil
-                      :on-success [:dissoc dpath uuid]
-                      :on-error zv/DEFAULT-SERVER-ERROR]}
-          {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
-      (zw/svg-button
-        :awe :edit :text "Edit item"
-        [:form/edit-open vpath dpath
-         (str url "/edit") uuid fdefs])
-      ]]))
-
-
-(defn render-list [&{:keys [vpath dpath data class fdefs url xhr-url template title on-refresh]}]
-  (let [list-col1 (last (cons :name (for [fd fdefs :when (:list-col1 fd)] (:attr fd))))
-        list-col2 (last (cons :comment (for [fd fdefs :when (:list-col2 fd)] (:attr fd))))
-        env-item (render-item :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
-        env-details (render-detail :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)]
-    (fn [_]
-      (when on-refresh
-        (zs/dispatch (vec (concat [:once] on-refresh))))
-      (zv/render-screen
-        :toolbar [zv/list-screen-toolbar
-                  :vpath vpath
-                  :title title,
-                  :on-refresh on-refresh,
-                  :add-left (when template
-                              [:div (zw/svg-button
-                                      :awe :plus :green "New"
-                                      [:form/edit-new vpath dpath
-                                       (str url "/edit") template fdefs])])]
-        :central [zv/list-interior
-                  :vpath vpath,
-                  :data data,
-                  :render-item env-item
-                  :render-details env-details
-                  :class class]))))
-
-
 (defn cfg-object [class title fdefs template]
   {:list
-   (render-list
+   (zf/render-list
      :vpath [:view :cfg class]
      :dpath [:data :cfg class]
      :data [(keyword "data" (str "cfg-" (name class) "-list"))]
@@ -108,10 +40,10 @@
      :title title
      :url (str "cfg/" (name class))
      :xhr-url (str "/data/cfg/" (name class))
+     :on-refresh [(keyword "data" (str "cfg-" (name class) "-list"))]
      :vpath [:view :cfg class]
      :dpath [:data :cfg class]
      :fdefs fdefs)})
-
 
 
 ; Config: Applications

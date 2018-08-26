@@ -25,7 +25,7 @@
 
 
 (defn menu-item [family glyph label path {:keys [changed?] :as params}]
-  [:div.itm {:on-click (zs/to-handler [:to-screen path])}
+  [:div.itm {:on-click (zs/to-handler [:do [:to-screen path] [:toggle [:view :menu :open?]]])}
    [(if changed? :div.ico.icm :div.ico)
     (zw/svg-icon family glyph "text")] [:div.lead label]])
 
@@ -43,9 +43,7 @@
           (menu-section monitor :monitor "TRACES")
           (when monitor
             [:div
-             (menu-item "awe" "search" "Search" "mon/trace/list" {})
-             ;(menu-item "ent" "flow-cascade" "Distributed" "mon/dtrace/tree" {})
-             ])
+             (menu-item "awe" "search" "Search" "mon/trace/list" {})])
           (menu-section configure :configure "CONFIGURE")
           (when configure
             [:div
@@ -59,14 +57,7 @@
           (when admin
             [:div
              (menu-item "awe" "user" "Users" "cfg/user/list" {})
-             ;(menu-item "awe" "users" "Groups" "cfg/group/list" {})
              (menu-item "awe" "hdd" "Backup" "adm/backup" {})])
-          ;(menu-section bookmarks :bookmarks "BOOKMARKS")
-          ;(when bookmarks
-          ;  [:div nil])                                     ; TODO render bookmarks here
-          ;(menu-section recent :recent "RECENT")
-          ;(when recent
-          ;  [:div nil])                          ; TODO render recent items here
           ]]))))
 
 
@@ -110,29 +101,21 @@
                (render-item obj))))]))))
 
 
-(def DEFAULT-SORT-CTLS {:alt "Sort order"})
-
-
-; TODO dopracować logikę sort - zrobić osobny handler do tej logiki
 (defn sort-event [vpath order]
   [:do
    [:toggle (concat vpath [:sort :rev])]
    [:set (concat vpath [:sort :order]) order]])
 
 
-; TODO sort-ctrs - powinno być puste by default
-; TODO wyłączyć search by default
-(defn list-screen-toolbar [&{:keys [vpath title add-left add-right sort-ctls on-refresh]}]
+(defn list-screen-toolbar [&{:keys [vpath title add-left add-right sort-ctls on-refresh search-box]}]
   "Renders toolbar interior for list screen (with search box, filters etc.)"
-  (let [view-state (zs/subscribe [:get vpath])
-        sort-ctls (or sort-ctls DEFAULT-SORT-CTLS)]
+  (let [view-state (zs/subscribe [:get vpath])]
     (fn []
       (let [view-state @view-state, search-state (:search view-state), sort-state (:sort view-state)]
         [:div.flexible.flex
          [:div.flexible.flex.itm
           (when on-refresh
             (zw/svg-button :awe :arrows-cw :blue "Refresh" on-refresh))
-          ; TODO sort-ctrls is bad abstraction in current form; refactor or remove;
           (when (:alt sort-ctls)
             (zw/svg-button
               :awe (if (and (= :alt (:order sort-state)) (-> view-state :sort :rev)) :sort-alt-down :sort-alt-up)
@@ -148,21 +131,23 @@
           add-left]
          [:div.flexible.flex
           (if (:open? search-state)
-            (let [path (concat vpath [:search])]
+            (let [path (concat vpath [:search]), tpath (concat path [:text])]
               [zw/autofocus
                [zw/input
-                :path path, :tag-ok :input.search, :autofocus true,
-                :getter (zs/subscribe [:get path]),
-                :setter [:form/set-text path :nil]
+                :path path, :tag-ok :input.search,
+                :getter (zs/subscribe [:get tpath]),
+                :setter [:set tpath]
                 :on-update [:timer/update path 1000 nil on-refresh]
                 :on-key-esc [:do [:timer/cancel path] [:set path {}] on-refresh]
                 :on-key-enter [:do [:timer/flush path] [:set (concat path [:open?]) false]]]])
-            [:div.cpt                                       ; TODO przenieść tę część do search boxa
-             {:on-click (zs/to-handler [:toggle (concat vpath [:search :open?])])}
+            [:div.cpt
+             (if search-box
+               {:on-click (zs/to-handler [:toggle (concat vpath [:search :open?])])})
              (str title (if (:text search-state) (str " (" (:text search-state) ")") ""))])]
          [:div.flexible.flex.itm
-          (zw/svg-button :awe :search :light "Search hosts." [:toggle (concat vpath [:search :open?])]
-                         :opaque (:open? search-state))
+          (if search-box
+            (zw/svg-button :awe :search :light "Search hosts." [:toggle (concat vpath [:search :open?])]
+                           :opaque (:open? search-state)))
           add-right]
          ]))))
 

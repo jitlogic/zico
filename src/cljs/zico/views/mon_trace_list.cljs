@@ -268,6 +268,7 @@
               :add-left [toolbar-left],
               :add-right [toolbar-right]
               :sort-ctls {},
+              :search-box true,
               :on-refresh [::refresh-list]]
     :central [zv/list-interior
               :vpath [:view :trace :list]

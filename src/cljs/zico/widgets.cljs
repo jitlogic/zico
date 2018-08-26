@@ -61,7 +61,7 @@
                      (when id {:id id})
                      (when on-key-down {:on-key-down on-key-down}))]
     (fn []
-      (let [{:keys [text]} @getter]
+      (let [text @getter]
         [(if (zu/deref? valid?) tag-ok tag-err)
          (assoc attrs :value text)]))))
 
@@ -84,7 +84,7 @@
                      (zs/dispatch-sync (conj setter text)))
         attrs (merge attrs {:style style, :on-change on-change} (when id {:id id}))]
     (fn []
-      (let [{:keys [text]} @getter, data @rdata]
+      (let [text @getter, data @rdata]
         [(if (zu/deref? valid?) tag-ok tag-err)
          (assoc attrs :value text)
          [:option {:value nil} "-"]

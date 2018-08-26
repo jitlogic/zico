@@ -23,8 +23,6 @@
   (data-list-sfn :trace :type :name))
 
 
-
-
 (def CFG-TTYPES (zs/subscribe [:get [:data :cfg :ttype]]))
 (def CFG-HOSTS (zs/subscribe [:get [:data :cfg :host]]))
 (def CFG-ENVS (zs/subscribe [:get [:data :cfg :env]]))

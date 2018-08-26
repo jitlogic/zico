@@ -101,14 +101,13 @@
                       [:xhr/post xhr-url nil (dissoc newv :uuid)
                        :on-success on-refresh
                        :on-error [:dissoc dpath :new]]
-                      [:xhr/put (str xhr-url "/" uuid) nil newv
-                       ; TODO move this to dedicated module :on-error zv/DEFAULT-SERVER-ERROR
-                       ]
-                      )]})))
+                      [:xhr/put (str xhr-url "/" uuid) nil newv])]})))
 
 
 (defn form-edit-cancel-fx [{:keys [db]} [_  vpath dpath url]]
-  {:db       (assoc-in db (concat vpath [:edit]) nil)
+  {:db       (-> db
+                 (assoc-in (concat vpath [:edit]) nil)
+                 (assoc-in dpath (dissoc (get-in db dpath) :new)))
    :dispatch [:to-screen url]})
 
 
@@ -129,34 +128,46 @@
 (zs/reg-event-db :form/set-value form-set-value-db)
 (zs/reg-event-fx :form/edit-commit form-edit-commit-fx)
 
-; TODO do czego to w ogole potrzebne ?
-(zs/register-sub
-  :form/get-value
-  (fn [db [_ path]]
-    (ra/reaction (get-in @db (conj path :value)))))
 
 ; -------------------------- Basic widgets ----------------------
 
-(defn render-form [&{:keys [vpath dpath url xhr-url title fdefs form-valid?]}]
-  (let [rnfn #(str (:name %) " - " (:comment %))]
+(defmulti
+  render-widget
+  "Renders form widget. Uses generic widget library."
+  (fn [_ fdef] (:widget fdef :input)))
+
+
+(defmethod render-widget :select [vpath {:keys [attr type rsub valid?]}]
+  (let [rnfn #(str (:name %) " - " (:comment %))
+        vpa (vec (concat vpath [:edit :form attr]))]
+    [zw/select
+     :getter (zs/subscribe [:get (concat vpa [:text])]),
+     :setter [:form/set-text vpa (or type :nil)],
+     :type (or type :nil), :rsub rsub, :rvfn :uuid, :rnfn rnfn, :valid? (or valid? true)]))
+
+
+(defmethod render-widget :input [vpath {:keys [attr type valid?]}]
+  (let [vpa (vec (concat vpath [:edit :form attr]))]
+    [zw/input
+     :getter (zs/subscribe [:get (concat vpa [:text])]),
+     :setter [:form/set-text vpa (or type :nil)],
+     :type (or type :nil), :valid? (or valid? true)]))
+
+
+; ---------------------------- Form rendering --------------------------
+
+(defn render-form [&{:keys [vpath dpath url xhr-url fdefs form-valid?]}]
+  (let []
     (fn []
       [:div.form-screen
-       (for [{:keys [id attr widget type label rsub valid?]} fdefs
-             :let [vpa (vec (concat vpath [:edit :form attr]))]]
+       (for [{:keys [id attr label] :as fdef} fdefs]
          ^{:key (or id attr)}
          [:div.form-row
           [:div.col1.label (str label ":")]
           [:div.col2
-           (case widget                                     ; TODO pozbyć się tego case i wyeliminować pośrednią warstwę niżej - dodatkowe atrybuty do kontrolkek przekazywać bezpośrednio w fdefs
-             :select
-             [zw/select
-              :getter (zs/subscribe [:get vpa]),
-              :setter [:form/set-text vpa (or type :nil)]
-              :type (or type :nil), :rsub rsub, :rvfn :uuid, :rnfn rnfn, :valid? (or valid? true)]
-             [zw/input
-              :getter (zs/subscribe [:get vpa]),
-              :setter [:form/set-text vpa (or type :nil)]
-              :type (or type :nil), :valid? (or valid? true)])]])
+           (if (= fdef (first fdefs))
+             [zw/autofocus (render-widget vpath fdef)]
+             (render-widget vpath fdef))]])
        [:div.button-row
         [zw/button
          :icon [:awe :ok :green], :text "Save", :enabled? form-valid?,
@@ -164,16 +175,12 @@
                     [:set (concat vpath [:selected]) nil]]]
         [zw/button
          :icon     [:awe :cancel :red], :text "Cancel"
-         :on-click [:form/edit-cancel vpath dpath (str url "/list")]]]]
-      )))
+         :on-click [:form/edit-cancel vpath dpath (str url "/list")]]]])))
 
 
-(defn render-edit [& {:keys [vpath dpath title fdefs url xhr-url] :as params}]
+(defn render-edit [& {:keys [vpath dpath title fdefs url xhr-url on-refresh]}]
   "Renders object editor screen. Editor allows for modifying configuration objects."
   (let [menu-open? (zs/subscribe [:get [:view :menu :open?]])
-        ;[_ sectn view] vpath
-        ;url (str (name sectn) "/" (name view))
-        ;xhr-url (str "../../../data/" (name sectn) "/" (name view))
         form-valid? (ra/reaction
                       (let [vs (filter some? (map zu/deref? (map :valid? fdefs)))]
                         (empty? (for [v vs :when (not v)] v))))]
@@ -189,9 +196,7 @@
          [:div.flexible.flex.itm
           (zw/svg-button
             :awe :ok :green "Save changes"
-            [:form/edit-commit vpath dpath (str url "/list") xhr-url
-             fdefs
-             :on-refresh [(keyword "data" (str "cfg-" (name (last vpath)) "-list"))]] ; TODO reimplement refresh / subscription event
+            [:form/edit-commit vpath dpath (str url "/list") xhr-url fdefs :on-refresh on-refresh]
             :enabled? form-valid?)
           (zw/svg-button
             :awe :cancel :red "Cancel editing"
@@ -227,4 +232,68 @@
       :else (assoc f :valid? (validator vpath attr text-not-empty-vfn)))))
 
 
+
+
+(defn render-item [&{:keys [vpath list-col1 list-col2] :or {list-col1 :name, list-col2 :comment}}]
+  (fn [{:keys [uuid] :as obj}]
+    ^{:key uuid}
+    [:div.itm {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
+     [:div.c1.dsc [:div.n (list-col1 obj)]]
+     [:div.c2.cmt (list-col2 obj)]]))
+
+
+(defn render-detail [&{:keys [vpath dpath fdefs url xhr-url]}]
+  (fn [{:keys [uuid name comment] :as obj}]
+    ^{:key uuid}
+    [:div.det {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
+     [:div.dsc
+      [:div.kv
+       [:div.c1.k "Name:"]
+       [:div.c2.v name]
+       [:div.c2.c.hide-s comment]]]
+     [:div.btns
+      [:div.ellipsis.c-gray uuid]
+      (zw/svg-button
+        :awe :clone :text "Clone item"
+        [:form/edit-new vpath dpath
+         (str url "/edit") obj fdefs])
+      (zw/svg-button
+        :awe :trash :red "Delete item"
+        [:popup/open :msgbox,
+         :caption "Deleting object", :modal? true,
+         :text (str "Delete object: " name " ?"),
+         :buttons
+         [{:id :ok, :text "Delete", :icon [:awe :ok :green]
+           :on-click [:xhr/delete
+                      (str xhr-url "/" uuid) nil nil
+                      :on-success [:dissoc dpath uuid]
+                      :on-error zv/DEFAULT-SERVER-ERROR]}
+          {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
+      (zw/svg-button
+        :awe :edit :text "Edit item"
+        [:form/edit-open vpath dpath
+         (str url "/edit") uuid fdefs])
+      ]]))
+
+
+(defn render-list [&{:keys [vpath dpath data class fdefs url xhr-url template title on-refresh]}]
+  (let [list-col1 (last (cons :name (for [fd fdefs :when (:list-col1 fd)] (:attr fd))))
+        list-col2 (last (cons :comment (for [fd fdefs :when (:list-col2 fd)] (:attr fd))))]
+    (fn [_]
+      (when on-refresh
+        (zs/dispatch (vec (concat [:once] on-refresh))))
+      (zv/render-screen
+        :toolbar [zv/list-screen-toolbar
+                  :vpath vpath
+                  :title title,
+                  :on-refresh on-refresh,
+                  :add-left (when template
+                              [:div (zw/svg-button
+                                      :awe :plus :green "New"
+                                      [:form/edit-new vpath dpath
+                                       (str url "/edit") template fdefs])])]
+        :central [zv/list-interior :vpath vpath, :data data, :class class
+                  :render-item (render-item :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
+                  :render-details (render-detail :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)
+                  ]))))
 
