@@ -83,7 +83,11 @@
    [:div.method
     [:div.c-darker.flexible result]
     [:div.ti {:style {:color (pct-color pct)}} (zw/svg-icon :awe :clock :blue) [:div.flexible]
-     (str (zu/ticks-to-str duration) " (" (pp/cl-format nil "~,2f" pct) "%)")]]
+     (str (zu/ticks-to-str duration) " (" (pp/cl-format nil "~,2f" pct) "%)")]
+    (when-let [dto (get attrs "DTRACE_OUT")]
+      (zw/svg-button
+        :awe :right-big :blue "Go to target trace..."
+        [:event/push-dispatch zvmt/TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree dto]]))]
    [:div.c-light.ellipsis (str method args)]
    [:div.c-darker.text-rtl.ellipsis package "." class]
    (when attrs (zvmt/render-attrs attrs nil))
@@ -99,8 +103,8 @@
     ;[:div.p (if (= pct 100.0) "100.0" (pp/cl-format nil "~,2f" pct))]
     ]
    [(cond attrs :div.mc.c-blue exception :div.mc.c-red :else :div.mc.c-text)
-    {:style {:margin-left (str (* level 10) "px")}}
-    [:div.flex.ml
+    {:style {:margin-left (str (* level 10) "px"), :flex 10}}
+    [:div.flex.ml.flexible
      (case state
        :open (zw/svg-button :awe :minus-squared-alt :text "Collapse" [:toggle [:view :trace :tree :collapsed pos]])
        :closed (zw/svg-button :awe :plus-squared-alt :text "Expand" [:toggle [:view :trace :tree :collapsed pos]])
@@ -109,7 +113,11 @@
      [:div.large-or-more (str package ".")]
      [:div.small-or-more (str class ".")]
      [:div.m.medium-or-less (str method (if (= args "()") "()" "(...)"))]
-     [:div.m.medium-or-more (str method args)]]]])
+     [:div.m.medium-or-more (str method args)]]]
+   (when-let [dto (get attrs "DTRACE_OUT")]
+     (zw/svg-button
+       :awe :right-big :blue "Go to target trace..."
+       [:event/push-dispatch zvmt/TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree dto]]))])
 
 
 (defn toolbar-tree-left []

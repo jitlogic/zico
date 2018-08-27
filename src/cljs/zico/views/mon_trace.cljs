@@ -70,22 +70,12 @@
                :awe :cancel :red "Clear filter ..."
                [:do
                 [:dissoc [:view :trace :list :filter-attrs] k]
-                ;[:dissoc [:view :trace :list] :selected]
                 [:zico.views.mon-trace-list/refresh-list]])]
             [:div.i
              (zw/svg-button
                :awe :filter :blue "Filter by ..."
-               [:do
-                ;[:dissoc [:view :trace :list] :selected]
-                [::filter-by-attr k v ttype]])]))
-        [:div.k k]
-        [:div.v v]
-        (when (= k "DTRACE_OUT")
-          [:div.i
-           (zw/svg-button
-             :awe :link-ext :blue "Go to target trace..."
-             [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree v]])])
-        ])]))
+               [:do [::filter-by-attr k v ttype]])]))
+        [:div.k k] [:div.v v]])]))
 
 
 (defn render-exception [exception full]
