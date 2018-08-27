@@ -30,12 +30,11 @@
                     :let [v (-> vroot :filter k :selected)]
                     :when v]
                 {k v}))
-        qmi (into
+        qmi (merge
               qmi
-              (for [k [:tstart :tstop]
-                    :let [v (-> vroot :filter k :selected)]
-                    :when v]
-                {k (ctf/unparse PARAM-FORMATTER v)}))
+              (when-let [tstamp (-> vroot :filter :time :selected)]
+                {:tstart (ctf/unparse PARAM-FORMATTER tstamp)
+                 :tstop (ctf/unparse PARAM-FORMATTER (zw/day-next tstamp))}))
         tft (if-not (empty? text) {:type :text, :text text})
         all (for [[k v] (:filter-attrs vroot) :when (string? k)] {:type :kv, :key k, :val v})
         all (for [f (into [tft] all) :when (some? f)] f)
@@ -172,9 +171,10 @@
         fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
     (ra/reaction
       (let [filter @filter, search @search, fattrs @fattrs,
-            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt] [:host "Host: " :sitemap]]
+            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt]
+                                 [:host "Host: " :sitemap] [:time "Time: " :calendar]]
                      :let [uuid (get-in filter [k :selected])] :when uuid]
-                 {:key      (str k), :text (str lbl (get-in @cfg [k uuid :name])), :icon [:awe ic :red],
+                 {:key      (str k), :text (str lbl (or (get-in @cfg [k uuid :name]) uuid)), :icon [:awe ic :red],
                   :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list]]})
             f2 (when-not (empty? (:text search))
                  [{:key      ":text", :text (str "Search: " (zu/ellipsis (:text search) 32)), :icon [:awe :search :red],
@@ -202,18 +202,10 @@
     (fn []
       (let [view-state @view-state]
         [:div.flexible.flex
-         (zw/svg-button :awe :attention-circled :red "Errors only"
-                        [::filter-list [:view :trace :list :filter :err :selected]
-                         (not (get-in view-state [:filter :err :selected]))]
-                        :opaque (get-in view-state [:filter :err :selected]))
-         (zw/svg-button :awe :calendar-plus-o :light "From"
+         (zw/svg-button :awe :calendar :light "Select timespan"
                         [:popup/open :calendar, :position :top-right, :on-click-kw ::filter-list,
-                         :path [:view :trace :list :filter :tstart]]
-                        :opaque (get-in view-state [:filter :tstart :selected]))
-         (zw/svg-button :awe :calendar-minus-o :light "To"
-                        [:popup/open :calendar, :position :top-right, :on-click-kw ::filter-list,
-                         :path [:view :trace :list :filter :tstop]]
-                        :opaque (get-in view-state [:filter :tstop :selected]))
+                         :path [:view :trace :list :filter :time]]
+                        :opaque (get-in view-state [:filter :time :selected]))
          (zw/svg-button
            :awe :clock :light "Minimum duration"
            [:popup/open :menu, :position :top-right, :items DURATION-FILTER-ITEMS
