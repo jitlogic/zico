@@ -90,6 +90,10 @@
                  [:div.c (str class "." method)]
                  [:div.f (str "(" file ":" line ")")]])]])
 
+(defn ttype-get [ttype]
+  (let [{:keys [glyph name uuid]} (get @CFG-TTYPES ttype {:glyph "awe/paw#text", :name "<unknown>"})
+             [_ f g c] (re-matches #"(.+)/([^#]+)#?(.*)?" glyph)]
+    {:family (keyword f), :glyph (keyword g), :name name, :uuid uuid, :color (keyword c)}))
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
   (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host ttype app env]
@@ -99,16 +103,15 @@
      {:data-trace-uuid uuid}
      [:div.flex-on-medium-or-more
       [:div tstamp]
-      (let [{:keys [glyph name uuid] :as x} (get @CFG-TTYPES ttype {:glyph "awe/paw", :name "<unknown>"}),
-            [_ f g] (re-matches #"(.+)/(.+)" glyph)]
+      (let [{:keys [family glyph color name uuid]} (ttype-get ttype)]
         [:div.flex
          [:div.i.lpad.rpad
           (if (and enable-filters (some? uuid))
             (zw/svg-button
-              (if f (keyword f) :awe) (if g (keyword g) :paw) :text (str "Show only " name " traces.")
+              family glyph color (str "Show only " name " traces.")
               [:do [:set [:view :trace :list :filter :ttype :selected] uuid]
                [:zico.views.mon-trace-list/refresh-list]])
-            (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text :opaque false))]
+            (zw/svg-icon family glyph color :opaque false))]
          [:div.ellipsis name]])
       (let [{:keys [name uuid]} (get @CFG-APPS app {:name "<unknown>"})]
         [:div.flex
@@ -180,9 +183,8 @@
         [:div.ct t]
         [:div.flexible]
         [:div.seg
-         (let [{:keys [glyph]} (get @CFG-TTYPES ttype {:glyph "awe/paw"}),
-               [_ f g] (re-matches #"(.+)/(.+)" glyph)]
-           (zw/svg-icon (if f (keyword f) :awe) (if g (keyword g) :paw) :text))]
+         (let [{:keys [family glyph color]} (ttype-get ttype)]
+           (zw/svg-icon family glyph color))]
         [:div.svg-icon.btn-details.small-or-less.clickable " "]]
        [:div.seg.flexible
         {:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
