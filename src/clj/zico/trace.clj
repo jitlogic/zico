@@ -316,7 +316,7 @@
       (zutl/rest-error "Missing session UUID header." 412))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch Object e
-      (log/error e "Internal error when processing submitted agent data.")
+      (log/error e (str "Error processing AGD data: " data))
       (zutl/rest-error "Internal error." 500))))
 
 
@@ -336,7 +336,7 @@
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
     (catch Object e
-      (log/error e "Internal error when processing submitted agent data.")
+      (log/error e "Error processing TRC data: " data)
       (zutl/rest-error "Internal error." 500))))
 
 

@@ -75,6 +75,7 @@
   ([ticks ms]
    (let [t (* ticks 65536)]
      (cond
+       (< t 0) "N/A"
        (= t 0) "0ms"
        (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
        (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
