@@ -16,5 +16,6 @@ mkdir $ZN
 mv zico.jar $ZN/
 cp ../dist/* $ZN/
 rm $ZN/build.sh
+cp ../COPYING ../CHANGES.md $ZN/
 
 zip -r $ZN.zip $ZN
