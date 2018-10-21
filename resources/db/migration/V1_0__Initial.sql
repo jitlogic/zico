@@ -171,8 +171,12 @@ INSERT INTO ttype (uuid,flags,dmin,name,glyph,descr,comment) values
    'awe/cube#blue', '${RID}', 'Crystal Reports Remote Request'),
   ('21c00000-0101-0000-0016-000000000000', 3, 1000, 'FLEX',
    'awe/cube#blue', '${DEST}: ${MESSAGE_ID} (${CLIENT_ID})', 'FLEX Remote Service'),
+  ('21c00000-0101-0000-0017-000000000000', 3, 1000, 'SPRING',
+   'awe/cube#blue', '${CLASS|URI|SERVICE_URL}/${METHOD}', 'Spring invocation'),
+  ('21c00000-0101-0000-0018-000000000000', 3, 1000, 'AMQP_SEND',
+   'awe/paper-plane-empty#darkgreen', '${CONN}  -> ${EXCHANGE}', 'AMQP message sent.'),
   ('21c00000-0101-0000-1000-000000000000', 3, 1000, 'SPRING',
-   'awe/cube#blue', '${CLASS|URI|SERVICE_URL}/${METHOD}', 'Spring invocation');
+   'awe/paper-plane-empty#blue', '${CONN}  <- ${EXCHANGE}', 'AMQP message received.');
 
 
 -- Default application
