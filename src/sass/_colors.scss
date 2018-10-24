@@ -23,6 +23,13 @@
 .c-yellow  { @include text-color($c-yellow); }
 .c-black   { @include text-color($c-black); }
 .c-white   { @include text-color($c-white); }
+.c-darkgreen { @include text-color($c-darkgreen); }
+.c-darkred { @include text-color($c-darkred); }
+.c-darkblue { @include text-color($c-darkblue); }
+.c-darkkhaki { @include text-color($c-darkkhaki); }
+.c-mediumblue { @include text-color($c-mediumblue); }
+.c-steelblue { @include text-color($c-steelblue); }
+.c-mediumred { @include text-color($c-mediumred); }
 
 // Background colors
 .b-text { background: $b-normal; }             // Background (depending on theme)

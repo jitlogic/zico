@@ -39,7 +39,7 @@
            [zw/autofocus
             [zw/input
              :path [:view :user :prefs :old],
-             :getter (zs/subscribe [:get [:view :user :prefs :old]]),
+             :getter (zs/subscribe [:get [:view :user :prefs :old :text]]),
              :setter [:form/set-text [:view :user :prefs :old] :nil],
              :attrs {:type :password}]]]]
          [:div.form-row
@@ -47,7 +47,7 @@
           [:div.col2
            [zw/input
             :path [:view :user :prefs :new],
-            :getter (zs/subscribe [:get [:view :user :prefs :new]]),
+            :getter (zs/subscribe [:get [:view :user :prefs :new :text]]),
             :setter [:form/set-text [:view :user :prefs :new] :nil],
             :attrs {:type :password}, :valid? match?]]
           [:div.aux (passwd-strength (:value new))]]
@@ -56,7 +56,7 @@
           [:div.col2
            [zw/input
             :path [:view :user :prefs :rep],
-            :getter (zs/subscribe [:get [:view :user :prefs :rep]]),
+            :getter (zs/subscribe [:get [:view :user :prefs :rep :text]]),
             :setter [:form/set-text [:view :user :prefs :rep] :nil],
             :attrs {:type :password}, :valid? match?]]
           (when-not @match?

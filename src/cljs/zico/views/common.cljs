@@ -25,7 +25,7 @@
 
 
 (defn menu-item [family glyph label path {:keys [changed?] :as params}]
-  [:div.itm {:on-click (zs/to-handler [:do [:to-screen path] [:toggle [:view :menu :open?]]])}
+  [:div.itm {:on-click (zs/to-handler [:to-screen path])}
    [(if changed? :div.ico.icm :div.ico)
     (zw/svg-icon family glyph "text")] [:div.lead label]])
 
