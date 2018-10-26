@@ -106,3 +106,9 @@
     (> (count s) limit) (str (subs s 0 limit) "...")
     :else s
     ))
+
+(defn glyph-parse [glyph default]
+  (if-let [m (re-matches #"(.+)/([^#]+)#?(.*)?" (or glyph default))]
+    (rest m)
+    (glyph-parse default "awe/paw#text")))
+

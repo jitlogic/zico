@@ -129,7 +129,8 @@
 
 
 (defn filtered-items [path data icon & {:keys [filter-fn]}]
-  (let [selected (zs/subscribe [:get path])]
+  (let [icon-fn (cond (vector? icon) (constantly icon), (fn? icon) icon, :else (constantly [:awe :paw :text]))
+        selected (zs/subscribe [:get path])]
     (ra/reaction
       (doall
         (cons
@@ -137,7 +138,7 @@
            :on-click [:do [:set path nil] [::refresh-list]]}
           (for [{:keys [uuid name] :as r} (sort-by :name (vals (zu/deref? data)))
                 :when ((or filter-fn identity) r)]
-            {:key      uuid, :text name, :icon icon,
+            {:key      uuid, :text name, :icon (icon-fn r),
              :on-click [:do [:set path uuid] [::refresh-list]]
              :state    (if (= uuid @selected) :selected :normal)
              }))))))
@@ -147,7 +148,7 @@
   (filtered-items
     [:view :trace :list :filter :ttype :selected]
     (zs/subscribe [:get [:data :cfg :ttype]])
-    [:awe :list-alt :text]
+    #(zu/glyph-parse (:glyph %) "awe/list-alt#text")
     :filter-fn #(= 0x08 (bit-and (:flags %) 0x08))))
 
 
