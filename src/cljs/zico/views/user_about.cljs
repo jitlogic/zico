@@ -9,15 +9,6 @@
 (def VERSION (str "zorka " (zorka-version-info)))
 (def BUILD (str "Build: " (zorka-build-info)))
 
-
-(defn about-refresh []
-  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil
-                :on-error zv/DEFAULT-SERVER-ERROR]))
-
-
-(defonce about-timer (js/setInterval about-refresh 30000))  ; TODO this is stateful
-
-
 (defn render-about-interior []
   (let [state (zs/subscribe [:get [:data :user :about]])]
     (fn []

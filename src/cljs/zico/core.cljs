@@ -14,7 +14,8 @@
     [zico.views.mon-trace-stats]
     [zico.views.adm-backup :as zvbkp]
     [zico.views.user-about :as zvabt]
-    [zico.views.user-prefs :as zvupr]))
+    [zico.views.user-prefs :as zvupr]
+    [zico.views.common :as zv]))
 
 
 
@@ -67,6 +68,30 @@
   "user/about"   #'zvabt/render-about-screen
   "user/prefs"   #'zvupr/render-user-prefs
   )
+
+
+(defn system-info-refresh []
+  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil
+                :on-success [:system-info-check-timestamps]
+                :on-error zv/DEFAULT-SERVER-ERROR]))
+
+
+(defn system-info-check-timestamps-fx [{:keys [db]} [_ {:keys [tstamps] :as sysinfo}]]
+  (let [tst0 (-> db :system :info :tstamps)]
+    {:db (assoc-in db [:system :info] sysinfo)
+     :dispatch-n
+         (vec
+           (for [k [:app :env :ttype :host] :let [v1 (k tst0), v2 (k tstamps)] :when (not= v1 v2)]
+             [:data/refresh :cfg k]))}))
+
+
+(zs/reg-event-fx :system-info-check-timestamps system-info-check-timestamps-fx)
+
+(system-info-refresh)
+
+(defonce
+  system-info-timer
+  (js/setInterval (fn [] (system-info-refresh)) 10000))     ; TODO this is stateful
 
 
 

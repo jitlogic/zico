@@ -132,6 +132,10 @@
       (let [^String uuid (-> req :params :uuid)]
         (ztrc/trace-stats app-state uuid)))
 
+    (GET "/data/cfg" _
+      (zutl/rest-result
+        (zobj/get-tstamps obj-store)))
+
     ; Configuration data API
     (GET "/data/cfg/:class" [class]
       (if (OBJ-CLASSES class)

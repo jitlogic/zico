@@ -127,7 +127,7 @@
       (String/format "%02d:%02d:%02d" (object-array [(mod h 24) (mod m 60) (mod s 60)])))))
 
 
-(defn system-info [{:keys [conf] :as _} _]
+(defn system-info [{:keys [conf obj-store] :as _} _]
   (let [runtime (ManagementFactory/getRuntimeMXBean)
         memory (ManagementFactory/getMemoryMXBean)]
     (zutl/rest-result
@@ -137,5 +137,6 @@
        :mem-used   (.getUsed (.getHeapMemoryUsage memory))
        :mem-max    (.getMax (.getHeapMemoryUsage memory))
        :home-dir   (:home-dir conf)
+       :tstamps    (zobj/get-tstamps obj-store)
        })))
 

@@ -159,6 +159,7 @@
   (get-obj   [this uuid])
   (del-obj   [this uuid])
   (find-obj  [this opts])
+  (get-tstamps [this])
   (refresh    [this]))
 
 
@@ -183,7 +184,7 @@
 
 ; TODO implement non-caching object store implementation
 (defn jdbc-caching-store [zico-db]
-  (let [data (atom {})]
+  (let [data (atom {}), tstamps (atom {})]
     (reify
       ObjectStore
       (put-obj [_ {:keys [uuid class] :as obj}]
@@ -194,6 +195,7 @@
           (if (contains? obj :uuid)
             (jdbc/update! zico-db class (dissoc obj :uuid :class) ["uuid = ?" uuid])
             (jdbc/insert! zico-db class (dissoc (assoc obj :uuid uuid) :class)))
+          (swap! tstamps assoc class (System/currentTimeMillis))
           (swap! data assoc uuid (assoc obj :uuid uuid))
           (assoc obj :uuid uuid)))
       (get-obj [_ uuid]
@@ -202,12 +204,16 @@
         (let [r (get @data uuid)]
           (when r
             (jdbc/delete! zico-db (:class r) ["uuid = ?" uuid])
-            (swap! data dissoc uuid))))
+            (swap! data dissoc uuid)
+            (swap! tstamps assoc (:class r) (System/currentTimeMillis)))))
       (find-obj [_ opts]
         (let [data @data]
           (map first (filter (obj-matcher opts) data))))
+      (get-tstamps [_]
+        @tstamps)
       (refresh [_]
         (reset! data (jdbc-read-and-map zico-db))
+        (reset! tstamps (into {} (for [c (into #{} (map :class (vals @data)))] {c (System/currentTimeMillis)})))
         (setup-obj-ids @data 0x1000))
       ManagedStore
       (backup [_ path]

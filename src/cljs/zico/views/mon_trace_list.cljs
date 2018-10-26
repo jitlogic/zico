@@ -248,10 +248,10 @@
 
 (defn trace-list []
   "Trace seach/listing panel: [:view :trace :list]"
-  (zs/dispatch [:once :data/refresh :cfg :app])
-  (zs/dispatch [:once :data/refresh :cfg :env])
-  (zs/dispatch [:once :data/refresh :cfg :ttype])
-  (zs/dispatch [:once :data/refresh :cfg :host])
+  ;(zs/dispatch [:once :data/refresh :cfg :app])
+  ;(zs/dispatch [:once :data/refresh :cfg :env])
+  ;(zs/dispatch [:once :data/refresh :cfg :ttype])
+  ;(zs/dispatch [:once :data/refresh :cfg :host])
   (zs/dispatch [::refresh-list])
   (zv/render-screen
     :toolbar [zv/list-screen-toolbar
