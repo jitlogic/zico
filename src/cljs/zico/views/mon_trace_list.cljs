@@ -124,7 +124,7 @@
 
 (def DURATION-FILTER-ITEMS
   (for [[k l t] DURATIONS]
-    {:key k, :text l, :icon [:awe (if t :clock :block) (if t :text :red)],
+    {:key k, :text l, :icon [:awe (if t :clock :cancel) (if t :text :red)],
      :on-click [::filter-list [:view :trace :list :filter :min-duration :selected] t]}))
 
 
