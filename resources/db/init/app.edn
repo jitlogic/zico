@@ -1,0 +1,4 @@
+[ ; Default set of applications
+ {:uuid "21c00000-0201-0000-0001-000000000000", :name "APP", :glyph "awe/cube", :comment "Discovered Application"}
+ ]
+

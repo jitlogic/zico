@@ -1,0 +1,4 @@
+[ ; Default admin user
+ {:uuid "21c00000-0801-0000-0001-000000000000", :flags 3, :name "admin", :password "zico",
+  :fullname "Zorka Administrator", :email "admin@mycompany.com", :comment "Default Admin Account"}
+ ]

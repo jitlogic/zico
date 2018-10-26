@@ -8,7 +8,8 @@
   (:import (java.util Random)
            (java.util.concurrent.atomic AtomicLong)
            (org.apache.tomcat.dbcp.dbcp BasicDataSource)
-           (org.flywaydb.core Flyway)))
+           (org.flywaydb.core Flyway)
+           (java.io File)))
 
 
 (defonce SEQ-NUM (AtomicLong.))
@@ -81,10 +82,10 @@
             {class (reduce max (map (comp extract-uuid-seq :uuid) recs))}))))
 
 
-(defn setup-obj-ids [data]
+(defn setup-obj-ids [data id-min]
   (doseq [[_ counter] OBJ-IDS] (.set counter 0))
   (doseq [[class seq-num] (last-seq-nums data)]
-    (.set (OBJ-IDS class) seq-num)))
+    (.set (OBJ-IDS class) (max seq-num id-min))))
 
 
 (defn jdbc-datasource [{:keys [subprotocol subname host port dbname user password classname] :as conf}]
@@ -207,7 +208,7 @@
           (map first (filter (obj-matcher opts) data))))
       (refresh [_]
         (reset! data (jdbc-read-and-map zico-db))
-        (setup-obj-ids @data))
+        (setup-obj-ids @data 0x1000))
       ManagedStore
       (backup [_ path]
         (try
@@ -237,4 +238,35 @@
                  (first (find-and-get obj-store {:name prefix})))]
     (if (= class (:class rslt)) rslt)))
 
+
+(defn merge-initial-data [zico-db class overwrite data]
+  (let [all (group-by :uuid (jdbc/query zico-db [(str "select * from " (zutl/to-str class))]))]
+    (doseq [{:keys [uuid] :as d} data,
+            :let [r (first (all uuid))]]
+      (when (or (nil? r) overwrite)
+        (jdbc/insert! zico-db class d)))))
+
+(defn slurp-init-file [^String homedir class]
+  (try
+    (let [f (File. (File. homedir "init") (str (name class) ".edn"))]
+      (if (.exists f)
+        (read-string (slurp f))))
+    (catch Exception e
+      (log/warn e "Cannot read init file for class: " class)
+      nil)))
+
+(defn slurp-init-classpath [class]
+  (read-string
+    (slurp (clojure.java.io/resource  (str "db/init/" (name class) ".edn")))))
+
+(def INIT-CLASSES [:app :env :hostreg :ttype :user])
+
+(defn load-initial-data [zico-db {:keys [source mode] :as conf} homedir]
+  (doseq [class INIT-CLASSES
+          :let [data (concat
+                       (if (#{:internal :all} source) (slurp-init-classpath class))
+                       (if (#{:external :all} source) (slurp-init-file homedir class)))]]
+    (when-not (= mode :skip)
+      (merge-initial-data zico-db class (= mode :overwrite) data)))
+  )
 

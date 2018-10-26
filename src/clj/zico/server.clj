@@ -51,6 +51,7 @@
   (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
         obj-store (zobj/jdbc-caching-store zico-db)]
     (zobj/jdbc-migrate zico-db)
+    (zobj/load-initial-data zico-db (:zico-db-init conf) (:home-dir conf))
     (zobj/refresh obj-store)
     (->
       {:conf conf, :zico-db zico-db, :obj-store obj-store,

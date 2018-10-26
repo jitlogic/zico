@@ -1,0 +1,5 @@
+[ ; Default host registration
+ {:uuid "21c00000-0701-0000-0001-000000000000", :name "ZORKA", :regkey "zorka", :flags 1,
+  :app "21c00000-0201-0000-0001-000000000000", :env "21c00000-0301-0000-0006-000000000000",
+  :comment "Default registration (please modify)"}
+ ]

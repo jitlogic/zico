@@ -1,0 +1,52 @@
+[ ; Predefined set of trace types
+ {:uuid "21c00000-0101-0000-0001-000000000000", :flags 9, :dmin 1000, :name "HTTP",
+  :glyph "awe/globe#steelblue", :descr "${METHOD:REQ} ${URI} -> ${STATUS}", :comment "HTTP request handling"}
+ {:uuid "21c00000-0101-0000-0002-000000000000", :flags 3, :dmin 1000, :name "HTTP_CLI",
+  :glyph "awe/globe#darkred", :descr "${METHOD} ${URL}", :comment "HTTP client request"}
+ {:uuid "21c00000-0101-0000-0003-000000000000", :flags 11, :dmin 1000, :name "SQL",
+  :glyph "awe/database#darkgreen", :descr "[${DB}] ${SQL}", :comment "SQL query"}
+ {:uuid "21c00000-0101-0000-0004-000000000000", :flags 3, :dmin 1000, :name "LDAP",
+  :glyph "awe/database#darkkhaki", :descr "${NAME}: ${FILTER}", :comment "LDAP query"}
+ {:uuid "21c00000-0101-0000-0005-000000000000", :flags 1, :dmin 1000, :name "SOAP",
+  :glyph "awe/cube#steelblue", :descr "${URI}: ${HDR.IN.soapOperation} -> ${STATUS}", :comment "SOAP request handling"}
+ {:uuid "21c00000-0101-0000-0006-000000000000", :flags 3, :dmin 1000, :name "SOAP_CLI",
+  :glyph "awe/cube#darkgred", :descr "${URL}: ${OPERATION} -> ${STATUS}", :comment "SOAP client request"}
+ {:uuid "21c00000-0101-0000-0007-000000000000", :flags 1, :dmin 1000, :name "EJB",
+  :glyph "awe/cube#steelblue", :descr "${CLASS}.${METHOD}", :comment "EJB request handling"}
+ {:uuid "21c00000-0101-0000-0008-000000000000", :flags 3, :dmin 1000, :name "EJB_CLI",
+  :glyph "awe/cube#darkred", :descr "${CLASS}.${METHOD}", :comment "EJB client request"}
+ {:uuid "21c00000-0101-0000-0009-000000000000", :flags 1, :dmin 1000, :name "REST",
+  :glyph "awe/globe#steelblue", :descr "${HTTP_METHOD} ${URI}", :comment "REST request handling"}
+ {:uuid "21c00000-0101-0000-000a-000000000000", :flags 3, :dmin 1000, :name "REST_CLI",
+  :glyph "awe/globe#darkred", :descr "${CLASS}.${METHOD}", :comment "REST client request"}
+ {:uuid "21c00000-0101-0000-000b-000000000000", :flags 1, :dmin 1000, :name "JMS",
+  :glyph "awe/cube#steelblue", :descr "${CLASS}.${METHOD}", :comment "JMS message handling"}
+ {:uuid "21c00000-0101-0000-000c-000000000000", :flags 1, :dmin 1000, :name "QUARTZ",
+  :glyph "awe/clock#darkred", :descr "${GROUP} ${NAME}", :comment "Quartz Schedules"}
+ {:uuid "21c00000-0101-0000-000f-000000000000", :flags 1, :dmin 1000, :name "CAMEL",
+  :glyph "awe/globe#steelblue", :descr "${CLASS} ${CONTEXT_NAME}", :comment "Apache CAMEL flow"}
+ {:uuid "21c00000-0101-0000-0010-000000000000", :flags 1, :dmin 1000, :name "CAS",
+  :glyph "awe/user-secret#darkkhaki", :descr "${ACTION}", :comment "Jasig CAS action"}
+ {:uuid "21c00000-0101-0000-0011-000000000000", :flags 1, :dmin 1000, :name "CAS_CLI",
+  :glyph "awe/user-secret#darkred", :descr "${CAS_URI}", :comment "Jasig CAS client"}
+ {:uuid "21c00000-0101-0000-0012-000000000000", :flags 1, :dmin 1000, :name "MULE_CMP",
+  :glyph "awe/cube#darkkhaki", :descr "${APPLICATION} ${FLOW}", :comment "Mule ESB component"}
+ {:uuid "21c00000-0101-0000-0013-000000000000", :flags 1, :dmin 1000, :name "MULE_DISP",
+  :glyph "awe/cube#darkkhaki", :descr "${APPLICATION} ${URI}", :comment "Mule ESB dispatcher"}
+ {:uuid "21c00000-0101-0000-0014-000000000000", :flags 1, :dmin 1000, :name "MULE_FLOW",
+  :glyph "awe/cube#darkkhaki", :descr "${APPLICATION} ${FLOW}", :comment "Mule ESB flow"}
+ {:uuid "21c00000-0101-0000-0015-000000000000", :flags 3, :dmin 1000, :name "CRYSTAL",
+  :glyph "awe/cube#darkred", :descr "${RID}", :comment "Crystal Reports Remote Request"}
+ {:uuid "21c00000-0101-0000-0016-000000000000", :flags 3, :dmin 1000, :name "FLEX",
+  :glyph "awe/cube#steelblue", :descr "${DEST}: ${MESSAGE_ID} (${CLIENT_ID})", :comment "FLEX Remote Service"}
+ {:uuid "21c00000-0101-0000-0017-000000000000", :flags 3, :dmin 1000, :name "AMQP_SEND",
+  :glyph "awe/paper-plane-empty#darkred", :descr "${CONN}    -> ${EXCHANGE}", :comment "AMQP message sent"}
+ {:uuid "21c00000-0101-0000-0018-000000000000", :flags 1, :dmin 1000, :name "AMQP_RECV",
+  :glyph "awe/paper-plane-empty#steelblue", :descr "${CONN}    <- ${EXCHANGE}", :comment "AMQP message received"}
+ {:uuid "21c00000-0101-0000-0019-000000000000", :flags 1, :dmin 1000, :name "HYSTRIX_IN",
+  :glyph "awe/flash#steelblue", :descr "${GROUP}.${KEY}", :comment "Hystrix: worker thread execution"}
+ {:uuid "21c00000-0101-0000-001a-000000000000", :flags 3, :dmin 1000, :name "HYSTRIX_OUT",
+  :glyph "awe/flash#darkkhaki", :descr "${GROUP}.${KEY}", :comment "Hystrix: client call"}
+ {:uuid "21c00000-0101-0000-001b-000000000000", :flags 3, :dmin 1000, :name "SPRING",
+  :glyph "awe/cube#darkkhaki", :descr "${CLASS|URI|SERVICE_URL}/${METHOD}", :comment "Spring invocation"}
+ ]

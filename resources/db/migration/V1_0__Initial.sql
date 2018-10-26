@@ -2,6 +2,14 @@
 -- Initial schema: tables
 
 -- Trace types: 0x01 - used to interpret and display trace data
+-- Defined flags:
+-- 0x00000001 - enabled;
+-- 0x00000002 - client side (for trace types);
+-- 0x00000002 - force app (for registrations);
+-- 0x00000004 - force env (for registrations);
+-- 0x00000008 - used (by at least one trace);
+-- 0x7fff0000 - pinned (fixed) for individual fields - for example, items edited
+--              manually can't be changed from agents (not implemented yet);
 CREATE TABLE ttype (
   uuid    VARCHAR(36) NOT NULL,      -- record UUID
   name    VARCHAR(64) NOT NULL,      -- symbolic name
@@ -65,7 +73,6 @@ CREATE TABLE hostattr (
   PRIMARY KEY (uuid)
 );
 
-
 -- Registration rules: 0x07
 CREATE TABLE hostreg (
   uuid   VARCHAR(36) NOT NULL,   -- record UUID
@@ -98,7 +105,6 @@ CREATE TABLE groups (
   PRIMARY KEY (uuid)
 );
 
-
 -- Access rights: 0x0a
 CREATE TABLE access (
   uuid    VARCHAR(36) NOT NULL,    -- record UUID
@@ -108,7 +114,6 @@ CREATE TABLE access (
   PRIMARY KEY (uuid)
 );
 
-
 -- Configuration properties: 0x0f
 CREATE TABLE props (
   uuid VARCHAR(36) NOT NULL,       -- record UUID
@@ -116,93 +121,3 @@ CREATE TABLE props (
   propv VARCHAR(255) NOT NULL,     -- property value
   PRIMARY KEY (uuid)
 );
-
-
--- Initial data: initial settings
-
--- Defined flags:
--- 0x00000001 - enabled;
--- 0x00000002 - client side (for trace types);
--- 0x00000002 - force app (for registrations);
--- 0x00000004 - force env (for registrations);
--- 0x7fff0000 - pinned (fixed) for individual fields - for example, items edited
---              manually can't be changed from agents (not implemented yet);
-
-
--- Default trace types
-INSERT INTO ttype (uuid,flags,dmin,name,glyph,descr,comment) values
-  ('21c00000-0101-0000-0001-000000000000', 1, 1000, 'HTTP',
-   'awe/globe#steelblue', '${METHOD:REQ} ${URI} -> ${STATUS}', 'HTTP request handling'),
-  ('21c00000-0101-0000-0002-000000000000', 3, 1000, 'HTTP_CLI',
-   'awe/globe#darkred', '${METHOD} ${URL}', 'HTTP client request'),
-  ('21c00000-0101-0000-0003-000000000000', 3, 1000, 'SQL',
-   'awe/database#darkgreen', '${SQL}', 'SQL query'),
-  ('21c00000-0101-0000-0004-000000000000', 3, 1000, 'LDAP',
-   'awe/database', '${NAME}: ${FILTER}', 'LDAP query'),
-  ('21c00000-0101-0000-0005-000000000000', 1, 1000, 'SOAP',
-   'awe/cube#steelblue', '${URI}: ${HDR.IN.soapOperation} -> ${STATUS}', 'SOAP request handling'),
-  ('21c00000-0101-0000-0006-000000000000', 3, 1000, 'SOAP_CLI',
-   'awe/cube#darkgred', '${URL}: ${HDR.OUT.soapOperation} -> ${STATUS}', 'SOAP client request'),
-  ('21c00000-0101-0000-0007-000000000000', 1, 1000, 'EJB',
-   'awe/cube#steelblue', '${CLASS}.${METHOD}', 'EJB request handling'),
-  ('21c00000-0101-0000-0008-000000000000', 3, 1000, 'EJB_CLI',
-   'awe/cube#darkred', '${CLASS}.${METHOD}', 'EJB client request'),
-  ('21c00000-0101-0000-0009-000000000000', 1, 1000, 'REST',
-   'awe/globe#steelblue', '${HTTP_METHOD} ${URI}', 'REST request handling'),
-  ('21c00000-0101-0000-000a-000000000000', 3, 1000, 'REST_CLI',
-   'awe/globe#darkred', '${CLASS}.${METHOD}', 'REST client request'),
-  ('21c00000-0101-0000-000b-000000000000', 1, 1000, 'JMS',
-   'awe/cube#steelblue', '${CLASS}.${METHOD}', 'JMS message handling'),
-  ('21c00000-0101-0000-000c-000000000000', 1, 1000, 'QUARTZ',
-   'awe/clock#darkred', '${GROUP} ${NAME}', 'Quartz Schedules'),
-  ('21c00000-0101-0000-000f-000000000000', 1, 1000, 'CAMEL',
-   'awe/globe#steelblue', '${CLASS} ${CONTEXT_NAME}', 'Apache CAMEL flow'),
-  ('21c00000-0101-0000-0010-000000000000', 1, 1000, 'CAS',
-   'awe/user-secret#darkkhaki', '${ACTION}', 'Jasig CAS action'),
-  ('21c00000-0101-0000-0011-000000000000', 1, 1000, 'CAS_CLI',
-   'awe/user-secret#darkred', '${CAS_URI}', 'Jasig CAS client'),
-  ('21c00000-0101-0000-0012-000000000000', 1, 1000, 'MULE_CMP',
-   'awe/cube#darkkhaki', '${APPLICATION} ${FLOW}', 'Mule ESB component'),
-  ('21c00000-0101-0000-0013-000000000000', 1, 1000, 'MULE_DISP',
-   'awe/cube#darkkhaki', '${APPLICATION} ${URI}', 'Mule ESB dispatcher'),
-  ('21c00000-0101-0000-0014-000000000000', 1, 1000, 'MULE_FLOW',
-   'awe/cube#darkkhaki', '${APPLICATION} ${FLOW}', 'Mule ESB flow'),
-  ('21c00000-0101-0000-0015-000000000000', 3, 1000, 'CRYSTAL',
-   'awe/cube#darkred', '${RID}', 'Crystal Reports Remote Request'),
-  ('21c00000-0101-0000-0016-000000000000', 3, 1000, 'FLEX',
-   'awe/cube#steelblue', '${DEST}: ${MESSAGE_ID} (${CLIENT_ID})', 'FLEX Remote Service'),
-  ('21c00000-0101-0000-0017-000000000000', 3, 1000, 'AMQP_SEND',
-   'awe/paper-plane-empty#darkred', '${CONN}    -> ${EXCHANGE}', 'AMQP message sent.'),
-  ('21c00000-0101-0000-0018-000000000000', 3, 1000, 'AMQP_RECV',
-   'awe/paper-plane-empty#steelblue', '${CONN}    <- ${EXCHANGE}', 'AMQP message received.'),
-  -- sentinel
-  ('21c00000-0101-0000-1000-000000000000', 3, 1000, 'SPRING',
-   'awe/cube#darkkhaki', '${CLASS|URI|SERVICE_URL}/${METHOD}', 'Spring invocation');
-
-
--- Default application
-INSERT INTO app (uuid, name, glyph, comment) VALUES
-  ('21c00000-0201-0000-0001-000000000000', 'DSC', 'awe/cube', 'Discovered Application');
-
--- Default environments
-INSERT INTO env (uuid, name, glyph, comment) VALUES
-  ('21c00000-0301-0000-0001-000000000000', 'PRD', 'awe/network', 'Production'),
-  ('21c00000-0301-0000-0002-000000000000', 'UAT', 'awe/network', 'User Acceptance Tests'),
-  ('21c00000-0301-0000-0003-000000000000', 'SIT', 'awe/network', 'System Integration Testing'),
-  ('21c00000-0301-0000-0004-000000000000', 'MNT', 'awe/network', 'Maintenance'),
-  ('21c00000-0301-0000-0005-000000000000', 'DEV', 'awe/network', 'Development'),
-  ('21c00000-0301-0000-0006-000000000000', 'TST', 'awe/network', 'Test');
-
--- Default host registration will register everything under as discovered application in Test environment;
-INSERT INTO hostreg (uuid, name, regkey, flags, app, env, comment) VALUES
-  ('21c00000-0701-0000-0001-000000000000', 'ZORKA', 'zorka', 1,
-   '21c00000-0201-0000-0001-000000000000', '21c00000-0301-0000-0006-000000000000',
-   'Default registration (please modify).');
-
--- Default user
-INSERT INTO user (uuid, name, fullname, comment, email, password, flags) VALUES
-  ('21c00000-0801-0000-0001-000000000000', 'admin', 'Zorka Administrator', '', 'admin@mycompany.com', 'zico', 3);
-
-
--- TODO default config properties
-
