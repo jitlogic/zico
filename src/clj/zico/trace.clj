@@ -350,16 +350,18 @@
         (when-not (get @data tn)
           (reset!
             data
-            (into {} (for [r (zobj/find-and-get obj-store {:class :ttype})]
-                       {(:name r) (zobj/extract-uuid-seq (:uuid r))}))))
+            (into {} (for [{:keys [name uuid flags] :as r} (zobj/find-and-get obj-store {:class :ttype})]
+                       {name {:tid (zobj/extract-uuid-seq uuid), :uuid uuid, :flags flags}}))))
         (when-not (get @data tn)
-          (let [tt (zobj/put-obj
+          (let [{:keys [uuid flags] :as tt} (zobj/put-obj
                      obj-store
-                     {:class   :ttype, :name tn,
+                     {:class   :ttype,
+                      :name tn,
                       :descr    (str "Trace type: " tn),
                       :glyph   "awe/cube",
+                      :flags   1,
                       :comment "Auto-registered. Please edit."})
-                ti (zobj/extract-uuid-seq (:uuid tt))]
+                ti {:tid (zobj/extract-uuid-seq uuid), :uuid uuid, :flags flags}]
             (swap! data assoc tn ti)))
         (get @data tn)))))
 
@@ -369,7 +371,14 @@
     (reify
       TraceTypeResolver
       (resolve [_ tn]
-        (trace-id-translate obj-store data tn)))))
+        (let [{:keys [tid uuid flags] :as tr} (trace-id-translate obj-store data tn)]
+          (when (= 0 (bit-and flags 0x08))
+            (log/info "Marking trace type" uuid "as used.")
+            (let [rec (zobj/get-obj obj-store uuid)
+                  flags (bit-or (:flags rec) 0x08)]
+              (zobj/put-obj obj-store (assoc rec :flags flags))
+              (swap! data assoc tn (assoc tr :flags flags))))
+          tid)))))
 
 
 (defn open-trace-store [new-conf old-conf old-store indexer-executor cleaner-executor obj-store]

@@ -128,14 +128,15 @@
      :on-click [::filter-list [:view :trace :list :filter :min-duration :selected] t]}))
 
 
-(defn filtered-items [path data icon]
+(defn filtered-items [path data icon & {:keys [filter-fn]}]
   (let [selected (zs/subscribe [:get path])]
     (ra/reaction
       (doall
         (cons
           {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
            :on-click [:do [:set path nil] [::refresh-list]]}
-          (for [{:keys [uuid name]} (sort-by :name (vals (zu/deref? data)))]
+          (for [{:keys [uuid name] :as r} (sort-by :name (vals (zu/deref? data)))
+                :when ((or filter-fn identity) r)]
             {:key      uuid, :text name, :icon icon,
              :on-click [:do [:set path uuid] [::refresh-list]]
              :state    (if (= uuid @selected) :selected :normal)
@@ -146,7 +147,8 @@
   (filtered-items
     [:view :trace :list :filter :ttype :selected]
     (zs/subscribe [:get [:data :cfg :ttype]])
-    [:awe :list-alt :text]))
+    [:awe :list-alt :text]
+    :filter-fn #(= 0x08 (bit-and (:flags %) 0x08))))
 
 
 (def APP-ITEMS
