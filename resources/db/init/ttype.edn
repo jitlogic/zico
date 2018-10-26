@@ -48,5 +48,5 @@
  {:uuid "21c00000-0101-0000-001a-000000000000", :flags 3, :dmin 1000, :name "HYSTRIX_OUT",
   :glyph "awe/flash#darkkhaki", :descr "${GROUP}.${KEY}", :comment "Hystrix: client call"}
  {:uuid "21c00000-0101-0000-001b-000000000000", :flags 3, :dmin 1000, :name "SPRING",
-  :glyph "awe/cube#darkkhaki", :descr "${CLASS|URI|SERVICE_URL}/${METHOD}", :comment "Spring invocation"}
+  :glyph "awe/leaf#darkgreen", :descr "${CLASS|URI|SERVICE_URL}/${METHOD}", :comment "Spring invocation"}
  ]
