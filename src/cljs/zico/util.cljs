@@ -80,6 +80,8 @@
        (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
        (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
        (or ms (< t 1000000000)) (pp/cl-format nil "~dms" (int (/ t 1000000)))
+       (< t 10000000000) (pp/cl-format nil "~4fs" (/ t 1000000000))
+       (< t 100000000000) (pp/cl-format nil "~3fs" (/ t 1000000000))
        :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))))
 
 (defn secs-to-str
