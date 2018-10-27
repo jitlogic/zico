@@ -75,14 +75,31 @@
              (zw/svg-button
                :awe :filter :blue "Filter by ..."
                [:do [::filter-by-attr k v ttype]])]))
-        [:div.k k] [:div.v v]])]))
+        [:div.k {:id (str "clipboard-" k)} k]
+        [:div.v v]
+        [:div.i.pad-l05
+         (zw/svg-button
+           :awe :paste :text "Copy attribute to clipboard"
+           [:write-to-clipboard v])]])]))
 
+(defn exception-to-string [{:keys [class msg stack]}]
+  (str
+    class ": " msg
+    (cs/join
+      "\n"
+      (for [{:keys [class method file line]} stack]
+        (str " at " class "." method "(" file ":" line ")")))
+    "\n"))
 
 (defn render-exception [exception full]
   [:div.trace-record-exception
    [:div.cls
     [:div.lb "Exception:"]
-    [:div.cl (:class exception)]]
+    [:div.cl (:class exception)]
+    [:div.i.pad-l05
+     (zw/svg-button
+       :awe :paste :text "Copy exception to clipboard"
+       [:write-to-clipboard (exception-to-string exception)])]]
    [:div.msg (str (:msg exception))]
    [:div.stk
     (for [[{:keys [class method file line] :as e} i] (map vector (:stack exception) (range))]

@@ -72,6 +72,9 @@
   (set! (.-location js/window) url)
   db)
 
+(defn write-to-clipboard-handler [db [_ text]]
+  (.writeText (.-clipboard js/navigator) text)
+  db)
 
 (rfc/reg-event-db :alert alert-handler)
 (rfc/reg-event-db :println println-handler)
@@ -80,3 +83,5 @@
 (rfc/reg-event-db :xhr xhr-handler)
 (rfc/reg-event-db :set-timeout set-timeout-handler)
 (rfc/reg-event-db :set-location set-location-handler)
+(rfc/reg-event-db :write-to-clipboard write-to-clipboard-handler)
+

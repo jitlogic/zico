@@ -88,7 +88,11 @@
       (zw/svg-button
         :awe :right-big :blue "Go to target trace..."
         [:event/push-dispatch zvmt/TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree dto]]))]
-   [:div.c-light.ellipsis (str method args)]
+   [:div.c-light.ellipsis.flex (str method args)
+    [:div.i.pad-l05
+     (zw/svg-button
+       :awe :paste :text "Copy method to clipboard"
+       [:write-to-clipboard (str result " " package "." class "." method args)])]]
    [:div.c-darker.text-rtl.ellipsis package "." class]
    (when attrs (zvmt/render-attrs attrs nil))
    (when exception (zvmt/render-exception exception true))])
