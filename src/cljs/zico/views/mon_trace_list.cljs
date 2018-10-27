@@ -111,20 +111,20 @@
 
 (def DURATIONS
   [["0" "clear"  nil ]
-   ["1s"  "1 second"    1     ]
-   ["5s"  "5 seconds"   5     ]
-   ["15s" "15 seconds"  15    ]
-   ["1m"  "1 minute"    60    ]
-   ["5m"  "5 minutes"   300   ]
-   ["15m" "15 minutes"  900   ]
-   ["1h"  "1 hour"      3600  ]
-   ["4h"  "4 hours"     14400 ]
-   ["1d"  "1 day"       86400 ]])
+   ["1s"  "1 second"    1      :darkgreen]
+   ["5s"  "5 seconds"   5      :darkgreen]
+   ["15s" "15 seconds"  15     :darkgreen]
+   ["1m"  "1 minute"    60     :darkkhaki]
+   ["5m"  "5 minutes"   300    :darkkhaki]
+   ["15m" "15 minutes"  900    :darkkhaki]
+   ["1h"  "1 hour"      3600   :mediumred]
+   ["4h"  "4 hours"     14400  :mediumred]
+   ["1d"  "1 day"       86400  :mediumred]])
 
 
 (def DURATION-FILTER-ITEMS
-  (for [[k l t] DURATIONS]
-    {:key k, :text l, :icon [:awe (if t :clock :cancel) (if t :text :red)],
+  (for [[k l t c] DURATIONS]
+    {:key k, :text l, :icon [:awe (if t :clock :cancel) (if t c :red)],
      :on-click [::filter-list [:view :trace :list :filter :min-duration :selected] t]}))
 
 
