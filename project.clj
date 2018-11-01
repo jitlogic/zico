@@ -22,7 +22,6 @@
 
                  [org.slf4j/slf4j-api "1.7.25"]
                  [com.taoensso/timbre "4.10.0"]
-                 [com.fzakaria/slf4j-timbre "0.3.8"]
 
                  [honeysql "0.9.1"]
                  [org.clojure/java.jdbc "0.7.3"]

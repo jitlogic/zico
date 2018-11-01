@@ -10,7 +10,8 @@
             [ns-tracker.core :refer [ns-tracker]]
             [ring.middleware.session.memory]
             [zico.objstore :as zobj])
-  (:gen-class))
+  (:gen-class)
+  (:import (org.slf4j.impl ZorkaLoggerFactory ConsoleTrapper ZorkaTrapper ZorkaLogLevel)))
 
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
@@ -74,6 +75,21 @@
       (update-in [:trace-store :path] updf)
       (update-in [:log-conf :main :path] updf))))
 
+(def TRAPPER-LEVELS
+  {ZorkaLogLevel/TRACE :trace,
+   ZorkaLogLevel/DEBUG :debug,
+   ZorkaLogLevel/INFO  :info,
+   ZorkaLogLevel/WARN  :warn,
+   ZorkaLogLevel/ERROR :error,
+   ZorkaLogLevel/FATAL :fatal})
+
+(defn timbre-trapper []
+  (reify
+    ZorkaTrapper
+    (trap [_ level tag msg e args]
+      (cond
+        (nil? e) (log/log (TRAPPER-LEVELS level :info) tag msg (seq args))
+        :else (log/log (TRAPPER-LEVELS level :info) e tag msg (seq args))))))
 
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
@@ -86,6 +102,7 @@
      (taoensso.timbre/merge-config!
        {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
                     :println {:enabled? false}}})
+     (.swapTrapper (ZorkaLoggerFactory/getInstance) (timbre-trapper))
      (taoensso.timbre/set-level! (-> conf :log-conf :level))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
@@ -120,8 +137,9 @@
       stop-f
       (hsv/run-server
         #'zorka-main-handler
-        (merge DEFAULT-HTTP-CONF http-conf))))
-  (println "Server started."))
+        (merge DEFAULT-HTTP-CONF http-conf)))
+    (println "ZICO is running and listening on port" (:port http-conf)))
+  )
 
 
 (defn -main [& args]
