@@ -7,57 +7,33 @@
 
 
 (def MENU-INITIAL-STATE
-  {:monitor true,
-   :configure true,
-   :recent true,
-   :admin true,
-   :user true,
-   :bookmarks true})
+  {:open? true})
 
 
 (zs/dispatch [:once :set [:view :menu] MENU-INITIAL-STATE])
 
 
-(defn menu-section [open? kw label]
-  [:div.scn {:on-click (zs/to-handler [:toggle [:view :menu kw]])}
-   [:div.ic (zw/svg-icon :awe (if open? :down-dir :right-dir) :gray)]
-   [:div label]])
-
-
 (defn menu-item [family glyph label path {:keys [changed?] :as params}]
-  [:div.itm {:on-click (zs/to-handler [:to-screen path])}
-   [(if changed? :div.ico.icm :div.ico)
-    (zw/svg-icon family glyph "text")] [:div.lead label]])
+  [:div.itm {:on-click (zs/to-handler [:to-screen path]), :title label}
+   [(if changed? :div.ico.icm :div.ico) (zw/svg-icon family glyph "text")]])
 
 
 (defn main-menu []
   (let [menu-state (zs/subscribe [:get [:view :menu]])]
     (fn []
-      (let [{:keys [open? monitor configure admin]} @menu-state]
+      (let [{:keys [open?]} @menu-state]
         [(if open? :div.main-menu.display-inline :div.main-menu.display-none)
-         [:div.toolbar
-          (zw/svg-button :awe :menu :white "Close menu" [:toggle [:view :menu :open?]])
-          [:div.cpt.small-or-less "zorka"]
-          [:div.icon-placeholder]]
          [:div.pnl
-          (menu-section monitor :monitor "TRACES")
-          (when monitor
-            [:div
-             (menu-item "awe" "search" "Search" "mon/trace/list" {})])
-          (menu-section configure :configure "CONFIGURE")
-          (when configure
-            [:div
-             (menu-item "awe" "cube" "Applications" "cfg/app/list" {})
-             (menu-item "awe" "sitemap" "Environments" "cfg/env/list" {})
-             (menu-item "awe" "home" "Hosts" "cfg/host/list" {})
-             (menu-item "awe" "tags" "Trace types" "cfg/ttype/list" {})
-             (menu-item "awe" "lightbulb" "Registrations" "cfg/hostreg/list" {})])
-
-          (menu-section admin :admin "ADMIN")
-          (when admin
-            [:div
-             (menu-item "awe" "user" "Users" "cfg/user/list" {})
-             (menu-item "awe" "hdd" "Backup" "adm/backup" {})])
+          [:div.itm (zw/svg-button :awe :menu :white "Close menu" [:toggle [:view :menu :open?]])]
+          [:div.itm ""]
+          [:div.itm (zw/svg-button :awe :search :white "Search" [:to-screen "mon/trace/list"])]
+          [:div.itm (zw/svg-button :awe :cube :white "Applications" [:to-screen "cfg/app/list"])]
+          [:div.itm (zw/svg-button :awe :sitemap :white "Environments" [:to-screen "cfg/env/list"])]
+          [:div.itm (zw/svg-button :awe :home :white "Hosts" [:to-screen "cfg/host/list"])]
+          [:div.itm (zw/svg-button :awe :tags :white "Trace types" [:to-screen "cfg/ttype/list"])]
+          [:div.itm (zw/svg-button :awe :lightbulb :white "Registrations" [:to-screen "cfg/hostreg/list"])]
+          [:div.itm (zw/svg-button :awe :user :white "Users" [:to-screen "cfg/user/list"])]
+          [:div.itm (zw/svg-button :awe :hdd :white "Backup" [:to-screen "adm/backup"])]
           ]]))))
 
 
@@ -67,7 +43,6 @@
     :on-click [:to-screen "user/about" {}]}
    {:key :prefs, :text "My profile",
     :icon [:awe :user], :on-click [:to-screen "user/prefs" {}]}
-   ;{:key :sep1, :separator? true}
    {:key :logout, :text "Logout",
     :icon [:awe :logout], :on-click [:set-location "/logout"]}])
 
