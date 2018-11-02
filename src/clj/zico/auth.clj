@@ -4,7 +4,9 @@
     [zico.util :as zutl]
     [taoensso.timbre :as log]
     [zico.objstore :as zobj]
-    [ring.util.response :refer [redirect]])
+    [ring.util.response :refer [redirect]]
+    [clojure.data.xml :as xml]
+    [clojure.string :as cs])
   (:import (java.security MessageDigest)
            (javax.xml.bind DatatypeConverter)))
 
@@ -72,9 +74,67 @@
     (let [{:keys [body status]} @(http/request {:method :get, :url (str cas-url "/validate?service=" app-url "/login&ticket=" ticket)})
           [_ username] (when (string? body) (re-matches #"yes\n([A-Za-z0-9\.\-_]+)\n?.*" body))
           user (when username (zobj/find-and-get-1 obj-store {:class :user, :name username}))]
-      (println "Username='" username "'")
       (cond
         (or (not= status 200) (nil? username))
+        (render-message-form
+          :error "CAS failed"
+          "Contact system administrator."
+          {:link "/" :msg "Or try again."})
+        (nil? user)
+        (render-message-form
+          :error "Not allowed"
+          "User not allowed to log in."
+          "Contact system.administrator.")
+        :else (assoc (redirect "/") :session (assoc session :user (dissoc user :password)))))))
+
+
+(defn cas20-parse-response [r]
+  (let [[un {an :content}] (-> (xml/parse-str r) :content first :content)
+        at (for [{t :tag c :content} an] [t (first c)])
+        ag (for [[k [v & vs :as vv]] (group-by first at)]
+             {k (if vs
+                  (vec (map second vv))
+                  (second v))})]
+    {:id         (-> un :content first)
+     :attributes (into {} ag)}))
+
+
+(defn attr-to-str [attrs expr]
+  (cond
+    (string? expr) expr
+    (keyword? expr) (get attrs expr)
+    (vector? expr) (cs/join " " (for [x expr] (attr-to-str attrs x)))
+    :else (str expr)))
+
+
+(defn attrs-to-user [{:keys [attrmap rolemap]} id attrs]
+  (let [roles (into #{} (get attrs (:attr rolemap)))
+        attrs (into (for [[a x] attrmap] {a (attr-to-str attrs x)}))
+        admin? (roles (:admin rolemap))]
+    (if (or admin? (roles (:viewer rolemap)))
+      (merge {:name id, :flags (if admin? 3 1)} attrs))))
+
+
+(defn get-updated-user [{:keys [create? update?] :as account} obj-store id attributes]
+  (let [user (when id (zobj/find-and-get-1 obj-store {:class :user, :name id}))]
+    (cond
+      (and (nil? user) (not create?)) nil
+      (and (some? user) (not update?)) user
+      :else
+      (when-let [uattrs (attrs-to-user account id attributes)]
+        (zobj/put-obj obj-store (merge (or user {}) uattrs))))))
+
+
+(defn handle-cas20-login [{{{:keys [cas-url app-url]} :auth, account :account} :conf :keys [obj-store]}
+                          {{:keys [ticket]} :params session :session :as req}]
+  (if (nil? ticket)
+    (redirect (str cas-url "/login?service=" app-url "/login"))
+    (let [{:keys [body status]} @(http/request {:method :get, :url (str cas-url "/serviceValidate?service=" app-url "/login&ticket=" ticket)})
+          {:keys [id attributes]} (cas20-parse-response body)
+          user (get-updated-user account obj-store id attributes)]
+      (println "Username='" id "'")
+      (cond
+        (or (not= status 200) (nil? id))
         (render-message-form
           :error "CAS failed"
           "Contact system administrator."
@@ -131,6 +191,7 @@
     (some? user) (redirect "/")
     (= :none (:auth auth)) (assoc (redirect "/") :session (assoc session :user ANON-USER))
     (= :cas10 (:auth auth)) (handle-cas10-login app-state req)
+    (= :cas20 (:auth auth)) (handle-cas20-login app-state req)
     (= :get (:request-method req)) (render-login-form)
     (= :local (:auth auth)) (handle-local-login app-state req)
     (= :ldap (:auth auth)) (handle-ldap-login app-state req)
