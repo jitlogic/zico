@@ -67,19 +67,22 @@
    (render-login-form :error user-msg)))
 
 
-(defn handle-cas10-login [{{{:keys [cas-url app-url]} :auth} :conf :keys [obj-store]}
+(defn handle-cas10-login [{{{:keys [cas-url app-url cas-client]} :auth} :conf :keys [obj-store]}
                           {{:keys [ticket]} :params session :session :as req}]
   (if (nil? ticket)
     (redirect (str cas-url "/login?service=" app-url "/login"))
-    (let [{:keys [body status]} @(http/request {:method :get, :url (str cas-url "/validate?service=" app-url "/login&ticket=" ticket)})
+    (let [v-url (str cas-url "/validate?service=" app-url "/login&ticket=" ticket)
+          {:keys [body status] :as res} @(http/request (merge {:method :get, :url v-url} cas-client))
           [_ username] (when (string? body) (re-matches #"yes\n([A-Za-z0-9\.\-_]+)\n?.*" body))
           user (when username (zobj/find-and-get-1 obj-store {:class :user, :name username}))]
       (cond
         (or (not= status 200) (nil? username))
-        (render-message-form
-          :error "CAS failed"
-          "Contact system administrator."
-          {:link "/" :msg "Or try again."})
+        (do
+          (log/error "CAS verification failed" res)
+          (render-message-form
+            :error "CAS failed"
+            "Contact system administrator."
+            {:link "/" :msg "Or try again."}))
         (nil? user)
         (render-message-form
           :error "Not allowed"
@@ -89,14 +92,15 @@
 
 
 (defn cas20-parse-response [r]
-  (let [[un {an :content}] (-> (xml/parse-str r) :content first :content)
-        at (for [{t :tag c :content} an] [t (first c)])
-        ag (for [[k [v & vs :as vv]] (group-by first at)]
-             {k (if vs
-                  (vec (map second vv))
-                  (second v))})]
-    {:id         (-> un :content first)
-     :attributes (into {} ag)}))
+  (when r
+    (let [[un {an :content}] (-> (xml/parse-str r) :content first :content)
+          at (for [{t :tag c :content} an] [t (first c)])
+          ag (for [[k [v & vs :as vv]] (group-by first at)]
+               {k (if vs
+                    (vec (map second vv))
+                    (second v))})]
+      {:id (-> un :content first)
+       :attributes (into {} ag)})))
 
 
 (defn attr-to-str [attrs expr]
@@ -107,38 +111,41 @@
     :else (str expr)))
 
 
-(defn attrs-to-user [{:keys [attrmap rolemap]} id attrs]
+(defn attrs-to-user [{:keys [attrmap rolemap]} id attrs]  
   (let [roles (into #{} (get attrs (:attr rolemap)))
-        attrs (into (for [[a x] attrmap] {a (attr-to-str attrs x)}))
+        attrs (into {} (for [[a x] attrmap] {a (attr-to-str attrs x)}))
         admin? (roles (:admin rolemap))]
     (if (or admin? (roles (:viewer rolemap)))
       (merge {:name id, :flags (if admin? 3 1)} attrs))))
 
 
 (defn get-updated-user [{:keys [create? update?] :as account} obj-store id attributes]
-  (let [user (when id (zobj/find-and-get-1 obj-store {:class :user, :name id}))]
-    (cond
-      (and (nil? user) (not create?)) nil
-      (and (some? user) (not update?)) user
-      :else
-      (when-let [uattrs (attrs-to-user account id attributes)]
-        (zobj/put-obj obj-store (merge (or user {}) uattrs))))))
+  (when id
+    (let [user (zobj/find-and-get-1 obj-store {:class :user, :name id})]
+      (cond
+        (and (nil? user) (not create?)) nil
+        (and (some? user) (not update?)) user
+        :else
+        (when-let [uattrs (attrs-to-user account id attributes)]
+          (zobj/put-obj obj-store (merge (or user {}) uattrs)))))))
 
 
-(defn handle-cas20-login [{{{:keys [cas-url app-url]} :auth, account :account} :conf :keys [obj-store]}
+(defn handle-cas20-login [{{{:keys [cas-url app-url cas-client]} :auth, account :account} :conf :keys [obj-store]}
                           {{:keys [ticket]} :params session :session :as req}]
   (if (nil? ticket)
     (redirect (str cas-url "/login?service=" app-url "/login"))
-    (let [{:keys [body status]} @(http/request {:method :get, :url (str cas-url "/serviceValidate?service=" app-url "/login&ticket=" ticket)})
+    (let [v-url (str cas-url "/serviceValidate?service=" app-url "/login&ticket=" ticket)
+          {:keys [body status] :as res} @(http/request (merge {:method :get, :url v-url} cas-client))
           {:keys [id attributes]} (cas20-parse-response body)
           user (get-updated-user account obj-store id attributes)]
-      (println "Username='" id "'")
       (cond
         (or (not= status 200) (nil? id))
-        (render-message-form
-          :error "CAS failed"
-          "Contact system administrator."
-          {:link "/" :msg "Or try again."})
+        (do
+          (log/error "Error validating CAS2 ticket " res)
+          (render-message-form
+            :error "CAS failed"
+            "Contact system administrator."
+            {:link "/" :msg "Or try again."}))
         (nil? user)
         (render-message-form
           :error "Not allowed"
