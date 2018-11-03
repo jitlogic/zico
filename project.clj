@@ -16,6 +16,7 @@
                  [ring/ring-core "1.6.3"]
                  [ring/ring-defaults "0.3.1"]
                  [ring/ring-devel "1.6.3"]
+                 [ring/ring-jetty-adapter "1.6.3"]
 
                  [compojure "1.6.0"]
                  [hiccup "1.0.5"]
