@@ -1,4 +1,4 @@
-(defproject zico "1.90.5"
+(defproject zico "1.90.6-SNAPSHOT"
   :description "Trace data collection and data presentation."
   :url "http://zorka.io"
   :license {:name "GPL v3"}
@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/core.async "0.3.465"]
 
-                 [io.zorka/zorka-tdb "1.90.5"]
+                 [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
 
                  [http-kit "2.2.0"]
 
