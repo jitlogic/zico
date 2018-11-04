@@ -1,3 +1,13 @@
+ZICO 1.90.5 (2018-11-05)
+------------------------
+
+* CAS 2.0 integration and automatic account creation (based on user attributes);
+* copy-to-clipboard for trace/method attributes and exceptions;
+* move data initialization from flyway SQL scripts to EDN files (zico.jar or external);
+* lots ot small UI fixes;
+* HTTPS mode (TLS only);
+
+
 ZICO 1.90.4 (2018-09-24)
 ------------------------
 
