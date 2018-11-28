@@ -8,15 +8,13 @@
                  [org.clojure/core.async "0.3.465"]
 
                  [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
-
-                 [http-kit "2.2.0"]
+                 [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
 
                  [slingshot "0.12.2"]
 
                  [ring/ring-core "1.6.3"]
-                 [ring/ring-defaults "0.3.1"]
                  [ring/ring-devel "1.6.3"]
-                 [ring/ring-jetty-adapter "1.6.3"]
+                 [ring/ring-defaults "0.3.1"]
 
                  [compojure "1.6.0"]
                  [hiccup "1.0.5"]
