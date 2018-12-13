@@ -21,8 +21,8 @@
     [zico.objstore :as zobj]
     [zico.trace :as ztrc]
     [zico.util :as zutl]
-    [zico.admin :as zadm]
-    [taoensso.timbre :as log]))
+    [zico.admin :as zadm])
+  (:import (com.jitlogic.netkit.util NetkitUtil)))
 
 
 (defn render-loading-page []
@@ -32,32 +32,6 @@
 
 
 (def OBJ-CLASSES (into #{} (map name (keys zobj/OBJ-TYPES))))
-
-
-(defn parse-rest-params [{:keys [headers body] :as req}]
-  (let [^String content-type (get headers "content-type" "application/json")]
-    (try
-      (cond
-        (empty? body) nil
-        (.startsWith content-type "application/json") (zutl/rekey-map (json/read-str body))
-        (.startsWith content-type "application/edn") (clojure.edn/read-string body)
-        (.startsWith content-type "application/zorka") {:format :cbor}
-        :else nil
-        ))))
-
-
-(defn wrap-rest-request [f]
-  (fn [{:keys [request-method uri] :as req}]
-    (let [req (assoc req :body (body-string req))]
-      (cond
-        (= request-method :get) (f req)
-        (and (string? uri) (not (or (.startsWith uri "/data") (.startsWith uri "/agent") (.startsWith uri "/user")))) (f req)
-        (or (= request-method :post) (= request-method :put))
-        (if-let [params (parse-rest-params req)]
-          (f (assoc req :data params))
-          {:status 405, :msg "Cannot parse REST parameters."})
-        :else (f req)))))
-
 
 (defn wrap-rest-response [f]
   (fn [{:keys [headers] :as req}]
@@ -80,28 +54,56 @@
           (assoc rslt :body (json/write-str (:data body)))
           [:headers "content-type"] "application/json")))))
 
+(defn parse-rest-params [headers body]
+  (let [^String content-type (get headers "content-type" "application/json")
+        body (body-string {:body body})]
+    (try
+      (cond
+        (empty? body) nil
+        (.startsWith content-type "application/json") (zutl/rekey-map (json/read-str body))
+        (.startsWith content-type "application/edn") (clojure.edn/read-string body)
+        (.startsWith content-type "application/zorka") {:format :cbor}
+        :else nil
+        ))))
 
-(defn zorka-agent-routes [{:keys [obj-store] :as app-state}]
+(defn arg-prep [arg]
+  (cond
+    (symbol? arg) {:keys ['body 'headers 'request-method] :as 'req}
+    (map? arg) (assoc arg :keys (into [] (into #{'headers 'body 'request-method} (:keys arg []))) :as 'req)
+    (vector? arg) {{:keys arg} :params :keys ['body 'headers 'request-method] :as 'req}
+    :else (throw (RuntimeException. (str "Illegal arg: " arg)))))
+
+(defmacro REST [[met uri arg & code]]
+  (let [argp (arg-prep arg)]
+    `(~met ~uri ~argp
+       (let [data# (parse-rest-params ~'headers ~'body)]
+         (cond
+           (and (nil? data#) (not= :get ~'request-method)) {:status 405, :msg "Cannot parse REST parameters."}
+           :else (let [~argp (assoc ~'req :data data#)] ~@code))))))
+
+(defn zorka-agent-routes [app-state]
   (routes
     ; Agent API
-    (POST "/agent/register" req
-      (ztrc/agent-register app-state req))
+    (REST
+      (POST "/agent/register" req
+        (ztrc/agent-register app-state req)))
 
-    (POST "/agent/session" req
-      (ztrc/agent-session app-state req))
+    (REST
+      (POST "/agent/session" req
+        (ztrc/agent-session app-state req)))
 
-    (POST "/agent/submit/agd" {:keys [headers] :as req}
+    (POST "/agent/submit/agd" {:keys [headers body]}
       (ztrc/submit-agd app-state
                        (get headers "x-zorka-agent-uuid")
                        (get headers "x-zorka-session-uuid")
-                       (body-string req)))
+                       (NetkitUtil/toByteArray body)))
 
-    (POST "/agent/submit/trc" {:keys [headers] :as req}
+    (POST "/agent/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc app-state
                        (get headers "x-zorka-agent-uuid")
                        (get headers "x-zorka-session-uuid")
                        (get headers "x-zorka-trace-uuid")
-                       (body-string req)))))
+                       (NetkitUtil/toByteArray body)))))
 
 
 (defn zorka-web-routes [{:keys [obj-store] :as app-state}]
@@ -114,7 +116,9 @@
     ; Trace API
     (GET "/data/trace/type" _ (zobj/find-and-get obj-store :ttype))
 
-    (POST "/data/trace/search" req (ztrc/trace-search app-state req))
+    (REST
+      (POST "/data/trace/search" req
+        (ztrc/trace-search app-state req)))
 
     (GET "/data/trace/:uuid/detail" req
       (let [^String uuid (-> req :params :uuid)]
@@ -143,10 +147,11 @@
           (zutl/rest-result data))
         (zutl/rest-error "Resource class not found." 404)))
 
-    (POST "/data/cfg/:class" {data :data {:keys [class]} :params :as req}
-      (if (OBJ-CLASSES class)
-        (zobj/put-obj obj-store (assoc data :class (keyword class)))
-        (zutl/rest-error "Resource class not found." 404)))
+    (REST
+      (POST "/data/cfg/:class" {data :data {:keys [class]} :params}
+        (if (OBJ-CLASSES class)
+          (zobj/put-obj obj-store (assoc data :class (keyword class)))
+          (zutl/rest-error "Resource class not found." 404))))
 
     (GET "/data/cfg/:class/:uuid" [class uuid]
       (if (OBJ-CLASSES class)
@@ -154,24 +159,29 @@
           (zutl/rest-result obj))
         (zutl/rest-error "Resource class not found." 404)))
 
-    (PUT "/data/cfg/:class/:uuid" {data :data {:keys [class uuid]} :params :as req}
-      (if (OBJ-CLASSES class)
-        (if-let [obj (zobj/get-obj obj-store uuid)]
-          (zutl/rest-result (zobj/put-obj obj-store (merge obj data)))
-          (zutl/rest-error "Resource not found." 404))))
+    (REST
+      (PUT "/data/cfg/:class/:uuid" {data :data {:keys [class uuid]} :params}
+        (if (OBJ-CLASSES class)
+          (if-let [obj (zobj/get-obj obj-store uuid)]
+            (zutl/rest-result (zobj/put-obj obj-store (merge obj data)))
+            (zutl/rest-error "Resource not found." 404)))))
 
-    (DELETE "/data/cfg/:class/:uuid" {{:keys [class uuid]} :params}
-      (when (OBJ-CLASSES class)
-        (let [obj (zobj/get-obj obj-store uuid)]
-          (if obj
-            (zutl/rest-result (zobj/del-obj obj-store uuid))
-            (zutl/rest-error "Object not found." 404)))))
+    (REST
+      (DELETE "/data/cfg/:class/:uuid" {{:keys [class uuid]} :params}
+        (when (OBJ-CLASSES class)
+          (let [obj (zobj/get-obj obj-store uuid)]
+            (if obj
+              (zutl/rest-result (zobj/del-obj obj-store uuid))
+              (zutl/rest-error "Object not found." 404))))))
 
     ; User info
-    (GET "/user/info" _ (zutl/rest-result zaut/*current-user*))
+    (GET "/user/info" req
+      (zutl/rest-result zaut/*current-user*))
 
     ; Changes password
-    (POST "/user/password" req (zaut/change-password app-state req))
+    (REST
+      (POST "/user/password" req
+        (zaut/change-password app-state req)))
 
     ; Application views
     (GET "/view/:section" [_] (render-loading-page))
@@ -202,7 +212,6 @@
 (defn wrap-web-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
   (let [wrap-auth (if (= :none (:auth auth)) identity zaut/wrap-user-auth)]
     (-> handler
-        wrap-rest-request
         wrap-rest-response
         wrap-keyword-params
         wrap-multipart-params
@@ -227,7 +236,6 @@
 
 (defn wrap-agent-middleware [handler]
   (-> handler
-      wrap-rest-request
       wrap-rest-response))
 
 

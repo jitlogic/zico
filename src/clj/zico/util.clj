@@ -223,6 +223,10 @@
   ([msg] {:status 500, :body {:type :rest, :data {:error msg}}})
   ([msg status] (assoc (rest-error msg) :status status)))
 
+(defmacro rest-error-logged [msg status & args]
+  `(do
+     (log/error "REST error" ~status ~msg ~args)
+     (rest-error ~msg ~status)))
 
 (defn rest-msg
   ([msg] {:status 200, :body {:type :rest, :data {:msg msg}}})

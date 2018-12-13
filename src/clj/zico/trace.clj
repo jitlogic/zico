@@ -17,7 +17,9 @@
     (io.zorka.tdb.search TraceSearchQuery SortOrder QmiNode)
     (io.zorka.tdb.search.lsn AndExprNode OrExprNode)
     (io.zorka.tdb.search.ssn TextNode)
-    (io.zorka.tdb.search.tsn KeyValSearchNode)))
+    (io.zorka.tdb.search.tsn KeyValSearchNode)
+    (io.zorka.tdb.util ZicoMaintThread)
+    (com.jitlogic.zorka.common.util ZorkaUtil)))
 
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
@@ -288,8 +290,8 @@
           (not (:host reg)) (zutl/rest-error "No such host.")
           (not= rkey regkey) (zutl/rest-error "Access denied." 401)
           (= rkey regkey) (register-host app-state req hreg)
-          :else (zutl/rest-error "Registration denied." 401)))
-      (zutl/rest-error "Missing arguments." 400))
+          :else (zutl/rest-error-logged "Registration denied." 401)))
+      (zutl/rest-error-logged "Missing arguments." 400))
     (catch Object e
       (log/error e "Error registering host.")
       (zutl/rest-error "Internal error." 500))))
@@ -301,42 +303,40 @@
     (if-let [obj (zobj/get-obj obj-store uuid)]
       (if (= (:authkey obj) authkey)
         (zutl/rest-result {:session (.getSession ^TraceStore trace-store uuid)})
-        (zutl/rest-error "Access denied." 401))
-      (zutl/rest-error "No such agent." 400))
-    (zutl/rest-error "Missing arguments." 400)))
+        (zutl/rest-error-logged "Access denied." 401 uuid authkey))
+      (zutl/rest-error-logged "No such agent." 400 uuid authkey))
+    (zutl/rest-error-logged "Missing arguments." 400 uuid authkey)))
 
 
 (defn submit-agd [{:keys [trace-store]} agent-uuid session-uuid data]
   (try+
     ; TODO weryfikacja argumentów
-    (locking trace-store
-      (.handleAgentData trace-store agent-uuid session-uuid data))
+    (.handleAgentData trace-store agent-uuid session-uuid data)
     (zutl/rest-result {:result "Submitted"} 202)
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch Object e
-      (log/error e (str "Error processing AGD data: " data))
+      (log/error e (str "Error processing AGD data: " (ZorkaUtil/hex data) (String. ^bytes data "UTF-8")))
       (zutl/rest-error "Internal error." 500))))
 
 
 (defn submit-trc [{:keys [obj-store trace-store] :as app-state} agent-uuid session-uuid trace-uuid data]
   (try+
     ; TODO weryfikacja argumentów
-    (locking trace-store
-      (if-let [agent (zobj/get-obj obj-store agent-uuid)]
-        (do
-          (.handleTraceData trace-store agent-uuid session-uuid trace-uuid data
-            (doto (ChunkMetadata.)
-              (.setAppId (zobj/extract-uuid-seq (:app agent)))
-              (.setEnvId (zobj/extract-uuid-seq (:env agent)))))
-          (zutl/rest-result {:result "Submitted"} 202))
-        (zutl/rest-error "No such agent." 401)))
+    (if-let [agent (zobj/get-obj obj-store agent-uuid)]
+      (do
+        (.handleTraceData trace-store agent-uuid session-uuid trace-uuid data
+                          (doto (ChunkMetadata.)
+                            (.setAppId (zobj/extract-uuid-seq (:app agent)))
+                            (.setEnvId (zobj/extract-uuid-seq (:env agent)))))
+        (zutl/rest-result {:result "Submitted"} 202))
+      (zutl/rest-error "No such agent." 401))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
     (catch Object e
-      (log/error e "Error processing TRC data: " data)
+      (log/error e "Error processing TRC data: " (ZorkaUtil/hex data))
       (zutl/rest-error "Internal error." 500))))
 
 
@@ -381,17 +381,14 @@
           tid)))))
 
 
-(defn open-trace-store [new-conf old-conf old-store indexer-executor cleaner-executor obj-store]
+(defn open-trace-store [new-conf old-conf old-store obj-store]
   (let [old-root (when (:path old-conf) (File. ^String (:path old-conf))),
         idx-cache (if old-store (.getIndexerCache old-store) (HashMap.))
         new-root (File. ^String (:path new-conf)), new-props (zutl/conf-to-props new-conf "store.")]
     (when-not (.exists new-root) (.mkdirs new-root))        ; TODO handle errors here, check if directory is writable etc.
     (cond
       (or (nil? old-store) (not (= old-root new-root)))
-      (let [store (RotatingTraceStore.
-                    new-root new-props
-                    (trace-id-translator obj-store)
-                    indexer-executor cleaner-executor idx-cache)]
+      (let [store (RotatingTraceStore. new-root new-props (trace-id-translator obj-store) idx-cache)]
         (when old-store                                     ; TODO reconfigure without closing
           (future
             (log/info "Waiting for old trace store to close.")
@@ -401,24 +398,28 @@
         store)
       (not= old-conf new-conf)
       (doto old-store
-        (.configure new-props indexer-executor cleaner-executor))
+        (.configure new-props))
       :else old-store)))
 
 
 (defn with-tracer-components [{{new-conf :trace-store} :conf obj-store :obj-store :as app-state}
-                              {{old-conf :trace-store} :conf :keys [indexer-executor cleaner-executor trace-store] :as old-app-state}]
+                              {{old-conf :trace-store} :conf :keys [trace-store maint-threads]
+                               :as old-app-state}]
   (if (:enabled new-conf true)
-    (let [indexer-executor (zutl/simple-executor (:nthreads new-conf) (:nthreads old-conf) indexer-executor)
-          cleaner-executor (zutl/simple-executor 1 1 cleaner-executor)
-          trace-store (open-trace-store new-conf old-conf trace-store indexer-executor cleaner-executor obj-store)
+    (let [trace-store (open-trace-store new-conf old-conf trace-store obj-store)
+          nmt (doall (for [n (range (:maint-threads new-conf 2))]
+                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) trace-store)))
           postproc (TemplatingMetadataProcessor.)
           trace-descs (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:uuid obj), (:descr obj)}))]
+      ; Set up template descriptions for rendering top level DESC field;
       (doseq [[uuid descr] trace-descs :when uuid :when descr :let [id (zobj/extract-uuid-seq uuid)]]
         (.putTemplate postproc id descr))
+      ; Stop old maintenance threads (new ones are already started)
+      (doseq [t maint-threads]
+        (.stop t))
       (.setPostproc trace-store postproc)
       (assoc app-state
-        :indexer-executor indexer-executor
-        :cleaner-executor cleaner-executor
+        :maint-threads nmt
         :trace-store trace-store
         :trace-postproc postproc))
     app-state))
