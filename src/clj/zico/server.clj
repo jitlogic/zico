@@ -23,8 +23,10 @@
 
 (def ^:private NS-TRACKER (ns-tracker SRC-DIRS))
 
+(def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
+
 (defn check-reload [reload-fn]
-  (when (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode"))
+  (when DEV-MODE
     (let [ns-syms (NS-TRACKER)]
       (when-not (empty? ns-syms)
         (log/info "Code changes detected. Reloading required namespaces:" (str (into [] ns-syms)))

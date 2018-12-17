@@ -24,6 +24,7 @@
     [zico.admin :as zadm])
   (:import (com.jitlogic.netkit.util NetkitUtil)))
 
+(def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
 
 (defn render-loading-page []
   (zutl/render-page
@@ -73,12 +74,14 @@
     (vector? arg) {{:keys arg} :params :keys ['body 'headers 'request-method] :as 'req}
     :else (throw (RuntimeException. (str "Illegal arg: " arg)))))
 
+(def EMPTY-METHODS #{:get :delete})
+
 (defmacro REST [[met uri arg & code]]
   (let [argp (arg-prep arg)]
     `(~met ~uri ~argp
        (let [data# (parse-rest-params ~'headers ~'body)]
          (cond
-           (and (nil? data#) (not= :get ~'request-method)) {:status 405, :msg "Cannot parse REST parameters."}
+           (and (nil? data#) (nil? (EMPTY-METHODS ~'request-method))) {:status 405, :msg "Cannot parse REST parameters."}
            :else (let [~argp (assoc ~'req :data data#)] ~@code))))))
 
 (defn zorka-agent-routes [app-state]
@@ -202,11 +205,13 @@
 
 
 (defn wrap-cache [f]
-  (fn [req]
+  (fn [{:keys [uri] :as req}]
     (let [resp (f req)]
-      (-> resp
-          (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
-          (assoc-in [:headers "Pragma"] "no-cache")))))
+      (if (and (not DEV-MODE) (or (.endsWith uri ".css") (.endsWith uri ".svg")))
+        (assoc-in resp [:headers "Cache-Control"] "max-age=3600")
+        (-> resp
+            (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
+            (assoc-in [:headers "Pragma"] "no-cache"))))))
 
 
 (defn wrap-web-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
