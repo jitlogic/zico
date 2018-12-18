@@ -1,6 +1,5 @@
 (ns zico.auth
   (:require
-    [org.httpkit.client :as http]
     [zico.util :as zutl]
     [taoensso.timbre :as log]
     [zico.objstore :as zobj]
@@ -8,7 +7,8 @@
     [clojure.data.xml :as xml]
     [clojure.string :as cs])
   (:import (java.security MessageDigest)
-           (javax.xml.bind DatatypeConverter)))
+           (javax.xml.bind DatatypeConverter)
+           (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)))
 
 
 (def ANON-USER
@@ -67,12 +67,19 @@
    (render-login-form :error user-msg)))
 
 
+(defn http-get [{:keys [url]}]
+  (with-open [conn (HttpStreamClient. (HttpConfig.) url)]
+    (let [msg (.exec conn (HttpMessage/GET url nil))]
+      ; TODO tls truststore etc.
+      {:status (.getStatus msg)
+       :body (.getBodyAsString msg)})))
+
 (defn handle-cas10-login [{{{:keys [cas-url app-url cas-client]} :auth} :conf :keys [obj-store]}
                           {{:keys [ticket]} :params session :session :as req}]
   (if (nil? ticket)
     (redirect (str cas-url "/login?service=" app-url "/login"))
     (let [v-url (str cas-url "/validate?service=" app-url "/login&ticket=" ticket)
-          {:keys [body status] :as res} @(http/request (merge {:method :get, :url v-url} cas-client))
+          {:keys [body status] :as res} (http-get (merge {:url v-url} cas-client))
           [_ username] (when (string? body) (re-matches #"yes\n([A-Za-z0-9\.\-_]+)\n?.*" body))
           user (when username (zobj/find-and-get-1 obj-store {:class :user, :name username}))]
       (cond
@@ -135,7 +142,7 @@
   (if (nil? ticket)
     (redirect (str cas-url "/login?service=" app-url "/login"))
     (let [v-url (str cas-url "/serviceValidate?service=" app-url "/login&ticket=" ticket)
-          {:keys [body status] :as res} @(http/request (merge {:method :get, :url v-url} cas-client))
+          {:keys [body status] :as res} (http-get (merge {:url v-url} cas-client))
           {:keys [id attributes]} (cas20-parse-response body)
           user (get-updated-user account obj-store id attributes)]
       (cond

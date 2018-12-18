@@ -2,7 +2,6 @@
   (:require [zico.web :as zweb]
             [zico.util :as zutl]
             [zico.trace :as ztrc]
-            [org.httpkit.server :as hsv]
             [clojure.java.io :as io]
             [compojure.core :refer [GET routes]]
             [taoensso.timbre.appenders.3rd-party.rotor :refer [rotor-appender]]
@@ -10,11 +9,9 @@
             [ns-tracker.core :refer [ns-tracker]]
             [ring.middleware.session.memory]
             [zico.objstore :as zobj]
-            [ring.util.servlet :as servlet]
             [clojure.set :as cs])
   (:gen-class)
-  (:import (org.slf4j.impl ZorkaLoggerFactory ConsoleTrapper ZorkaTrapper ZorkaLogLevel)
-           (java.security KeyStore)
+  (:import (org.slf4j.impl ZorkaLoggerFactory ZorkaTrapper ZorkaLogLevel)
            (com.jitlogic.netkit.integ.ring RingServerBuilder)
            (com.jitlogic.netkit.log LoggerFactory LoggerOutput)))
 

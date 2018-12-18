@@ -9,7 +9,6 @@
 
                  [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
-                 [http-kit "2.3.0"]
 
                  [slingshot "0.12.2"]
 
