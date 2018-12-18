@@ -13,6 +13,7 @@
     [ring.middleware.default-charset :refer [wrap-default-charset]]
     [ring.middleware.proxy-headers :refer [wrap-forwarded-remote-addr]]
     [ring.middleware.ssl :refer [wrap-ssl-redirect wrap-hsts wrap-forwarded-scheme]]
+    [ring.middleware.gzip :refer [wrap-gzip]]
     [ring.util.request :refer [body-string]]
     [ring.util.response :refer [redirect]]
     [slingshot.slingshot :refer [try+]]
@@ -221,16 +222,16 @@
         wrap-keyword-params
         wrap-multipart-params
         wrap-params
+        wrap-gzip
         wrap-auth
         zaut/wrap-keep-session
         (wrap-session {:store session-store})
-        ;(without-agent-session session-store)
         wrap-cookies
         wrap-content-type
         (wrap-default-charset "utf-8")
         ;(wrap-xss-protection {:mode :block})
-        ;(wrap-frame-options :sameorigin)
-        ;(wrap-content-type-options :nosniff)
+        (wrap-frame-options :sameorigin)
+        (wrap-content-type-options :nosniff)
         ;wrap-hsts
         ;wrap-ssl-redirect
         wrap-forwarded-scheme

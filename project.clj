@@ -3,12 +3,13 @@
   :url "http://zorka.io"
   :license {:name "GPL v3"}
 
-  :dependencies [[org.clojure/clojure "1.9.0"]
+  :dependencies [[org.clojure/clojure "1.10.0"]
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/core.async "0.3.465"]
 
                  [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
+                 [http-kit "2.3.0"]
 
                  [slingshot "0.12.2"]
 
