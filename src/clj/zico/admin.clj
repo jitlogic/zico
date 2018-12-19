@@ -20,7 +20,7 @@
 
 
 (defn backup-dir [{:keys [conf]}]
-  (let [^String bpath (-> conf :backup-conf :path)
+  (let [^String bpath (-> conf :backup :path)
         bdir (if (.startsWith "/" bpath) (File. bpath) (File. ^String (:home-dir conf) bpath))]
     (when-not (.exists bdir) (.mkdirs bdir))
     bdir))

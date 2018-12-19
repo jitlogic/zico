@@ -215,7 +215,7 @@
             }}))
 
 
-(defn get-or-new [{:keys [obj-store] {{reg :register} :agent-conf} :conf :as app-state} class name]
+(defn get-or-new [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state} class name]
   (if (some? name)
     (let [nobj (zobj/find-and-get-1 obj-store {:class class, :name name})]
       (cond
@@ -275,7 +275,7 @@
         (zutl/rest-result {:uuid (:uuid hobj), :authkey (:authkey hobj)} 201)))))
 
 
-(defn agent-register [{:keys [obj-store] {{reg :register} :agent-conf} :conf :as app-state}
+(defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
                       {{:keys [rkey akey name uuid]} :data :as req}]
   (try+
     (if (and rkey name)

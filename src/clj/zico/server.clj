@@ -57,7 +57,7 @@
   (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
         obj-store (zobj/jdbc-caching-store zico-db)]
     (zobj/jdbc-migrate zico-db)
-    (zobj/load-initial-data zico-db (:zico-db-init conf) (:home-dir conf))
+    (zobj/load-initial-data zico-db (:zico-db conf) (:home-dir conf))
     (zobj/refresh obj-store)
     (->
       {:conf conf, :zico-db zico-db, :obj-store obj-store,
@@ -74,10 +74,10 @@
     (->
       conf
       (assoc :home-dir home-dir)
-      (update-in [:backup-conf :path] updf)
+      (update-in [:backup :path] updf)
       (update-in [:zico-db :subname] updf)
       (update-in [:trace-store :path] updf)
-      (update-in [:log-conf :main :path] updf))))
+      (update-in [:log :main :path] updf))))
 
 (def TRAPPER-LEVELS
   {ZorkaLogLevel/TRACE :trace,
@@ -109,10 +109,10 @@
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
-   (let [conf (load-conf (zutl/ensure-dir home-dir)), logs (-> conf :log-conf :main)]
-     (zutl/ensure-dir (-> conf :backup-conf :path))
+   (let [conf (load-conf (zutl/ensure-dir home-dir)), logs (-> conf :log :main)]
+     (zutl/ensure-dir (-> conf :backup :path))
      (zutl/ensure-dir (-> conf :trace-store :path))
-     (zutl/ensure-dir (-> conf :log-conf :main :path))
+     (zutl/ensure-dir (-> conf :log :main :path))
      ; TODO konfiguracja logów przed inicjacją serwera - tak aby logi slf4j trafiły od razu we właściwe miejsce
      (taoensso.timbre/merge-config!
        {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
@@ -120,7 +120,7 @@
      (.swapTrapper (ZorkaLoggerFactory/getInstance) (timbre-trapper))
      (LoggerFactory/setOutput (netkit-logger))
      (LoggerFactory/setLevel ((cs/map-invert NETKIT_LEVELS) (:level logs) 3))
-     (taoensso.timbre/set-level! (-> conf :log-conf :level))
+     (taoensso.timbre/set-level! (-> conf :log :level))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
 
@@ -146,7 +146,7 @@
 (defn start-server []
   (stop-server)
   (reload)
-  (let [{:keys [http-conf]} (:conf zorka-app-state)]
+  (let [{:keys [http]} (:conf zorka-app-state)]
     (reset!
       conf-autoreload-f
       (zutl/conf-reload-task
@@ -156,9 +156,7 @@
     ;(LoggerFactory/setDefaultLevel 5)
     (doto
       (RingServerBuilder/server
-        (merge
-          http-conf
-          {:handler zorka-main-handler}))
+        (merge http {:handler zorka-main-handler}))
       (.start))
     (println "ZICO is up and running.")))
 

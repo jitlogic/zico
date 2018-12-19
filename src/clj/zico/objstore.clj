@@ -267,12 +267,12 @@
 
 (def INIT-CLASSES [:app :env :hostreg :ttype :user])
 
-(defn load-initial-data [zico-db {:keys [source mode] :as conf} homedir]
+(defn load-initial-data [zico-db {:keys [init-source init-mode]} homedir]
   (doseq [class INIT-CLASSES
           :let [data (concat
-                       (if (#{:internal :all} source) (slurp-init-classpath class))
-                       (if (#{:external :all} source) (slurp-init-file homedir class)))]]
-    (when-not (= mode :skip)
-      (merge-initial-data zico-db class (= mode :overwrite) data)))
+                       (if (#{:internal :all} init-source) (slurp-init-classpath class))
+                       (if (#{:external :all} init-source) (slurp-init-file homedir class)))]]
+    (when-not (= init-mode :skip)
+      (merge-initial-data zico-db class (= init-mode :overwrite) data)))
   )
 
