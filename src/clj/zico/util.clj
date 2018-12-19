@@ -225,7 +225,7 @@
 
 (defmacro rest-error-logged [msg status & args]
   `(do
-     (log/error "REST error" ~status ~msg ~args)
+     (log/error "REST error" (str ~status " " ~msg " " (vector ~@args)))
      (rest-error ~msg ~status)))
 
 (defn rest-msg
