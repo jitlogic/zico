@@ -16,7 +16,6 @@
     [ring.middleware.gzip :refer [wrap-gzip]]
     [ring.util.request :refer [body-string]]
     [ring.util.response :refer [redirect]]
-    [slingshot.slingshot :refer [try+]]
     [clojure.data.json :as json]
     [zico.auth :as zaut]
     [zico.objstore :as zobj]

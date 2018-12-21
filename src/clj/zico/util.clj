@@ -2,7 +2,6 @@
   (:require [taoensso.timbre :as log]
             [clj-time.coerce :as ctco]
             [clj-time.format :as ctfo]
-            [slingshot.slingshot :refer [try+]]
             [hiccup.page :refer [include-js include-css html5]]
             [clojure.string :as cs])
   (:import (java.io File)
@@ -190,11 +189,11 @@
 
 
 (defn tcp-request [^String host ^Integer port ^String text]
-  (try+
+  (try
     (with-open [sock (Socket. host port)]
       (spit (.getOutputStream sock) text)
       (slurp (.getInputStream sock)))
-    (catch Object e
+    (catch Exception e
       (log/error e (str "Error performing TCP request to " host ":" port))
       nil)))
 

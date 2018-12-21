@@ -1,7 +1,6 @@
 (ns zico.trace
   (:require
     [taoensso.timbre :as log]
-    [slingshot.slingshot :refer [throw+ try+]]
     [zico.util :as zutl]
     [zico.objstore :as zobj]
     [clj-time.coerce :as ctc]
@@ -277,7 +276,7 @@
 
 (defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
                       {{:keys [rkey akey name uuid]} :data :as req}]
-  (try+
+  (try
     (if (and rkey name)
       (let [{:keys [regkey] :as hreg} (zobj/find-and-get-1 obj-store {:class :hostreg, :regkey rkey})
             {:keys [authkey] :as host} (when uuid (zobj/find-and-get-1 obj-store {:class :host, :uuid uuid}))]
@@ -292,7 +291,7 @@
           (= rkey regkey) (register-host app-state req hreg)
           :else (zutl/rest-error-logged "Registration denied." 401)))
       (zutl/rest-error-logged "Missing arguments." 400))
-    (catch Object e
+    (catch Exception e
       (log/error e "Error registering host.")
       (zutl/rest-error "Internal error." 500))))
 
@@ -309,20 +308,20 @@
 
 
 (defn submit-agd [{:keys [tstore]} agent-uuid session-uuid data]
-  (try+
+  (try
     ; TODO weryfikacja argumentów
     (.handleAgentData tstore agent-uuid session-uuid data)
     (zutl/rest-result {:result "Submitted"} 202)
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
-    (catch Object e
+    (catch Exception e
       (log/error e (str "Error processing AGD data: " (ZorkaUtil/hex data) (String. ^bytes data "UTF-8")))
       (zutl/rest-error "Internal error." 500))))
 
 
 (defn submit-trc [{:keys [obj-store tstore]} agent-uuid session-uuid trace-uuid data]
-  (try+
+  (try
     ; TODO weryfikacja argumentów
     (if-let [agent (zobj/get-obj obj-store agent-uuid)]
       (do
@@ -335,7 +334,7 @@
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
-    (catch Object e
+    (catch Exception e
       (log/error e "Error processing TRC data: " (ZorkaUtil/hex data))
       (zutl/rest-error "Internal error." 500))))
 

@@ -155,7 +155,7 @@
       (RingServerBuilder/server
         (merge http {:handler zorka-main-handler}))
       (.start))
-    (println "ZICO is up and running.")))
+    (println "ZICO is up and running on: " (str (:ip http) ":" (:port http)))))
 
 
 (defn -main [& args]

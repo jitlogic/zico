@@ -7,8 +7,8 @@
     [clojure.data.xml :as xml]
     [clojure.string :as cs])
   (:import (java.security MessageDigest)
-           (javax.xml.bind DatatypeConverter)
-           (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)))
+           (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)
+           (com.jitlogic.zorka.common.util ZorkaUtil)))
 
 
 (def ANON-USER
@@ -112,9 +112,8 @@
 
 (defn attr-to-str [attrs expr]
   (cond
-    (string? expr) expr
+    (string? expr) (reduce #(.replace %1 (str (first %2)) (str (second %2))) expr (for [kv attrs] kv))
     (keyword? expr) (get attrs expr)
-    (vector? expr) (cs/join " " (for [x expr] (attr-to-str attrs x)))
     :else (str expr)))
 
 
@@ -172,7 +171,7 @@
   ([password salt]
     (let [md (MessageDigest/getInstance "SHA-512")
           hs (.digest md (.getBytes (str salt password)))]
-      (str "SSHA512:" (DatatypeConverter/printBase64Binary hs)))))
+      (str "SSHA512:" (ZorkaUtil/hex hs)))))
 
 
 (defn password-check [pwhash password]
