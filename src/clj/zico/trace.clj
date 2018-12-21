@@ -103,15 +103,15 @@
              {(zobj/extract-uuid-seq uuid) uuid})))
 
 
-(defn trace-search [{:keys [obj-store trace-store] :as app-state}
-                    {:keys [data] :as req}]
+(defn trace-search [{:keys [obj-store tstore]}
+                    {:keys [data]}]
   (let [query (parse-search-query data)
         limit (:limit data 100)
         apps (find-and-map-by-id obj-store {:class :app})
         envs (find-and-map-by-id obj-store {:class :env})
         ttps (find-and-map-by-id obj-store {:class :ttype})
         hids (find-and-map-by-id obj-store {:class :host})
-        rslt (for [^TraceSearchResultItem r (.searchTraces trace-store query)]
+        rslt (for [^TraceSearchResultItem r (.searchTraces tstore query)]
                {:uuid        (.getUuid r),
                 :lcid        (.getChunkId r)
                 :descr       (.getDescription r)
@@ -184,24 +184,24 @@
           )))))
 
 
-(defn trace-detail [{:keys [trace-store obj-store] :as app-state} stack-limit uuid]
+(defn trace-detail [{:keys [tstore obj-store]} stack-limit uuid]
   (let [rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
-        rslt (.retrieve trace-store uuid rtr)]
+        rslt (.retrieve tstore uuid rtr)]
     {:status 200, :body {:type :rest, :data (merge {:uuid uuid} rslt)}}))
 
 
-(defn trace-detail-tid [{:keys [trace-store obj-store] :as app-state} stack-limit is-out tid]
+(defn trace-detail-tid [{:keys [tstore] :as app-state} stack-limit is-out tid]
   (let [query (TraceSearchQuery. (doto (QmiNode.) (.setDtraceTid tid)) nil)
-        rslt (.searchTraces trace-store query)
+        rslt (.searchTraces tstore query)
         trc (first (for [r rslt :when (= is-out (.isDtraceOut r))] r))]
     (if (some? trc)
       (trace-detail app-state stack-limit (.getUuid trc))
       {:status 404})))
 
 
-(defn trace-stats [{:keys [trace-store obj-store] :as app-state} uuid]
+(defn trace-stats [{:keys [tstore]} uuid]
   (let [f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
-    (.retrieve trace-store uuid rtr)
+    (.retrieve tstore uuid rtr)
     {:status 200,
      :body {:type :rest,
             :data (for [^TraceStatsResultItem s (.getStats f)]
@@ -297,21 +297,21 @@
       (zutl/rest-error "Internal error." 500))))
 
 
-(defn agent-session [{:keys [obj-store trace-store]}        ; app-state
+(defn agent-session [{:keys [obj-store tstore]}        ; app-state
                      {{:keys [uuid authkey]} :data}]        ; req
   (if (and uuid authkey)
     (if-let [obj (zobj/get-obj obj-store uuid)]
       (if (= (:authkey obj) authkey)
-        (zutl/rest-result {:session (.getSession ^TraceStore trace-store uuid)})
+        (zutl/rest-result {:session (.getSession ^TraceStore tstore uuid)})
         (zutl/rest-error-logged "Access denied." 401 uuid authkey))
       (zutl/rest-error-logged "No such agent." 400 uuid authkey))
     (zutl/rest-error-logged "Missing arguments." 400 uuid authkey)))
 
 
-(defn submit-agd [{:keys [trace-store]} agent-uuid session-uuid data]
+(defn submit-agd [{:keys [tstore]} agent-uuid session-uuid data]
   (try+
     ; TODO weryfikacja argumentów
-    (.handleAgentData trace-store agent-uuid session-uuid data)
+    (.handleAgentData tstore agent-uuid session-uuid data)
     (zutl/rest-result {:result "Submitted"} 202)
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
@@ -321,12 +321,12 @@
       (zutl/rest-error "Internal error." 500))))
 
 
-(defn submit-trc [{:keys [obj-store trace-store] :as app-state} agent-uuid session-uuid trace-uuid data]
+(defn submit-trc [{:keys [obj-store tstore]} agent-uuid session-uuid trace-uuid data]
   (try+
     ; TODO weryfikacja argumentów
     (if-let [agent (zobj/get-obj obj-store agent-uuid)]
       (do
-        (.handleTraceData trace-store agent-uuid session-uuid trace-uuid data
+        (.handleTraceData tstore agent-uuid session-uuid trace-uuid data
                           (doto (ChunkMetadata.)
                             (.setAppId (zobj/extract-uuid-seq (:app agent)))
                             (.setEnvId (zobj/extract-uuid-seq (:env agent)))))
@@ -381,7 +381,7 @@
           tid)))))
 
 
-(defn open-trace-store [new-conf old-conf old-store obj-store]
+(defn open-tstore [new-conf old-conf old-store obj-store]
   (let [old-root (when (:path old-conf) (File. ^String (:path old-conf))),
         idx-cache (if old-store (.getIndexerCache old-store) (HashMap.))
         new-root (File. ^String (:path new-conf)), new-props (zutl/conf-to-props new-conf "store.")]
@@ -402,13 +402,12 @@
       :else old-store)))
 
 
-(defn with-tracer-components [{{new-conf :trace-store} :conf obj-store :obj-store :as app-state}
-                              {{old-conf :trace-store} :conf :keys [trace-store maint-threads]
-                               :as old-app-state}]
+(defn with-tracer-components [{{new-conf :tstore} :conf obj-store :obj-store :as app-state}
+                              {{old-conf :tstore} :conf :keys [tstore maint-threads]}]
   (if (:enabled new-conf true)
-    (let [trace-store (open-trace-store new-conf old-conf trace-store obj-store)
+    (let [tstore (open-tstore new-conf old-conf tstore obj-store)
           nmt (doall (for [n (range (:maint-threads new-conf 2))]
-                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) trace-store)))
+                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))
           postproc (TemplatingMetadataProcessor.)
           trace-descs (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:uuid obj), (:descr obj)}))]
       ; Set up template descriptions for rendering top level DESC field;
@@ -417,10 +416,10 @@
       ; Stop old maintenance threads (new ones are already started)
       (doseq [t maint-threads]
         (.stop t))
-      (.setPostproc trace-store postproc)
+      (.setPostproc tstore postproc)
       (assoc app-state
         :maint-threads nmt
-        :trace-store trace-store
+        :tstore tstore
         :trace-postproc postproc))
     app-state))
 

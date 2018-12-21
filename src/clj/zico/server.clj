@@ -9,7 +9,9 @@
             [ns-tracker.core :refer [ns-tracker]]
             [ring.middleware.session.memory]
             [zico.objstore :as zobj]
-            [clojure.set :as cs])
+            [clojure.set :as cs]
+            [clojure.spec.alpha :as s]
+            [zico.cfg])
   (:gen-class)
   (:import (org.slf4j.impl ZorkaLoggerFactory ZorkaTrapper ZorkaLogLevel)
            (com.jitlogic.netkit.integ.ring RingServerBuilder)
@@ -32,16 +34,6 @@
           (require sym :reload))
         (log/info "Reloading configuration.")
         (reload-fn)))))
-
-
-(def DEFAULT-HTTP-CONF
-  {:ip "0.0.0.0"
-   :port 6841
-   :thread 16
-   :queue-size 65536
-   :worker-name-prefix "zico-http-"
-   :max-body 8388608
-   :max-line 4096})
 
 (def DEFAULT-CONF
   (read-string (slurp (io/resource "zico/zico.conf"))))
@@ -71,12 +63,17 @@
                (zutl/recursive-merge DEFAULT-CONF (read-string (slurp path)))
                DEFAULT-CONF)
         updf #(if (string? %) (.replace % "${zico.home}" home-dir))]
+    (when-not (s/valid? :zico.cfg/config conf)
+      (println "ERROR: invalid application configuration.")
+      (s/explain :zico.cfg/config conf)
+      (log/error "Invalid configuration" (str (s/explain-data :zico.cfg/config conf)))
+      (throw (RuntimeException. "Invalid application configuration.")))
     (->
       conf
       (assoc :home-dir home-dir)
       (update-in [:backup :path] updf)
       (update-in [:zico-db :subname] updf)
-      (update-in [:trace-store :path] updf)
+      (update-in [:tstore :path] updf)
       (update-in [:log :main :path] updf))))
 
 (def TRAPPER-LEVELS
@@ -111,7 +108,7 @@
   ([home-dir]
    (let [conf (load-conf (zutl/ensure-dir home-dir)), logs (-> conf :log :main)]
      (zutl/ensure-dir (-> conf :backup :path))
-     (zutl/ensure-dir (-> conf :trace-store :path))
+     (zutl/ensure-dir (-> conf :tstore :path))
      (zutl/ensure-dir (-> conf :log :main :path))
      ; TODO konfiguracja logów przed inicjacją serwera - tak aby logi slf4j trafiły od razu we właściwe miejsce
      (taoensso.timbre/merge-config!
