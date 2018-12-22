@@ -74,6 +74,10 @@
           padding-left: 0.2em;
         }
       }
+    } // .inf
+
+    .ci {
+      padding-right: 0.5em;
     }
 
     // Default view: two columns + button column
@@ -101,78 +105,59 @@
 
   // Details view (expanded list item)
   .det {
-    display: flex;
-    flex-direction: column;
-    cursor: default;
     padding: 0.25em 0.5em;
+  }
+
+  // Key-value list
+  .kvl {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    .kv {
+      display: flex;
+      @media screen and (max-width: $small) {
+        flex-direction: column;
+      }
+      .k {
+        font-weight: bold;
+        color: $c-blue;
+        padding-right: 0.5em;
+        margin-left: 0.5em;
+        flex-grow: 0;
+        flex-shrink: 0;
+      }
+      .v {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-left: 0.25em;
+        @media screen and (max-width: $small) {
+          white-space: pre-wrap;
+          overflow: auto;
+        }
+      }
+    } // .kv
+  } // .kvl
+
+  // Highlighted item
+  .hl {
     background-color: $b-focus;
     &:hover {
       background-color: $b-hover;
     }
+  }
 
-    .kv {
-      display: flex;
-      flex-direction: row;
-
-      .k {
-        font-weight: bold;
+  .btns {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    .clickable {
+      margin-left: 0.25em;
+      filter: opacity(10%);
+      &:hover {
+        filter: opacity(100%);
       }
-
-      .v {
-        text-overflow: ellipsis;
-      }
-
-      .c {
-        text-overflow: ellipsis;
-        color: $c-darker;
-      }
-
-      .s {
-        display: flex;
-        font-weight: bold;
-        color: $c-darker;
-        .i {
-          flex: 0 0 1.5em;
-          color: $c-darker;
-        }
-      } // .s
-
-    } // .kv
-
-    // Bottom line with action buttons
-    .btns {
-      display: flex;
-      flex-direction: row;
-      justify-content: flex-end;
-      .l {
-        flex: 10 10 70%;
-        color: $c-darker;
-      }
-      .s {
-        width: 1em;
-      }
-      .clickable {
-        margin-left: 0.25em;
-      }
-    } // .btns
-
-    // Default view: 3 columns
-    .c1  { flex: 4 4 20%; }
-    .c2  { flex: 4 4 30%; }
-    .c3  { flex: 4 4 50%; }
-    .c2x { flex: 4 4 80%; }
-
-    @media screen and (max-width: $small) {
-      .c3 {
-        display: none;
-      }
-      flex-direction: column;
-      border-bottom: 1px solid $c-line;
     }
-
-  } // .det
-
-
+  } // .btns
 
 }
 

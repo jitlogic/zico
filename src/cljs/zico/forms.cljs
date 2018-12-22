@@ -232,48 +232,52 @@
       :else (assoc f :valid? (validator vpath attr text-not-empty-vfn)))))
 
 
+(defn render-btns [{:keys [vpath dpath fdefs url xhr-url] :as cfg}
+                   {:keys [uuid name] :as obj}]
+  [:div.btns
+   (zw/svg-button
+     :awe :clone :text "Clone item"
+     [:form/edit-new vpath dpath
+      (str url "/edit") obj fdefs])
+   (zw/svg-button
+     :awe :trash :red "Delete item"
+     [:popup/open :msgbox,
+      :caption "Deleting object", :modal? true,
+      :text (str "Delete object: " name " ?"),
+      :buttons
+      [{:id :ok, :text "Delete", :icon [:awe :ok :green]
+        :on-click [:xhr/delete
+                   (str xhr-url "/" uuid) nil nil
+                   :on-success [:dissoc dpath uuid]
+                   :on-error zv/DEFAULT-SERVER-ERROR]}
+       {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
+   (zw/svg-button
+     :awe :edit :text "Edit item"
+     [:form/edit-open vpath dpath
+      (str url "/edit") uuid fdefs])])
 
 
-(defn render-item [&{:keys [vpath list-col1 list-col2] :or {list-col1 :name, list-col2 :comment}}]
-  (fn [{:keys [uuid] :as obj}]
+(defn render-item [detail? &{:keys [vpath dpath fdefs url list-col1 list-col2 xhr-url]
+                     :or {list-col1 :name, list-col2 :comment} :as cfg}]
+  (fn [{:keys [uuid glyph] :as obj}]
     ^{:key uuid}
-    [:div.itm {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
-     [:div.c1.dsc [:div.n (list-col1 obj)]]
-     [:div.c2.cmt (list-col2 obj)]]))
-
-
-(defn render-detail [&{:keys [vpath dpath fdefs url xhr-url]}]
-  (fn [{:keys [uuid name comment] :as obj}]
-    ^{:key uuid}
-    [:div.det {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
-     [:div.dsc
-      [:div.kv
-       [:div.c1.k "Name:"]
-       [:div.c2.v name]
-       [:div.c2.c.hide-s comment]]]
-     [:div.btns
-      [:div.ellipsis.c-gray uuid]
-      (zw/svg-button
-        :awe :clone :text "Clone item"
-        [:form/edit-new vpath dpath
-         (str url "/edit") obj fdefs])
-      (zw/svg-button
-        :awe :trash :red "Delete item"
-        [:popup/open :msgbox,
-         :caption "Deleting object", :modal? true,
-         :text (str "Delete object: " name " ?"),
-         :buttons
-         [{:id :ok, :text "Delete", :icon [:awe :ok :green]
-           :on-click [:xhr/delete
-                      (str xhr-url "/" uuid) nil nil
-                      :on-success [:dissoc dpath uuid]
-                      :on-error zv/DEFAULT-SERVER-ERROR]}
-          {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
-      (zw/svg-button
-        :awe :edit :text "Edit item"
-        [:form/edit-open vpath dpath
-         (str url "/edit") uuid fdefs])
-      ]]))
+    [(if detail? :div.hl :div)
+     [:div.itm
+      {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
+      (when glyph
+        (let [[f i c] (zu/glyph-parse glyph glyph)]
+          [:div.ci (zw/svg-icon f i c)]))
+      [:div.c1.dsc [:div.n (list-col1 obj)]]
+      [:div.c2.cmt (list-col2 obj)]
+      (render-btns cfg obj)]
+     (when detail?
+       [:div.kvl
+        (for [{:keys [attr label] :as fdef} fdefs
+              :when (not= attr :glyph)]
+          ^{:key attr}
+          [:div.kv
+           [:div.k label]
+           [:div.v (attr obj)]])])]))
 
 
 (defn render-list [&{:keys [vpath dpath data class fdefs url xhr-url template title on-refresh]}]
@@ -293,7 +297,7 @@
                                       [:form/edit-new vpath dpath
                                        (str url "/edit") template fdefs])])]
         :central [zv/list-interior :vpath vpath, :data data, :class class
-                  :render-item (render-item :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
-                  :render-details (render-detail :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)
+                  :render-item (render-item false :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
+                  :render-details (render-item true :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)
                   ]))))
 
