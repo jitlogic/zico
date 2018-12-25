@@ -3,6 +3,7 @@
   (:require
     [clojure.set :as cs]
     [zico.util :as zutl]
+    [zico.schema :refer [RE-UUID]]
     [clojure.java.jdbc :as jdbc]
     [taoensso.timbre :as log])
   (:import (java.util Random)
@@ -16,8 +17,6 @@
 (defonce NODE-NUM 1)
 (defonce RAND-NUM (Random.))
 (defonce RUN-ID (bit-and (.nextInt RAND-NUM) 0xffff))
-
-(def RE-UUID #"(\p{XDigit}{8})-(\p{XDigit}{4})-(\p{XDigit}{4})-(\p{XDigit}{4})-(\p{XDigit}{12})")
 
 ; UUID format for database records
 ; 21c00000-OONN-UUUU-nnnn-Vttttttttttt

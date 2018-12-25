@@ -9,6 +9,7 @@
 
                  [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
+                 [prismatic/schema "1.1.9"]
 
                  [ring/ring-core "1.7.1"]
                  [ring/ring-devel "1.7.1"]
@@ -49,7 +50,7 @@
    [:cljsbuild :builds :app :compiler :output-dir]
    [:cljsbuild :builds :app :compiler :output-to]]
 
-  :source-paths ["src/clj"]
+  :source-paths ["src/clj" "src/cljc"]
   :resource-paths ["resources" "target/cljsbuild"]
 
 
@@ -58,14 +59,14 @@
 
   :cljsbuild
   {:builds {:min
-            {:source-paths ["src/cljs" "env/prod/cljs"]
+            {:source-paths ["src/cljs" "src/cljc" "env/prod/cljs"]
              :compiler
              {:output-to "target/cljsbuild/public/js/app.js"
               :output-dir "target/uberjar"
               :optimizations :advanced
               :pretty-print  false}}
             :app
-            {:source-paths ["src/cljs" "env/dev/cljs"]
+            {:source-paths ["src/cljs" "src/cljc" "env/dev/cljs"]
              :compiler
              {:main "zico.dev"
               :asset-path "/js/out"
@@ -75,7 +76,7 @@
               :optimizations :none
               :pretty-print  true}}
             :test
-            {:source-paths ["src/cljs" "env/test/cljs" "test/cljs"]
+            {:source-paths ["src/cljs" "src/cljc" "env/test/cljs" "test/cljs"]
              :compiler
              {:main "zico.test-runner"
               :asset-path "target/cljstest/public/js/out"

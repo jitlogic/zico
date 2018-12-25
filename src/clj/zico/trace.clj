@@ -73,8 +73,8 @@
       (case (TYPES (:type q) (:type q))
         :and (AndExprNode. (lmap parse-search-node (:args q)))
         :or (OrExprNode. (lmap parse-search-node (:args q)))
-        :text (TextNode. (:text q) (:match-start q false) (:match-end q false))
-        :xtext (TextNode. (:text q) (:match-start q true) (:match-end q true))
+        :text (TextNode. ^String (:text q) ^Boolean (:match-start q false) ^Boolean (:match-end q false))
+        :xtext (TextNode. ^String (:text q) ^Boolean (:match-start q true) ^Boolean (:match-end q true))
         :kv (KeyValSearchNode. (:key q) (parse-search-node (:val q)))
         nil))))
 
@@ -112,7 +112,7 @@
         hids (find-and-map-by-id obj-store {:class :host})
         rslt (for [^TraceSearchResultItem r (.searchTraces tstore query)]
                {:uuid        (.getUuid r),
-                :lcid        (.getChunkId r)
+                :chunk-id    (.getChunkId r)
                 :descr       (.getDescription r)
                 :duration    (.getDuration r)
                 :ttype       (ttps (.getTypeId r))

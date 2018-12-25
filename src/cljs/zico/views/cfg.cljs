@@ -16,7 +16,7 @@
       )))
 
 ; Register all needed subscriptions
-(doseq [k [:env :app :host :metric :poller :output :user :group :ttype :hostreg]]
+(doseq [k [:env :app :host :user :ttype :hostreg]]
   (zs/register-sub
     (keyword "data" (str "cfg-" (name k) "-list"))
     (data-list-sfn :cfg k :name)))
