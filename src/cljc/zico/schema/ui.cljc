@@ -4,6 +4,13 @@
     [zico.schema.db :as db]
     [schema.core :as s :include-macros true]))
 
+(s/defschema FormField
+  {(s/optional-key :text) s/Str
+   (s/optional-key :value)  s/Any})
+
+(s/defschema Form
+  {:uuid s/Str
+   })
 
 (s/defschema CfgView
   {:app s/Any

@@ -31,20 +31,28 @@
     lst))
 
 
+(defn to-int [x]
+  (cond
+    (int? x) x
+    (string? x) (Integer/parseInt x)
+    (number? x) (.longValue x)
+    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
+
+
 (defn parse-qmi-node [q]
   (doto (QmiNode.)
     (.setAppId (zobj/extract-uuid-seq (:app q)))
     (.setEnvId (zobj/extract-uuid-seq (:env q)))
     (.setHostId (zobj/extract-uuid-seq (:host q)))
     (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
-    (.setMinDuration (:min-duration q 0))
-    (.setMaxDuration (:max-duration q Long/MAX_VALUE))
-    (.setMinCalls (:min-calls q 0))
-    (.setMaxCalls (:max-calls q Long/MAX_VALUE))
-    (.setMinErrs (:min-errors q 0))
-    (.setMaxErrs (:max-errors q Long/MAX_VALUE))
-    (.setMinRecs (:min-recs q 0))
-    (.setMaxRecs (:max-recs q Long/MAX_VALUE))
+    (.setMinDuration (to-int (:min-duration q 0)))
+    (.setMaxDuration (to-int (:max-duration q Long/MAX_VALUE)))
+    (.setMinCalls (to-int (:min-calls q 0)))
+    (.setMaxCalls (to-int (:max-calls q Long/MAX_VALUE)))
+    (.setMinErrs (to-int (:min-errors q 0)))
+    (.setMaxErrs (to-int (:max-errors q Long/MAX_VALUE)))
+    (.setMinRecs (to-int (:min-recs q 0)))
+    (.setMaxRecs (to-int (:max-recs q Long/MAX_VALUE)))
     (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
     (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
     (.setDtraceUuid (:dtrace-uuid q))

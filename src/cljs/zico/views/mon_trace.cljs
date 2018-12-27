@@ -27,15 +27,14 @@
 (def CFG-HOSTS (zs/subscribe [:get [:data :cfg :host]]))
 (def CFG-ENVS (zs/subscribe [:get [:data :cfg :env]]))
 (def CFG-APPS (zs/subscribe [:get [:data :cfg :app]]))
-
-(def TRACE_HISTORY [:view :trace :history])
+(def CFG-TRACES (zs/subscribe [:get [:data :trace :list]]))
 
 (defn trace-list-click-handler-fn [sect sub]
   (fn [e]
     (zs/traverse-and-handle
       (.-target e) "data-trace-uuid" "zorka-traces"
-      :btn-details #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree %]])
-      :btn-dtrace #(zs/dispatch [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-dist/dtrace-tree %]])
+      :btn-details #(zs/dispatch [:to-screen "mon/trace/tree" {:uuid %}])
+      :btn-dtrace #(zs/dispatch [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [% :dtrace-uuid])}])
       :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
                           [:xhr/get (str "../../../data/trace/" % "/detail")
                            [:data sect sub % :detail] nil
@@ -50,7 +49,7 @@
           fattrs (if (= ttype (:ttype fattrs)) fattrs {:ttype ttype})
           fattrs (if (contains? fattrs k) (dissoc fattrs k) (assoc fattrs k v))]
       {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
-       :dispatch [:zico.views.mon-trace-list/refresh-list]})))
+       :dispatch [:zico.views.mon-trace-list/refresh-list true]})))
 
 
 (def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
@@ -70,7 +69,7 @@
                :awe :cancel :red "Clear filter ..."
                [:do
                 [:dissoc [:view :trace :list :filter-attrs] k]
-                [:zico.views.mon-trace-list/refresh-list]])]
+                [:zico.views.mon-trace-list/refresh-list true]])]
             [:div.i
              (zw/svg-button
                :awe :filter :blue "Filter by ..."
@@ -127,7 +126,7 @@
             (zw/svg-button
               family glyph color (str "Show only " name " traces.")
               [:do [:set [:view :trace :list :filter :ttype :selected] uuid]
-               [:zico.views.mon-trace-list/refresh-list]])
+               [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon family glyph color :opaque false))]
          [:div.ellipsis name]])
       (let [{:keys [name uuid]} (get @CFG-APPS app {:name "<unknown>"})]
@@ -137,7 +136,7 @@
             (zw/svg-button
               :awe :cubes :yellow (str "Show only " name " application.")
               [:do [:set [:view :trace :list :filter :app :selected] uuid]
-               [:zico.views.mon-trace-list/refresh-list]])
+               [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon :awe :cubes :yellow :opaque false))]
          [:div.ellipsis name]])
       (let [{:keys [name uuid]} (get @CFG-ENVS env {:name "<unknown>"})]
@@ -147,7 +146,7 @@
             (zw/svg-button
               :awe :sitemap :green (str "Show only " name " environment.")
               [:do [:set [:view :trace :list :filter :env :selected] uuid]
-               [:zico.views.mon-trace-list/refresh-list]])
+               [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon :awe :sitemap :green :opaque false))]
          [:div.ellipsis name]])]
      (let [{:keys [name uuid]} (get @CFG-HOSTS host {:name "<unknown host>"})]
@@ -157,7 +156,7 @@
            (zw/svg-button
              :awe :desktop :blue (str "Show only " name " host.")
              [:do [:set [:view :trace :list :filter :host :selected] uuid]
-              [:zico.views.mon-trace-list/refresh-list]])
+              [:zico.views.mon-trace-list/refresh-list true]])
            (zw/svg-icon :awe :desktop :text))]
         [:div.ellipsis (str name "   (" uuid ")")]])
      [:div.c-light.bold.wrapping descr]
@@ -178,14 +177,15 @@
       [:div.flexible.flex]                                  ; TODO display trace type
       (zw/svg-button
         :awe :chart-bar :text "Method call stats"
-        [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-stats/display-stats uuid]])
+        [:to-screen "mon/trace/stats" {:uuid uuid}])
       (when (and dtrace-links dtrace-uuid)           ; TODO use explicit flag, not dtrace-level check
         (zw/svg-button
           :ent :flow-cascade :blue "Distributed trace"
-          [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-dist/dtrace-tree uuid]]))
+          [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [uuid :dtrace-uuid])}]))
       (zw/svg-button
         :awe :right-big :blue "View trace details"
-        [:event/push-dispatch TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree uuid]])]]))
+        [:to-screen "mon/trace/tree" {:uuid uuid}]
+        )]]))
 
 
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))

@@ -32,10 +32,26 @@
   db)
 
 
+(defn view-path [name params]
+  (let [path (str "/view/" name)]
+    (if (and params (not (empty? params)))
+      (str path "?" (zutl/url-encode params))
+      path)))
+
+
 (defn to-screen-handler [db [_ name params]]
-  (sc/dispatch! (str "/view/" name))
+  (let [path (view-path name params)]
+    (sc/dispatch! path)
+    (.pushState js/history nil nil path))
   (if (small-screen?) (assoc-in db [:view :menu :open?] false) db))
 
+(defn history-push-handler [db [_ name params]]
+  (.pushState js/history nil nil (view-path name params))
+  db)
+
+(defn history-replace-handler [db [_ name params]]
+  (.replaceState js/history nil nil (view-path name params))
+  db)
 
 (defn xhr-handler [db [_ method url & {:keys [data on-success on-error content-type]}]]
   "Event handler performs XHR request. Currently only EDN calls are supported.
@@ -84,4 +100,5 @@
 (rfc/reg-event-db :set-timeout set-timeout-handler)
 (rfc/reg-event-db :set-location set-location-handler)
 (rfc/reg-event-db :write-to-clipboard write-to-clipboard-handler)
-
+(rfc/reg-event-db :history-push history-push-handler)
+(rfc/reg-event-db :history-replace history-replace-handler)

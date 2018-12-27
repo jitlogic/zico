@@ -1,6 +1,7 @@
 (ns zico.util
   (:require
-    [cljs.pprint :as pp]))
+    [cljs.pprint :as pp]
+    [clojure.string :as cs]))
 
 
 (defn deref?
@@ -113,4 +114,11 @@
   (if-let [m (re-matches #"(.+)/([^#]+)#?(.*)?" (or glyph default))]
     (rest m)
     (glyph-parse default "awe/paw#text")))
+
+
+(defn url-encode [params]
+  (cs/join
+    "&"
+    (for [[k v] params]
+      (str (js/encodeURIComponent (to-string k)) "=" (js/encodeURIComponent (to-string v))))))
 

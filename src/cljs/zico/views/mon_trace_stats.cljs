@@ -7,18 +7,7 @@
     [zico.views.mon-trace :as zvmt]))
 
 
-(zs/reg-event-fx
-  ::display-stats
-  (fn [{:keys [db]} [_ uuid]]
-    {:db (assoc-in db [:data :trace :stats] nil),
-     :dispatch-n
-         [[:to-screen "mon/trace/stats"]
-          [:xhr/get (str "../../../data/trace/" uuid "/stats")
-           [:data :trace :stats] nil
-           :on-error zv/DEFAULT-SERVER-ERROR]]}))
-
-
-(defn trace-stats-list-ra [db [_]]
+(defn trace-stats-list-ra [_ [_]]
   (let [stats (zs/subscribe [:get [:data :trace :stats]])
         order (zs/subscribe [:get [:view :trace :stats :sort]])]
     (ra/reaction
@@ -50,9 +39,6 @@
     (fn []
       [:div.flexible.flex
        (zw/svg-button
-         :awe :left-big :blue "To trace list"
-         [:event/pop-dispatch zvmt/TRACE_HISTORY [:to-screen "mon/trace/list"]])
-       (zw/svg-button
          :awe :inbox :green "Sort by number of recorded calls"
          [:set [:view :trace :stats :sort] {:recs true}]
          :opaque sort-r)
@@ -64,8 +50,14 @@
       )))
 
 
-(defn trace-stats []
+(defn trace-stats [{:keys [uuid]}]
   "Trace call stats panel [:view :trace :stats]"
+  (zs/dispatch-sync
+    [:set [:data :trace :stats] nil])
+  (zs/dispatch
+    [:xhr/get (str "../../../data/trace/" uuid "/stats")
+     [:data :trace :stats] nil
+     :on-error zv/DEFAULT-SERVER-ERROR])
   (zv/render-screen
     :hide-menu-btn true
     :toolbar [zv/list-screen-toolbar

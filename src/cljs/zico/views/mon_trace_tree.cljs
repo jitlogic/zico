@@ -6,6 +6,7 @@
     [zico.widgets :as zw]
     [zico.views.mon-trace :as zvmt]
     [zico.util :as zu]
+    [zico.io]
     [cljs.pprint :as pp]))
 
 
@@ -42,19 +43,6 @@
   trace-tree-list-ra)
 
 
-(zs/reg-event-fx
-  ::display-tree
-  (fn [{:keys [db]} [_ uuid]]
-    {:db (-> db
-             (assoc-in [:view :trace :tree] {:uuid uuid, :collapsed {}})
-             (assoc-in [:data :trace :tree] nil))
-     :dispatch-n
-         [[:to-screen "mon/trace/tree"]
-          [:xhr/get (str "../../../data/trace/" uuid "/tree") nil nil,
-           :on-success [::handle-xhr-result nil]
-           :on-error zv/DEFAULT-SERVER-ERROR]]}))
-
-
 (zs/reg-event-db
   ::handle-xhr-result
   (fn [db [_ _ tr]]
@@ -87,7 +75,8 @@
     (when-let [dto (get attrs "DTRACE_OUT")]
       (zw/svg-button
         :awe :right-big :blue "Go to target trace..."
-        [:event/push-dispatch zvmt/TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree dto]]))]
+        [:to-screen "mon/trace/tree" {:uuid dto}]
+        ))]
    [:div.c-light.ellipsis.flex (str method args)
     [:div.i.pad-l05
      (zw/svg-button
@@ -121,15 +110,8 @@
    (when-let [dto (get attrs "DTRACE_OUT")]
      (zw/svg-button
        :awe :right-big :blue "Go to target trace..."
-       [:event/push-dispatch zvmt/TRACE_HISTORY [:zico.views.mon-trace-tree/display-tree dto]]))])
-
-
-(defn toolbar-tree-left []
-  [:div.flexible
-   (zw/svg-button
-     :awe :left-big :blue "To trace list"
-     [:event/pop-dispatch zvmt/TRACE_HISTORY
-      [:to-screen "mon/trace/list"]])])
+       [:to-screen "mon/trace/tree" {:uuid dto}]
+       ))])
 
 
 (defn toolbar-tree-right []
@@ -150,15 +132,23 @@
     :det #(zs/dispatch [:toggle [:view :trace :tree :selected] (js/parseInt %)])))
 
 
-(defn trace-tree []
+(defn trace-tree [{:keys [uuid]}]
   "Trace call tree display panel [:view :trace :tree]"
+  (when uuid
+    (zs/dispatch-sync
+      [:do
+       [:set [:view :trace :tree] {:uuid uuid, :collapsed {}}]
+       [:set [:data :trace :tree] nil]])
+    (zs/dispatch
+      [:xhr/get (str "../../../data/trace/" uuid "/tree") nil nil,
+       :on-success [::handle-xhr-result nil]
+       :on-error zv/DEFAULT-SERVER-ERROR]))
   (zv/render-screen
     :hide-menu-btn true
     :toolbar [zv/list-screen-toolbar
               :vpath [:view :trace :tree],
               :title     "Call tree",
               :sort-ctls {},
-              :add-left  [toolbar-tree-left],
               :add-right [toolbar-tree-right]]
     :central [zv/list-interior
               :vpath [:view :trace :tree]

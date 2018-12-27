@@ -129,6 +129,8 @@
           (swap! once-events assoc ev 1)
           {:dispatch ev})))))
 
+; -------------------------------- Dispatch event stack ----------------------------------
+; Can be useful for implementing event history inependent of browser history mechanism
 
 (reg-event-fx
   :event/push-dispatch

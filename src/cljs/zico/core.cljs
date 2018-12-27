@@ -42,7 +42,7 @@
   ; Monitoring screens
   "mon/trace/list"    #'zico.views.mon-trace-list/trace-list
   "mon/trace/tree"    #'zico.views.mon-trace-tree/trace-tree
-  "mon/dtrace/tree"   #'zico.views.mon-trace-dist/dtrace-tree
+  "mon/trace/dtree"   #'zico.views.mon-trace-dist/dtrace-tree
   "mon/trace/stats"   #'zico.views.mon-trace-stats/trace-stats
 
   ; Config items - lists

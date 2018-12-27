@@ -6,7 +6,9 @@
     [zico.views.mon-trace :as zvmt]
     [zico.widgets :as zw]
     [cljs-time.format :as ctf]
-    [zico.util :as zu]))
+    [cljs.reader :refer [read-string]]
+    [zico.util :as zu]
+    [cljsjs.lz-string]))
 
 
 (zs/register-sub
@@ -45,12 +47,31 @@
         deep-search (= true (-> db :view :trace :list :deep-search))]
     (merge {:limit 50, :offset offset, :deep-search deep-search, :node q, :qmi qmi})))
 
+(defn parse-filter-query [db [_ q]]
+  (if q
+    (let [{{:keys [env app ttype min-duration tstart]} :qmi :keys [deep-search node]}
+          (read-string (js/LZString.decompressFromBase64 q))
+          fltr {:env {:selected env}, :app {:selected app}
+                :ttype {:selected ttype}, :min-duration {:selected min-duration}
+                :time {:selected (if tstart (ctf/parse PARAM-FORMATTER tstart))}}
+          nodes (if (= :and (:type node)) (:args node) [node])
+          text (first (for [n nodes :when (= :text (:type n))] (:text n)))
+          attrs (into {} (for [n nodes :when (= :kv (:type n))] {(:key n), (:val n)}))]
+      (->
+        db
+        (assoc-in [:view :trace :list :filter] fltr)
+        (assoc-in [:view :trace :list :deep-search] deep-search)
+        (assoc-in [:view :trace :list :search :text] text)
+        (assoc-in [:view :trace :list :filter-attrs] attrs)
+        ))
+    db))
+
 
 (zs/reg-event-fx
   ::filter-list
   (fn [{:keys [db]} [_ path v]]
     {:db (assoc-in db path v)
-     :dispatch [::refresh-list]}))
+     :dispatch [::refresh-list true]}))
 
 
 (zs/reg-event-fx
@@ -85,14 +106,20 @@
       db)))
 
 
+(zs/reg-event-db ::parse-filter-query parse-filter-query)
+
+
 (zs/reg-event-fx
   ::refresh-list
-  (fn [{:keys [db]} _]
-    {:db db
-     :dispatch
-         [:xhr/post "../../../data/trace/search" nil (make-filter db 0)
-          :on-success [::handle-trace-search-result true]
-          :on-error zv/DEFAULT-SERVER-ERROR]}))
+  (fn [{:keys [db]} [_ history-push]]
+    (let [flt (make-filter db 0)
+          zf (js/LZString.compressToBase64 (pr-str flt))]
+      {:db db
+       :dispatch-n
+           [[:xhr/post "../../../data/trace/search" nil flt
+             :on-success [::handle-trace-search-result true]
+             :on-error zv/DEFAULT-SERVER-ERROR]
+            (if history-push [:history-replace "mon/trace/list" {:q zf}] [:nop])]})))
 
 
 (zs/reg-event-fx
@@ -111,15 +138,15 @@
 
 (def DURATIONS
   [["0" "clear"  nil ]
-   ["1s"  "1 second"    1      :darkgreen]
-   ["5s"  "5 seconds"   5      :darkgreen]
-   ["15s" "15 seconds"  15     :darkgreen]
-   ["1m"  "1 minute"    60     :darkkhaki]
-   ["5m"  "5 minutes"   300    :darkkhaki]
-   ["15m" "15 minutes"  900    :darkkhaki]
-   ["1h"  "1 hour"      3600   :mediumred]
-   ["4h"  "4 hours"     14400  :mediumred]
-   ["1d"  "1 day"       86400  :mediumred]])
+   ["1s"  "1 second"    "1"      :darkgreen]
+   ["5s"  "5 seconds"   "5"      :darkgreen]
+   ["15s" "15 seconds"  "15"     :darkgreen]
+   ["1m"  "1 minute"    "60"     :darkkhaki]
+   ["5m"  "5 minutes"   "300"    :darkkhaki]
+   ["15m" "15 minutes"  "900"    :darkkhaki]
+   ["1h"  "1 hour"      "3600"   :mediumred]
+   ["4h"  "4 hours"     "14400"  :mediumred]
+   ["1d"  "1 day"       "86400"  :mediumred]])
 
 
 (def DURATION-FILTER-ITEMS
@@ -135,11 +162,11 @@
       (doall
         (cons
           {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
-           :on-click [:do [:set path nil] [::refresh-list]]}
+           :on-click [:do [:set path nil] [::refresh-list true]]}
           (for [{:keys [uuid name] :as r} (sort-by :name (vals (zu/deref? data)))
                 :when ((or filter-fn identity) r)]
             {:key      uuid, :text name, :icon (icon-fn r),
-             :on-click [:do [:set path uuid] [::refresh-list]]
+             :on-click [:do [:set path uuid] [::refresh-list true]]
              :state    (if (= uuid @selected) :selected :normal)
              }))))))
 
@@ -178,13 +205,13 @@
                                  [:host "Host: " :sitemap] [:time "Time: " :calendar]]
                      :let [uuid (get-in filter [k :selected])] :when uuid]
                  {:key      (str k), :text (str lbl (or (get-in @cfg [k uuid :name]) uuid)), :icon [:awe ic :red],
-                  :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list]]})
+                  :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list true]]})
             f2 (when-not (empty? (:text search))
                  [{:key      ":text", :text (str "Search: " (zu/ellipsis (:text search) 32)), :icon [:awe :search :red],
-                   :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list]]}])
+                   :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list true]]}])
             f3 (for [[k _] fattrs :when (string? k)]
                  {:key      (str "ATTR-" k), :text (zu/ellipsis (str "Attr: " k) 32), :icon [:awe :filter :red],
-                  :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list]]})]
+                  :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list true]]})]
         (doall
           (concat
             [{:key "all", :text "clear filters", :icon [:awe :cancel :red]
@@ -192,7 +219,7 @@
                          [:set [:view :trace :list :filter] {}]
                          [:set [:view :trace :list :filter-attrs] {}]
                          [:set [:view :trace :list :search] {}]
-                         [::refresh-list]]}]
+                         [::refresh-list true]]}]
             f1 f2 f3)))
       )))
 
@@ -241,7 +268,7 @@
            :opaque (:dur sort))
          (zw/svg-button
            :awe :binoculars :light "Deep search"
-           [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list]]
+           [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list true]]
            :opaque deep-search)
          (zw/svg-button
            :awe :eye-off :light "Suppress details"
@@ -249,12 +276,9 @@
            :opaque suppress)]))))
 
 
-(defn trace-list []
+(defn trace-list [params]
   "Trace seach/listing panel: [:view :trace :list]"
-  ;(zs/dispatch [:once :data/refresh :cfg :app])
-  ;(zs/dispatch [:once :data/refresh :cfg :env])
-  ;(zs/dispatch [:once :data/refresh :cfg :ttype])
-  ;(zs/dispatch [:once :data/refresh :cfg :host])
+  (zs/dispatch [::parse-filter-query (:q params)])
   (zs/dispatch [::refresh-list])
   (zv/render-screen
     :toolbar [zv/list-screen-toolbar
@@ -264,7 +288,7 @@
               :add-right [toolbar-right]
               :sort-ctls {},
               :search-box true,
-              :on-refresh [::refresh-list]]
+              :on-refresh [::refresh-list true]]
     :central [zv/list-interior
               :vpath [:view :trace :list]
               :data [:data/trace-list-list]

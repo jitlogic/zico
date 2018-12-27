@@ -8,21 +8,6 @@
     [clojure.string :as cs]))
 
 
-(zs/reg-event-fx
-  ::dtrace-tree
-  (fn [{:keys [db]} [_ uuid]]
-    (let [dtrace-uuid (get-in db [:data :trace :list uuid :dtrace-uuid])]
-      {:db (assoc-in db [:data :dtrace :tree] [])
-       :dispatch-n
-           [[:to-screen "mon/dtrace/tree"]
-            [:xhr/post "../../../data/trace/search" nil
-             {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
-             :on-success [:set [:data :dtrace :tree]],
-             :on-error zv/DEFAULT-SERVER-ERROR,
-             :map-by :uuid]
-            ]})))
-
-
 (defn dtrace-path-compare [p1 p2]
   (cond
     (empty? p1) -1
@@ -63,9 +48,6 @@
 (defn dtrace-toolbar-left []
   [:div.flexible.flex
    (zw/svg-button
-     :awe :left-big :blue "To trace list"
-     [:event/pop-dispatch zvmt/TRACE_HISTORY [:to-screen "mon/trace/list"]])
-   (zw/svg-button
      :awe :eye-off :light "Suppress details"
      [:toggle [:view :trace :list :suppress]]
      :opaque zvmt/SUPPRESS-DETAILS)
@@ -76,8 +58,16 @@
    ])
 
 
-(defn dtrace-tree []
+(defn dtrace-tree [{:keys [dtrace-uuid]}]
   "Displays distributed trace panel [:view :trace :dtrace]"
+  (zs/dispatch-sync
+    [:set [:data :dtrace :tree] []])
+  (zs/dispatch
+    [:xhr/post "../../../data/trace/search" nil
+     {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
+     :on-success [:set [:data :dtrace :tree]],
+     :on-error zv/DEFAULT-SERVER-ERROR,
+     :map-by :uuid])
   (zv/render-screen
     :hide-menu-btn true
     :toolbar [zv/list-screen-toolbar
