@@ -23,6 +23,7 @@
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
 
+
 (defn make-filter [db offset]
   (let [vroot (-> db :view :trace :list)
         text (-> vroot :search :text)
@@ -47,23 +48,26 @@
         deep-search (= true (-> db :view :trace :list :deep-search))]
     (merge {:limit 50, :offset offset, :deep-search deep-search, :node q, :qmi qmi})))
 
+
 (defn parse-filter-query [db [_ q]]
   (if q
-    (let [{{:keys [env app ttype min-duration tstart]} :qmi :keys [deep-search node]}
-          (read-string (js/LZString.decompressFromBase64 q))
-          fltr {:env {:selected env}, :app {:selected app}
+    (let [f (read-string (js/LZString.decompressFromBase64 q)),
+          {{:keys [env app ttype min-duration tstart host]} :qmi :keys [deep-search node]} f,
+          fltr {:env   {:selected env}, :app {:selected app}, :host {:selected host},
                 :ttype {:selected ttype}, :min-duration {:selected min-duration}
-                :time {:selected (if tstart (ctf/parse PARAM-FORMATTER tstart))}}
+                :time  {:selected (if tstart (ctf/parse PARAM-FORMATTER tstart))}}
           nodes (if (= :and (:type node)) (:args node) [node])
           text (first (for [n nodes :when (= :text (:type n))] (:text n)))
           attrs (into {} (for [n nodes :when (= :kv (:type n))] {(:key n), (:val n)}))]
-      (->
-        db
-        (assoc-in [:view :trace :list :filter] fltr)
-        (assoc-in [:view :trace :list :deep-search] deep-search)
-        (assoc-in [:view :trace :list :search :text] text)
-        (assoc-in [:view :trace :list :filter-attrs] attrs)
-        ))
+      (assoc-in
+        db [:view :trace :list]
+        (->
+          (get-in db [:view :trace :list])
+          (assoc-in [:filter] fltr)
+          (assoc-in [:deep-search] deep-search)
+          (assoc-in [:search :text] text)
+          (assoc-in [:filter-attrs] attrs)
+          )))
     db))
 
 
