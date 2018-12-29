@@ -258,3 +258,11 @@
     [:body {:class "body-container"}
      content]))
 
+
+(defn to-int [x]
+  (cond
+    (int? x) x
+    (string? x) (Integer/parseInt x)
+    (number? x) (.longValue x)
+    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
+

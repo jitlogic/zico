@@ -1,7 +1,7 @@
 (ns zico.trace
   (:require
     [taoensso.timbre :as log]
-    [zico.util :as zutl]
+    [zico.util :as zutl :refer [to-int]]
     [zico.objstore :as zobj]
     [clj-time.coerce :as ctc]
     [clj-time.format :as ctf])
@@ -31,20 +31,12 @@
     lst))
 
 
-(defn to-int [x]
-  (cond
-    (int? x) x
-    (string? x) (Integer/parseInt x)
-    (number? x) (.longValue x)
-    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
-
-
 (defn parse-qmi-node [q]
   (doto (QmiNode.)
-    (.setAppId (zobj/extract-uuid-seq (:app q)))
-    (.setEnvId (zobj/extract-uuid-seq (:env q)))
-    (.setHostId (zobj/extract-uuid-seq (:host q)))
-    (.setTypeId (zobj/extract-uuid-seq (:ttype q)))
+    (.setAppId (to-int (:app q 0)))
+    (.setEnvId (to-int (:env q 0)))
+    (.setHostId (to-int (:host q 0)))
+    (.setTypeId (to-int (:ttype q 0)))
     (.setMinDuration (to-int (:min-duration q 0)))
     (.setMaxDuration (to-int (:max-duration q Long/MAX_VALUE)))
     (.setMinCalls (to-int (:min-calls q 0)))
@@ -105,28 +97,19 @@
       (.setFullInfo (:full-info q false)))))
 
 
-(defn find-and-map-by-id [obj-store fexpr]
-  (into {} (for [uuid (zobj/find-obj obj-store fexpr)]
-             {(zobj/extract-uuid-seq uuid) uuid})))
-
-
-(defn trace-search [{:keys [obj-store tstore]}
+(defn trace-search [{:keys [tstore]}
                     {:keys [data]}]
   (let [query (parse-search-query data)
         limit (:limit data 100)
-        apps (find-and-map-by-id obj-store {:class :app})
-        envs (find-and-map-by-id obj-store {:class :env})
-        ttps (find-and-map-by-id obj-store {:class :ttype})
-        hids (find-and-map-by-id obj-store {:class :host})
         rslt (for [^TraceSearchResultItem r (.searchTraces tstore query)]
                {:uuid        (.getUuid r),
                 :chunk-id    (.getChunkId r)
                 :descr       (.getDescription r)
                 :duration    (.getDuration r)
-                :ttype       (ttps (.getTypeId r))
-                :app         (apps (.getAppId r))
-                :env         (envs (.getEnvId r))
-                :host        (hids (.getHostId r))
+                :ttype       (.getTypeId r)
+                :app         (.getAppId r)
+                :env         (.getEnvId r)
+                :host        (.getHostId r)
                 :tst         (.getTstamp r)
                 :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
                 :data-offs   (.getDataOffs r)
@@ -233,66 +216,67 @@
           (zobj/put-obj obj-store nobj))))))
 
 
-(defn get-host-attrs [{:keys [obj-store]} host-uuid]
+(defn get-host-attrs [{:keys [obj-store]} host-id]
   "Retrieves custom attributes for given host. Returns :ATTR -> 'value' map."
-  (let [host-attrs (zobj/find-and-get obj-store {:class :hostattr, :hostuuid host-uuid})]
+  (let [host-attrs (zobj/find-and-get obj-store {:class :hostattr, :hostid host-id})]
     (into {}
-          (for [{:keys [attruuid attrval]} host-attrs
-                :let [{attrname :name} (zobj/get-obj obj-store attruuid)]]
+          (for [{:keys [attrid attrval]} host-attrs
+                :let [{attrname :name} (zobj/get-obj obj-store {:class :attrdesc, :id attrid})]]
             {(keyword attrname) attrval}))))
 
 
-(defn update-host-attrs [{:keys [obj-store] :as app-state} host-uuid attrs]
+(defn update-host-attrs [{:keys [obj-store] :as app-state} host-id attrs]
   "Adds or updates host attributes. Missing but previously posted attributes are not removed."
-  (let [host-attrs (get-host-attrs app-state host-uuid)]
+  (let [host-attrs (get-host-attrs app-state host-id)]
     (doseq [[k v] attrs :when (not= v (host-attrs k))
             :let [adesc (get-or-new app-state :attrdesc (name k))]
-            :let [hattr (zobj/find-and-get-1 obj-store {:class :hostattr, :hostuuid host-uuid, :attruuid (:uuid adesc)})]]
-      (zobj/put-obj obj-store (merge (or hattr {}) {:class :hostattr, :hostuuid host-uuid,
-                                                    :attruuid (:uuid adesc), :attrval v})))))
+            :let [hattr (zobj/find-and-get-1 obj-store {:class :hostattr, :hostid host-id, :attrid (:id adesc)})]]
+      (println "ADD: " {:class :hostattr, :hostid host-id, :attrid (:id adesc), :attrval v})
+      (zobj/put-obj obj-store (merge (or hattr {}) {:class :hostattr, :hostid host-id,
+                                                    :attrid (:id adesc), :attrval v})))))
 
 
 (defn update-host-data [{:keys [obj-store] :as app-state}                 ; app-state
                          {{:keys [name app env attrs] :as data} :data :as req}
                          old-host]
-  (let [app-uuid (or (:uuid (get-or-new app-state :app app)) (:app old-host))
-        env-uuid (or (:uuid (get-or-new app-state :env env)) (:env old-host))
+  (let [app-id (or (:id (get-or-new app-state :app app)) (:app old-host))
+        env-id (or (:id (get-or-new app-state :env env)) (:env old-host))
         new-host (merge old-host
-                        (if app-uuid {:app app-uuid})
-                        (if env-uuid {:env env-uuid})
+                        (if app-id {:app app-id})
+                        (if env-id {:env env-id})
                         (if name {:name name}))
         new-host (if (not= old-host new-host) (zobj/put-obj obj-store new-host))]
-    (update-host-attrs app-state (:uuid new-host) attrs)
+    (update-host-attrs app-state (:id new-host) attrs)
     new-host))
 
 
 (defn register-host [{:keys [obj-store] :as app-state}                      ; app-state
                          {{:keys [name app env attrs]} :data} ; req
                          {:as hreg}]                          ; host-reg
-  (let [app-uuid (or (:uuid (get-or-new app-state :app app)) (:app hreg))
-        env-uuid (or (:uuid (get-or-new app-state :env env)) (:env hreg))]
+  (let [app-id (or (:id (get-or-new app-state :app app)) (:app hreg))
+        env-id (or (:id (get-or-new app-state :env env)) (:env hreg))]
     (cond
-      (nil? app-uuid) (zutl/rest-error (str "No such application: " app) 400)
-      (nil? env-uuid) (zutl/rest-error (str "No such environment:" env) 400)
+      (nil? app-id) (zutl/rest-error (str "No such application: " app) 400)
+      (nil? env-id) (zutl/rest-error (str "No such environment:" env) 400)
       :else
-      (let [hobj {:class :host, :app app-uuid, :env env-uuid, :name name,
+      (let [hobj {:class :host, :app app-id, :env env-id, :name name,
                   :comment "Auto-registered host.", :flags 0x01, :authkey (zutl/random-string 16 zutl/ALPHA-STR)}
             hobj (zobj/put-obj obj-store hobj)]
-        (update-host-attrs app-state (:uuid hobj) attrs)
-        (zutl/rest-result {:uuid (:uuid hobj), :authkey (:authkey hobj)} 201)))))
+        (update-host-attrs app-state (:id hobj) attrs)
+        (zutl/rest-result {:id (:id hobj), :authkey (:authkey hobj)} 201)))))
 
 
 (defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
-                      {{:keys [rkey akey name uuid]} :data :as req}]
+                      {{:keys [rkey akey name id]} :data :as req}]
   (try
     (if (and rkey name)
       (let [{:keys [regkey] :as hreg} (zobj/find-and-get-1 obj-store {:class :hostreg, :regkey rkey})
-            {:keys [authkey] :as host} (when uuid (zobj/find-and-get-1 obj-store {:class :host, :uuid uuid}))]
+            {:keys [authkey] :as host} (when id (zobj/find-and-get-1 obj-store {:class :host, :id id}))]
         (cond
-          (and akey (= akey authkey))
+          (and (string? akey) (= akey authkey))
           (do
             (update-host-data app-state req host)
-            (zutl/rest-result {:uuid (:uuid host), :authkey authkey}))
+            (zutl/rest-result {:id (:id host), :authkey authkey}))
           (some? host) (zutl/rest-error "Access denied." 401)
           (not (:host reg)) (zutl/rest-error "No such host.")
           (not= rkey regkey) (zutl/rest-error "Access denied." 401)
@@ -305,20 +289,20 @@
 
 
 (defn agent-session [{:keys [obj-store tstore]}        ; app-state
-                     {{:keys [uuid authkey]} :data}]        ; req
-  (if (and uuid authkey)
-    (if-let [obj (zobj/get-obj obj-store uuid)]
+                     {{:keys [id authkey]} :data}]        ; req
+  (if (and id authkey)
+    (if-let [obj (zobj/get-obj obj-store {:class :host, :id id})]
       (if (= (:authkey obj) authkey)
-        (zutl/rest-result {:session (.getSession ^TraceStore tstore uuid)})
-        (zutl/rest-error-logged "Access denied." 401 uuid authkey))
-      (zutl/rest-error-logged "No such agent." 400 uuid authkey))
-    (zutl/rest-error-logged "Missing arguments." 400 uuid authkey)))
+        (zutl/rest-result {:session (.getSession ^TraceStore tstore id)})
+        (zutl/rest-error-logged "Access denied." 401 id authkey))
+      (zutl/rest-error-logged "No such agent." 400 id authkey))
+    (zutl/rest-error-logged "Missing arguments." 400 id authkey)))
 
 
-(defn submit-agd [{:keys [tstore]} agent-uuid session-uuid data]
+(defn submit-agd [{:keys [tstore]} agent-id session-uuid data]
   (try
     ; TODO weryfikacja argumentów
-    (.handleAgentData tstore agent-uuid session-uuid data)
+    (.handleAgentData tstore agent-id session-uuid data)
     (zutl/rest-result {:result "Submitted"} 202)
     (catch MissingSessionException _
       (zutl/rest-error "Missing session UUID header." 412))
@@ -328,15 +312,15 @@
       (zutl/rest-error "Internal error." 500))))
 
 
-(defn submit-trc [{:keys [obj-store tstore]} agent-uuid session-uuid trace-uuid data]
+(defn submit-trc [{:keys [obj-store tstore]} agent-id session-uuid trace-uuid data]
   (try
     ; TODO weryfikacja argumentów
-    (if-let [agent (zobj/get-obj obj-store agent-uuid)]
+    (if-let [agent (zobj/get-obj obj-store {:class :host, :id agent-id})]
       (do
-        (.handleTraceData tstore agent-uuid session-uuid trace-uuid data
+        (.handleTraceData tstore agent-id session-uuid trace-uuid data
                           (doto (ChunkMetadata.)
-                            (.setAppId (zobj/extract-uuid-seq (:app agent)))
-                            (.setEnvId (zobj/extract-uuid-seq (:env agent)))))
+                            (.setAppId (:app agent))
+                            (.setEnvId (:env agent))))
         (zutl/rest-result {:result "Submitted"} 202))
       (zutl/rest-error "No such agent." 401))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
@@ -357,10 +341,10 @@
         (when-not (get @data tn)
           (reset!
             data
-            (into {} (for [{:keys [name uuid flags] :as r} (zobj/find-and-get obj-store {:class :ttype})]
-                       {name {:tid (zobj/extract-uuid-seq uuid), :uuid uuid, :flags flags}}))))
+            (into {} (for [{:keys [name id flags] :as r} (zobj/find-and-get obj-store {:class :ttype})]
+                       {name {:tid id, :id id, :flags flags}}))))
         (when-not (get @data tn)
-          (let [{:keys [uuid flags] :as tt} (zobj/put-obj
+          (let [{:keys [id flags] :as tt} (zobj/put-obj
                      obj-store
                      {:class   :ttype,
                       :name tn,
@@ -368,7 +352,7 @@
                       :glyph   "awe/cube",
                       :flags   1,
                       :comment "Auto-registered. Please edit."})
-                ti {:tid (zobj/extract-uuid-seq uuid), :uuid uuid, :flags flags}]
+                ti {:tid id, :id id, :flags flags}]
             (swap! data assoc tn ti)))
         (get @data tn)))))
 
@@ -378,10 +362,10 @@
     (reify
       TraceTypeResolver
       (resolve [_ tn]
-        (let [{:keys [tid uuid flags] :as tr} (trace-id-translate obj-store data tn)]
+        (let [{:keys [tid id flags] :as tr} (trace-id-translate obj-store data tn)]
           (when (= 0 (bit-and flags 0x08))
-            (log/info "Marking trace type" uuid "as used.")
-            (let [rec (zobj/get-obj obj-store uuid)
+            (log/info "Marking trace type" id "as used.")
+            (let [rec (zobj/get-obj obj-store {:class :ttype, :id id})
                   flags (bit-or (:flags rec) 0x08)]
               (zobj/put-obj obj-store (assoc rec :flags flags))
               (swap! data assoc tn (assoc tr :flags flags))))
@@ -416,9 +400,10 @@
           nmt (doall (for [n (range (:maint-threads new-conf 2))]
                        (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))
           postproc (TemplatingMetadataProcessor.)
-          trace-descs (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:uuid obj), (:descr obj)}))]
+          trace-descs {}                                       ; TODO (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:id obj), (:descr obj)}))
+          ]
       ; Set up template descriptions for rendering top level DESC field;
-      (doseq [[uuid descr] trace-descs :when uuid :when descr :let [id (zobj/extract-uuid-seq uuid)]]
+      (doseq [[id descr] trace-descs :when id :when descr :let [id id]]
         (.putTemplate postproc id descr))
       ; Stop old maintenance threads (new ones are already started)
       (doseq [t maint-threads]

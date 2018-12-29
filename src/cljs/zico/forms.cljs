@@ -74,34 +74,34 @@
     (assoc-in db (conj path :text) text)))
 
 
-(defn form-edit-open-fx [{:keys [db]} [_ vpath dpath url uuid fdefs]]
-  {:db (let [obj (get-in db (concat dpath [uuid]))]
-         (assoc-in db (concat vpath [:edit]) {:uuid uuid, :form (form-parse fdefs obj)}))
+(defn form-edit-open-fx [{:keys [db]} [_ vpath dpath url id fdefs]]
+  {:db (let [obj (get-in db (concat dpath [id]))]
+         (assoc-in db (concat vpath [:edit]) {:id id, :form (form-parse fdefs obj)}))
    :dispatch [:to-screen url]})
 
 
 (defn form-edit-new-fx [{:keys [db]} [_ vpath dpath url nobj fdefs]]
-  (let [nobj (assoc nobj :uuid :new)]
+  (let [nobj (assoc nobj :id :new)]
     {:db (-> db
              (assoc-in (concat dpath [:new]) nobj)
-             (assoc-in (concat vpath [:edit]) {:uuid :new, :form (form-parse fdefs nobj)}))
+             (assoc-in (concat vpath [:edit]) {:id :new, :form (form-parse fdefs nobj)}))
      :dispatch [:to-screen url]}))
 
 
 (defn form-edit-commit-fx [{:keys [db]} [_ vpath dpath url xhr-url fdefs on-refresh]]
-  (let [{:keys [uuid form]} (get-in db (concat vpath [:edit]))
-        orig (get-in db (concat dpath [uuid]))
+  (let [{:keys [id form]} (get-in db (concat vpath [:edit]))
+        orig (get-in db (concat dpath [id]))
         newv (merge orig (form-unparse fdefs form))]
     (merge
       {:db (-> db
-               (assoc-in (concat dpath [uuid]) newv)
+               (assoc-in (concat dpath [id]) newv)
                (assoc-in (concat vpath [:edit]) nil))
        :dispatch-n [[:to-screen url]
-                    (if (= :new uuid)
-                      [:xhr/post xhr-url nil (dissoc newv :uuid)
+                    (if (= :new id)
+                      [:xhr/post xhr-url nil (dissoc newv :id)
                        :on-success on-refresh
                        :on-error [:dissoc dpath :new]]
-                      [:xhr/put (str xhr-url "/" uuid) nil newv])]})))
+                      [:xhr/put (str xhr-url "/" id) nil newv])]})))
 
 
 (defn form-edit-cancel-fx [{:keys [db]} [_  vpath dpath url]]
@@ -116,7 +116,7 @@
    :dispatch
        [:xhr/get (str "../../../data/" (name sectn) "/" (name view))
         [:data sectn view] nil,
-        :map-by :uuid]})
+        :map-by :id]})
 
 
 (zs/reg-event-fx :data/refresh zorka-refresh-data)
@@ -143,7 +143,7 @@
     [zw/select
      :getter (zs/subscribe [:get (concat vpa [:text])]),
      :setter [:form/set-text vpa (or type :nil)],
-     :type (or type :nil), :rsub rsub, :rvfn :uuid, :rnfn rnfn, :valid? (or valid? true)]))
+     :type (or type :nil), :rsub rsub, :rvfn :id, :rnfn rnfn, :valid? (or valid? true)]))
 
 
 (defmethod render-widget :input [vpath {:keys [attr type valid?]}]
@@ -233,7 +233,7 @@
 
 
 (defn render-btns [{:keys [vpath dpath fdefs url xhr-url] :as cfg}
-                   {:keys [uuid name] :as obj}]
+                   {:keys [id name] :as obj}]
   [:div.btns
    (zw/svg-button
      :awe :clone :text "Clone item"
@@ -247,23 +247,23 @@
       :buttons
       [{:id :ok, :text "Delete", :icon [:awe :ok :green]
         :on-click [:xhr/delete
-                   (str xhr-url "/" uuid) nil nil
-                   :on-success [:dissoc dpath uuid]
+                   (str xhr-url "/" id) nil nil
+                   :on-success [:dissoc dpath id]
                    :on-error zv/DEFAULT-SERVER-ERROR]}
        {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]])
    (zw/svg-button
      :awe :edit :text "Edit item"
      [:form/edit-open vpath dpath
-      (str url "/edit") uuid fdefs])])
+      (str url "/edit") id fdefs])])
 
 
 (defn render-item [detail? &{:keys [vpath dpath fdefs url list-col1 list-col2 xhr-url]
                      :or {list-col1 :name, list-col2 :comment} :as cfg}]
-  (fn [{:keys [uuid glyph] :as obj}]
-    ^{:key uuid}
+  (fn [{:keys [id glyph] :as obj}]
+    ^{:key id}
     [(if detail? :div.hl :div)
      [:div.itm
-      {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) uuid])}
+      {:on-click (zs/to-handler [:toggle (concat vpath [:selected]) id])}
       (when glyph
         (let [[f i c] (zu/glyph-parse glyph glyph)]
           [:div.ci (zw/svg-icon f i c)]))
@@ -297,7 +297,7 @@
                                       [:form/edit-new vpath dpath
                                        (str url "/edit") template fdefs])])]
         :central [zv/list-interior :vpath vpath, :data data, :class class
-                  :render-item (render-item false :vpath vpath, :list-col1 list-col1, :list-col2 list-col2)
+                  :render-item (render-item false :vpath vpath, :dpath dpath, :list-col1 list-col1, :list-col2 list-col2, :xhr-url xhr-url, :url url)
                   :render-details (render-item true :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)
                   ]))))
 

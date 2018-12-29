@@ -3,89 +3,11 @@
   (:require
     [clojure.set :as cs]
     [zico.util :as zutl]
-    [zico.schema :refer [RE-UUID]]
     [clojure.java.jdbc :as jdbc]
     [taoensso.timbre :as log])
-  (:import (java.util Random)
-           (java.util.concurrent.atomic AtomicLong)
-           (org.apache.tomcat.dbcp.dbcp BasicDataSource)
+  (:import (org.apache.tomcat.dbcp.dbcp BasicDataSource)
            (org.flywaydb.core Flyway)
            (java.io File)))
-
-
-(defonce SEQ-NUM (AtomicLong.))
-(defonce NODE-NUM 1)
-(defonce RAND-NUM (Random.))
-(defonce RUN-ID (bit-and (.nextInt RAND-NUM) 0xffff))
-
-; UUID format for database records
-; 21c00000-OONN-UUUU-nnnn-Vttttttttttt
-; t - timestamp (millisecond precision)
-; V - UUID version (currently 0)
-; n - sequential number (modulo 64k)
-; N - node number
-; U - user ID (one, not UUID, 0 for system user)
-; O - object type
-; x - random number
-
-
-(defn gen-uuid
-  ([oid uid]
-   (gen-uuid oid uid RUN-ID))
-  ([oid uid rid]
-    (gen-uuid oid uid rid (.getAndIncrement SEQ-NUM)))
-  ([oid uid rid seq-num]
-   (let [t (zutl/cur-time)]
-     (format
-       "21c0%04x-%02x%02x-%04x-%04x-%012x"
-       rid
-       oid
-       NODE-NUM
-       uid
-       seq-num
-       (bit-and t 0xffffffffffff)
-       ))))
-
-
-(defn extract-uuid-seq [id]
-  (cond
-    (string? id)
-    (when-let [[_ _ _ _ seq _] (re-matches RE-UUID id)]
-      (Long/parseLong seq 16))
-    (int? id) id
-    :else 0))
-
-
-(def OBJ-TYPES
-  {:ttype    0x01
-   :app      0x02
-   :env      0x03
-   :attrdesc 0x04
-   :host     0x05
-   :hostattr 0x06
-   :hostreg  0x07
-   :user     0x08
-   :groups   0x09
-   :access   0x0a
-   :props    0x0f
-   })
-
-
-(def OBJ-IDS (into {} (for [[idt _] OBJ-TYPES] {idt (AtomicLong.)})))
-
-
-(defn last-seq-nums [data]
-  (let [seq-map (group-by :class (vals data))]
-    (into {}
-          (for [[class recs] seq-map]
-            {class (reduce max (map (comp extract-uuid-seq :uuid) recs))}))))
-
-
-(defn setup-obj-ids [data id-min]
-  (doseq [[_ counter] OBJ-IDS] (.set counter 0))
-  (doseq [[class seq-num] (last-seq-nums data)]
-    (.set (OBJ-IDS class) (max seq-num id-min))))
-
 
 (defn jdbc-datasource [{:keys [subprotocol subname host port dbname user password classname] :as conf}]
   "Configures and returns pooled data source."
@@ -142,24 +64,12 @@
     (.migrate))
   ds)
 
-(defn jdbc-read-and-map [conn]
-  "Reads configuration tables and maps them into "
-  (into
-    {}
-    (for [table (keys OBJ-TYPES)]
-      (into
-        {}
-        (for [r (jdbc/query conn [(str "select * from " (zutl/to-str table))])]
-          {(:uuid r) (assoc r :class table)})))))
-
 
 (defprotocol ObjectStore
-  (put-obj   [this obj])
-  (get-obj   [this uuid])
-  (del-obj   [this uuid])
-  (find-obj  [this opts])
-  (get-tstamps [this])
-  (refresh    [this]))
+  (put-obj     [this obj])
+  (get-obj     [this attrs])
+  (del-obj     [this attrs])
+  (find-obj    [this attrs]))
 
 
 (defprotocol ManagedStore
@@ -167,89 +77,60 @@
   (restore [this path name]))
 
 
-(defn- obj-matcher [conditions]
-  (fn [[uuid obj]]
-    (every?
-      #(let [[k cv] %]
-         (cond
-           (set? cv)
-           (let [ov (k obj)]
-             (when (set? ov)
-               (not (empty? (cs/intersection cv ov)))))
-           :else
-           (= (k obj) cv)))
-      conditions)))
+(defn jdbc-store [zico-db]
+  (reify
+    ObjectStore
+    (put-obj [_ {:keys [class id] :as obj}]
+      (if (contains? obj :id)
+        (do (jdbc/update! zico-db class (dissoc obj :id :class) ["id = ?" id]) obj)
+        (let [x (jdbc/insert! zico-db class (dissoc (assoc obj :id id) :class))]
+          (assoc obj :id (second (first (first x)))))))
+    (get-obj [_ {:keys [class id]}]
+      (assoc
+        (first (jdbc/query zico-db [(str " select * from " (zutl/to-str class) " where id = ?") id]))
+        :class class))
+    (del-obj [_ {:keys [class id]}]
+      (jdbc/delete! zico-db class ["id = ?" id]))
+    (find-obj [_ {:keys [class] :as attrs}]
+      (let [qs (for [[k v] (dissoc attrs :class)] [(str (name k) " = ? ") v])
+            qa (clojure.string/join " and " (map first qs))
+            q0 (if (empty? qa)
+                 (str "select * from " (name class))
+                 (str "select * from " (name class) " where " qa))]
+        (for [r (jdbc/query zico-db (into [q0] (doall (map second qs))))]
+          (:id r))))
+    ManagedStore
+    (backup [_ path]
+      (try
+        (let [fname (str "conf-" (zutl/str-time-yymmdd-hhmmss-sss) ".sql")
+              fpath (str (or path "data/backup") "/" fname)]
+          (log/info "Backing up configuration to: " fpath)
+          (doall (jdbc/query zico-db [(str "script drop to '" fpath "'")])))
+        (catch Exception e
+          (log/error e "Error backing up"))))
+    (restore [_ path fname]
+      (let [fpath (str (or path "data/backup") "/" fname)]
+        (doall (jdbc/db-do-commands zico-db [(str "runscript from '" fpath "'")]))))
+    ))
 
 
-; TODO implement non-caching object store implementation
-(defn jdbc-caching-store [zico-db]
-  (let [data (atom {}), tstamps (atom {})]
-    (reify
-      ObjectStore
-      (put-obj [_ {:keys [uuid class] :as obj}]
-        (when-not (and (keyword? class) (OBJ-TYPES class))
-          (throw (RuntimeException. (str "Trying to save invalid object: " obj))))
-        (let [seqnum (.incrementAndGet (OBJ-IDS class))
-              uuid (or uuid (gen-uuid (OBJ-TYPES class) 0 0 seqnum))]
-          (if (contains? obj :uuid)
-            (jdbc/update! zico-db class (dissoc obj :uuid :class) ["uuid = ?" uuid])
-            (jdbc/insert! zico-db class (dissoc (assoc obj :uuid uuid) :class)))
-          (swap! tstamps assoc class (System/currentTimeMillis))
-          (swap! data assoc uuid (assoc obj :uuid uuid))
-          (assoc obj :uuid uuid)))
-      (get-obj [_ uuid]
-        (let [obj (get @data uuid)] obj))
-      (del-obj [_ uuid]
-        (let [r (get @data uuid)]
-          (when r
-            (jdbc/delete! zico-db (:class r) ["uuid = ?" uuid])
-            (swap! data dissoc uuid)
-            (swap! tstamps assoc (:class r) (System/currentTimeMillis)))))
-      (find-obj [_ opts]
-        (let [data @data]
-          (map first (filter (obj-matcher opts) data))))
-      (get-tstamps [_]
-        @tstamps)
-      (refresh [_]
-        (reset! data (jdbc-read-and-map zico-db))
-        (reset! tstamps (into {} (for [c (into #{} (map :class (vals @data)))] {c (System/currentTimeMillis)})))
-        (setup-obj-ids @data 0x1000))
-      ManagedStore
-      (backup [_ path]
-        (try
-          (let [fname (str "conf-" (zutl/str-time-yymmdd-hhmmss-sss) ".sql")
-                fpath (str (or path "data/backup") "/" fname)]
-            (log/info "Backing up configuration to: " fpath)
-            (doall (jdbc/query zico-db [(str "script drop to '" fpath "'")])))
-          (catch Exception e
-            (log/error e "Error backing up"))))
-      (restore [_ path fname]
-        (let [fpath (str (or path "data/backup") "/" fname)]
-          (doall (jdbc/db-do-commands zico-db [(str "runscript from '" fpath "'")]))))
-      )))
+(defn find-and-get [obj-store {:keys [class] :as attrs}]
+  (for [id (find-obj obj-store attrs)]
+    (get-obj obj-store {:class class, :id id})))
 
 
-(defn find-and-get [obj-store opts]
-  (for [uuid (find-obj obj-store opts)]
-    (get-obj obj-store uuid)))
+(defn find-and-get-1 [obj-store attrs]
+  (first (find-and-get obj-store attrs)))
 
 
-(defn find-and-get-1 [obj-store opts]
-  (first (find-and-get obj-store opts)))
+(defn merge-initial-data [object-store class overwrite data]
+  (doseq [{:keys [name] :as d} data,
+          :let [r (find-and-get-1 object-store {:class class, :name name})]]
+    (cond
+      (nil? r) (put-obj object-store (assoc d :class class))
+      overwrite (put-obj object-store (merge r d))
+      :else nil)))
 
-
-(defn get-by-uuid-or-prefix [obj-store class uuid prefix]
-  (let [rslt (or (get-obj obj-store uuid)
-                 (first (find-and-get obj-store {:name prefix})))]
-    (if (= class (:class rslt)) rslt)))
-
-
-(defn merge-initial-data [zico-db class overwrite data]
-  (let [all (group-by :uuid (jdbc/query zico-db [(str "select * from " (zutl/to-str class))]))]
-    (doseq [{:keys [uuid] :as d} data,
-            :let [r (first (all uuid))]]
-      (when (or (nil? r) overwrite)
-        (jdbc/insert! zico-db class d)))))
 
 (defn slurp-init-file [^String homedir class]
   (try
@@ -266,12 +147,10 @@
 
 (def INIT-CLASSES [:app :env :hostreg :ttype :user])
 
-(defn load-initial-data [zico-db {:keys [init-source init-mode]} homedir]
+(defn load-initial-data [obj-store {:keys [init-source init-mode]} homedir]
   (doseq [class INIT-CLASSES
           :let [data (concat
                        (if (#{:internal :all} init-source) (slurp-init-classpath class))
                        (if (#{:external :all} init-source) (slurp-init-file homedir class)))]]
     (when-not (= init-mode :skip)
-      (merge-initial-data zico-db class (= init-mode :overwrite) data)))
-  )
-
+      (merge-initial-data obj-store class (= init-mode :overwrite) data))))

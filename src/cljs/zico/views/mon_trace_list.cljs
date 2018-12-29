@@ -167,11 +167,11 @@
         (cons
           {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
            :on-click [:do [:set path nil] [::refresh-list true]]}
-          (for [{:keys [uuid name] :as r} (sort-by :name (vals (zu/deref? data)))
+          (for [{:keys [id name] :as r} (sort-by :name (vals (zu/deref? data)))
                 :when ((or filter-fn identity) r)]
-            {:key      uuid, :text name, :icon (icon-fn r),
-             :on-click [:do [:set path uuid] [::refresh-list true]]
-             :state    (if (= uuid @selected) :selected :normal)
+            {:key      id, :text name, :icon (icon-fn r),
+             :on-click [:do [:set path id] [::refresh-list true]]
+             :state    (if (= id @selected) :selected :normal)
              }))))))
 
 
@@ -207,8 +207,8 @@
       (let [filter @filter, search @search, fattrs @fattrs,
             f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt]
                                  [:host "Host: " :sitemap] [:time "Time: " :calendar]]
-                     :let [uuid (get-in filter [k :selected])] :when uuid]
-                 {:key      (str k), :text (str lbl (or (get-in @cfg [k uuid :name]) uuid)), :icon [:awe ic :red],
+                     :let [id (get-in filter [k :selected])] :when id]
+                 {:key      (str k), :text (str lbl (or (get-in @cfg [k id :name]) id)), :icon [:awe ic :red],
                   :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list true]]})
             f2 (when-not (empty? (:text search))
                  [{:key      ":text", :text (str "Search: " (zu/ellipsis (:text search) 32)), :icon [:awe :search :red],
@@ -284,6 +284,11 @@
   "Trace seach/listing panel: [:view :trace :list]"
   (zs/dispatch [::parse-filter-query (:q params)])
   (zs/dispatch [::refresh-list])
+  (zs/dispatch [:do
+                [:once [:data/refresh :cfg :ttype]]
+                [:once [:data/refresh :cfg :app]]
+                [:once [:data/refresh :cfg :env]]
+                [:once [:data/refresh :cfg :host]]])
   (zv/render-screen
     :toolbar [zv/list-screen-toolbar
               :vpath [:view :trace :list]
@@ -299,6 +304,7 @@
               :render-item (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)
               :render-details (zvmt/render-trace-list-detail-fn true true)
               :id "zorka-traces",
+              :id-attr :uuid,
               :class "trace-list-list",
               :on-scroll [::scroll-list],
               :on-click (zvmt/trace-list-click-handler-fn :trace :list)]))

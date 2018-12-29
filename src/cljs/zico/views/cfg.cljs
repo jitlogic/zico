@@ -56,7 +56,7 @@
     {:attr :glyph, :label "Icon"}))
 
 (def APP-OBJ-TEMPLATE
-  {:uuid :new
+  {:id :new
    :class :app
    :name "newapp"
    :glyph "awe/cube"
@@ -78,7 +78,7 @@
 
 
 (def ENV-OBJ-TEMPLATE
-  {:uuid :new
+  {:id :new
    :class :env
    :name "newenv"
    :comment "New Environment"})
@@ -91,7 +91,7 @@
 ; Config: Hosts
 
 (def HOST-TEMPLATE
-  {:uuid :new, :class :host, :name "newhost", :comment "New Host"})
+  {:id :new, :class :host, :name "newhost", :comment "New Host"})
 
 (def HOST-FDEFS
   (zf/validated-fdefs
@@ -112,7 +112,7 @@
 ; Config: Trace Types
 
 (def TTYPE-TEMPLATE
-  {:uuid :new, :class :ttype, :name "newtype",
+  {:id :new, :class :ttype, :name "newtype",
    :comment "New trace type", :glyph "awe/cube",
    :descr "FIXME: ${SOME_ATTR} -> ${OTHER_ATTR}"})
 
@@ -144,7 +144,7 @@
      :widget :select, :rsub :data/cfg-env-list}))
 
 (def HOSTREG-OBJ-TEMPLATE
-  {:uuid :new, :class :hostreg, :name "newreg", :comment "New Registration"})
+  {:id :new, :class :hostreg, :name "newreg", :comment "New Registration"})
 
 
 (let [cfo (cfg-object :hostreg "Registration" HOSTREG-FDEFS HOSTREG-OBJ-TEMPLATE)]
@@ -164,7 +164,7 @@
     {:attr :password, :label "Password"}))
 
 (def USER-OBJ-TEMPLATE
-  {:uuid :new, :class :user, :name "newuser"})
+  {:id :new, :class :user, :name "newuser"})
 
 (let [cfo (cfg-object :user "User" USER-FDEFS USER-OBJ-TEMPLATE)]
   (def user-list (:list cfo))

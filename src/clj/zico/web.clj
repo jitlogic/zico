@@ -32,7 +32,7 @@
     (include-js "/js/app.js")))
 
 
-(def OBJ-CLASSES (into #{} (map name (keys zobj/OBJ-TYPES))))
+(def OBJ-CLASSES #{:app :env :host :ttype :hostreg :user})
 
 (defn wrap-rest-response [f]
   (fn [{:keys [headers] :as req}]
@@ -97,13 +97,13 @@
 
     (POST "/agent/submit/agd" {:keys [headers body]}
       (ztrc/submit-agd app-state
-                       (get headers "x-zorka-agent-uuid")
+                       (get headers "x-zorka-agent-id")
                        (get headers "x-zorka-session-uuid")
                        (NetkitUtil/toByteArray body)))
 
     (POST "/agent/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc app-state
-                       (get headers "x-zorka-agent-uuid")
+                       (get headers "x-zorka-agent-id")
                        (get headers "x-zorka-session-uuid")
                        (get headers "x-zorka-trace-uuid")
                        (NetkitUtil/toByteArray body)))))
@@ -123,29 +123,29 @@
       (POST "/data/trace/search" req
         (ztrc/trace-search app-state req)))
 
-    (GET "/data/trace/:uuid/detail" req
-      (let [^String uuid (-> req :params :uuid)]
-        (if (.contains uuid "_")
-          (ztrc/trace-detail-tid app-state 1, false uuid)
-          (ztrc/trace-detail app-state 1 uuid))))
+    (GET "/data/trace/:id/detail" req
+      (let [^String id (-> req :params :id)]
+        (if (.contains id "_")
+          (ztrc/trace-detail-tid app-state 1, false id)
+          (ztrc/trace-detail app-state 1 id))))
 
-    (GET "/data/trace/:uuid/tree" req
-      (let [^String uuid (-> req :params :uuid)]
-        (if (.contains uuid "_")
-          (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false uuid)
-          (ztrc/trace-detail app-state Integer/MAX_VALUE uuid))))
+    (GET "/data/trace/:id/tree" req
+      (let [^String id (-> req :params :id)]
+        (if (.contains id "_")
+          (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false id)
+          (ztrc/trace-detail app-state Integer/MAX_VALUE id))))
 
-    (GET "/data/trace/:uuid/stats" req
-      (let [^String uuid (-> req :params :uuid)]
-        (ztrc/trace-stats app-state uuid)))
+    (GET "/data/trace/:id/stats" req
+      (let [^String id (-> req :params :id)]
+        (ztrc/trace-stats app-state id)))
 
     (GET "/data/cfg" _
       (zutl/rest-result
-        (zobj/get-tstamps obj-store)))
+        {}))
 
     ; Configuration data API
     (GET "/data/cfg/:class" [class]
-      (if (OBJ-CLASSES class)
+      (if (OBJ-CLASSES (keyword class))
         (let [data (zobj/find-and-get obj-store {:class (keyword class)})]
           (zutl/rest-result data))
         (zutl/rest-error "Resource class not found." 404)))
@@ -156,25 +156,27 @@
           (zobj/put-obj obj-store (assoc data :class (keyword class)))
           (zutl/rest-error "Resource class not found." 404))))
 
-    (GET "/data/cfg/:class/:uuid" [class uuid]
+    (GET "/data/cfg/:class/:id" [class id]
       (if (OBJ-CLASSES class)
-        (if-let [obj (zobj/get-obj obj-store uuid)]
+        (if-let [obj (zobj/get-obj obj-store {:class (keyword class), :id id})]
           (zutl/rest-result obj))
         (zutl/rest-error "Resource class not found." 404)))
 
     (REST
-      (PUT "/data/cfg/:class/:uuid" {data :data {:keys [class uuid]} :params}
+      (PUT "/data/cfg/:class/:id" {data :data {:keys [class id]} :params}
         (if (OBJ-CLASSES class)
-          (if-let [obj (zobj/get-obj obj-store uuid)]
+          (if-let [obj (zobj/get-obj obj-store {:class (keyword class), :id id})]
             (zutl/rest-result (zobj/put-obj obj-store (merge obj data)))
             (zutl/rest-error "Resource not found." 404)))))
 
     (REST
-      (DELETE "/data/cfg/:class/:uuid" {{:keys [class uuid]} :params}
-        (when (OBJ-CLASSES class)
-          (let [obj (zobj/get-obj obj-store uuid)]
+      (DELETE "/data/cfg/:class/:id" {{:keys [class id]} :params}
+        (when (OBJ-CLASSES (keyword class))
+          (let [qry {:class (keyword class), :id (zutl/to-int id)}
+                _ (println "qry" qry)
+                obj (zobj/get-obj obj-store qry)]
             (if obj
-              (zutl/rest-result (zobj/del-obj obj-store uuid))
+              (zutl/rest-result (zobj/del-obj obj-store qry))
               (zutl/rest-error "Object not found." 404))))))
 
     ; User info

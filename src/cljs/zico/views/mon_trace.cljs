@@ -107,9 +107,9 @@
                  [:div.f (str "(" file ":" line ")")]])]])
 
 (defn ttype-get [ttype]
-  (let [{:keys [glyph name uuid]} (get @CFG-TTYPES ttype {:glyph "awe/paw#text", :name "<unknown>"})
+  (let [{:keys [glyph name id]} (get @CFG-TTYPES ttype {:glyph "awe/paw#text", :name "<unknown>"})
              [_ f g c] (re-matches #"(.+)/([^#]+)#?(.*)?" glyph)]
-    {:family (keyword f), :glyph (keyword g), :name name, :uuid uuid, :color (keyword c)}))
+    {:family (keyword f), :glyph (keyword g), :name name, :id id, :color (keyword c)}))
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
   (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host ttype app env]
@@ -119,46 +119,46 @@
      {:data-trace-uuid uuid}
      [:div.flex-on-medium-or-more
       [:div tstamp]
-      (let [{:keys [family glyph color name uuid]} (ttype-get ttype)]
+      (let [{:keys [family glyph color name id]} (ttype-get ttype)]
         [:div.flex
          [:div.i.lpad.rpad
-          (if (and enable-filters (some? uuid))
+          (if (and enable-filters (some? id))
             (zw/svg-button
               family glyph color (str "Show only " name " traces.")
-              [:do [:set [:view :trace :list :filter :ttype :selected] uuid]
+              [:do [:set [:view :trace :list :filter :ttype :selected] id]
                [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon family glyph color :opaque false))]
          [:div.ellipsis name]])
-      (let [{:keys [name uuid]} (get @CFG-APPS app {:name "<unknown>"})]
+      (let [{:keys [name id]} (get @CFG-APPS app {:name "<unknown>"})]
         [:div.flex
          [:div.i.lpad.rpad
-          (if (and enable-filters uuid)
+          (if (and enable-filters id)
             (zw/svg-button
               :awe :cubes :yellow (str "Show only " name " application.")
-              [:do [:set [:view :trace :list :filter :app :selected] uuid]
+              [:do [:set [:view :trace :list :filter :app :selected] id]
                [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon :awe :cubes :yellow :opaque false))]
          [:div.ellipsis name]])
-      (let [{:keys [name uuid]} (get @CFG-ENVS env {:name "<unknown>"})]
+      (let [{:keys [name id]} (get @CFG-ENVS env {:name "<unknown>"})]
         [:div.flex
          [:div.i.lpad.rpad
-          (if (and enable-filters uuid)
+          (if (and enable-filters id)
             (zw/svg-button
               :awe :sitemap :green (str "Show only " name " environment.")
-              [:do [:set [:view :trace :list :filter :env :selected] uuid]
+              [:do [:set [:view :trace :list :filter :env :selected] id]
                [:zico.views.mon-trace-list/refresh-list true]])
             (zw/svg-icon :awe :sitemap :green :opaque false))]
          [:div.ellipsis name]])]
-     (let [{:keys [name uuid]} (get @CFG-HOSTS host {:name "<unknown host>"})]
+     (let [{:keys [name id]} (get @CFG-HOSTS host {:name "<unknown host>"})]
        [:div.flex
         [:div.lpad.rpad
-         (if (and enable-filters uuid)
+         (if (and enable-filters id)
            (zw/svg-button
              :awe :desktop :blue (str "Show only " name " host.")
-             [:do [:set [:view :trace :list :filter :host :selected] uuid]
+             [:do [:set [:view :trace :list :filter :host :selected] id]
               [:zico.views.mon-trace-list/refresh-list true]])
            (zw/svg-icon :awe :desktop :text))]
-        [:div.ellipsis (str name "   (" uuid ")")]])
+        [:div.ellipsis (str name "   (" id ")")]])
      [:div.c-light.bold.wrapping descr]
      [:div.c-darker.ellipsis result]
      [:div.c-light.ellipsis (str method args)]

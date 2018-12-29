@@ -88,7 +88,6 @@
       :else
       (try
         (jdbc/execute! zico-db ["RUNSCRIPT FROM ?" (.getPath bkpf)])
-        (zobj/refresh obj-store)
         (zutl/rest-result
           {:id id})
         (catch Exception e
@@ -137,6 +136,6 @@
        :mem-used   (.getUsed (.getHeapMemoryUsage memory))
        :mem-max    (.getMax (.getHeapMemoryUsage memory))
        :home-dir   (:home-dir conf)
-       :tstamps    (zobj/get-tstamps obj-store)
+       :tstamps    {}                                       ; TODO timestamps
        })))
 

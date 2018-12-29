@@ -47,10 +47,9 @@
 
 (defn  new-app-state [old-state conf]
   (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
-        obj-store (zobj/jdbc-caching-store zico-db)]
+        obj-store (zobj/jdbc-store zico-db)]
     (zobj/jdbc-migrate zico-db)
-    (zobj/load-initial-data zico-db (:zico-db conf) (:home-dir conf))
-    (zobj/refresh obj-store)
+    (zobj/load-initial-data obj-store (:zico-db conf) (:home-dir conf))
     (->
       {:conf conf, :zico-db zico-db, :obj-store obj-store,
        :session-store (or (:session-store old-state) (ring.middleware.session.memory/memory-store))}

@@ -59,7 +59,7 @@
           )))))
 
 
-(defn list-interior [&{:keys [vpath data id id-attr on-scroll on-click class render-item render-details] :or {id-attr :uuid}}]
+(defn list-interior [&{:keys [vpath data id id-attr on-scroll on-click class render-item render-details] :or {id-attr :id}}]
   "Rennders generic list interior. To be used as :central part of screens."
   (let [data (if (vector? data) (zs/subscribe data) data)
         selected (zs/subscribe [:get (vec (concat vpath [:selected]))])
