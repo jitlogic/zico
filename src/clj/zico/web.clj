@@ -173,7 +173,6 @@
       (DELETE "/data/cfg/:class/:id" {{:keys [class id]} :params}
         (when (OBJ-CLASSES (keyword class))
           (let [qry {:class (keyword class), :id (zutl/to-int id)}
-                _ (println "qry" qry)
                 obj (zobj/get-obj obj-store qry)]
             (if obj
               (zutl/rest-result (zobj/del-obj obj-store qry))

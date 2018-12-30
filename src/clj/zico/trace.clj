@@ -231,7 +231,6 @@
     (doseq [[k v] attrs :when (not= v (host-attrs k))
             :let [adesc (get-or-new app-state :attrdesc (name k))]
             :let [hattr (zobj/find-and-get-1 obj-store {:class :hostattr, :hostid host-id, :attrid (:id adesc)})]]
-      (println "ADD: " {:class :hostattr, :hostid host-id, :attrid (:id adesc), :attrval v})
       (zobj/put-obj obj-store (merge (or hattr {}) {:class :hostattr, :hostid host-id,
                                                     :attrid (:id adesc), :attrval v})))))
 
