@@ -4,7 +4,8 @@
     [zico.state :as zs]
     [zico.forms :as zf]
     [zico.widgets :as zw]
-    [zico.views.common :as zv]))
+    [zico.views.common :as zv]
+    [zico.io :as io]))
 
 (defn data-list-sfn [sectn view sort-attr]
   (fn [db [_]]
@@ -31,7 +32,7 @@
      :on-refresh [:data/refresh :cfg class]
      :class (str "cfg-" (name class) "-list")
      :url (str "cfg/" (name class))
-     :xhr-url (str "/data/cfg/" (name class))
+     :xhr-url (io/api "/cfg/" (name class))
      :title title
      :fdefs fdefs
      :template template)
@@ -39,7 +40,7 @@
    (zf/render-edit
      :title title
      :url (str "cfg/" (name class))
-     :xhr-url (str "/data/cfg/" (name class))
+     :xhr-url (io/api "/cfg/" (name class))
      :on-refresh [(keyword "data" (str "cfg-" (name class) "-list"))]
      :vpath [:view :cfg class]
      :dpath [:data :cfg class]
@@ -57,7 +58,6 @@
 
 (def APP-OBJ-TEMPLATE
   {:id :new
-   :class :app
    :name "newapp"
    :glyph "awe/cube"
    :comment "New Application"})
@@ -79,7 +79,6 @@
 
 (def ENV-OBJ-TEMPLATE
   {:id :new
-   :class :env
    :name "newenv"
    :comment "New Environment"})
 
@@ -91,7 +90,7 @@
 ; Config: Hosts
 
 (def HOST-TEMPLATE
-  {:id :new, :class :host, :name "newhost", :comment "New Host"})
+  {:id :new, :name "newhost", :comment "New Host"})
 
 (def HOST-FDEFS
   (zf/validated-fdefs
@@ -112,7 +111,7 @@
 ; Config: Trace Types
 
 (def TTYPE-TEMPLATE
-  {:id :new, :class :ttype, :name "newtype",
+  {:id :new, :name "newtype",
    :comment "New trace type", :glyph "awe/cube",
    :descr "FIXME: ${SOME_ATTR} -> ${OTHER_ATTR}"})
 
@@ -144,7 +143,7 @@
      :widget :select, :rsub :data/cfg-env-list}))
 
 (def HOSTREG-OBJ-TEMPLATE
-  {:id :new, :class :hostreg, :name "newreg", :comment "New Registration"})
+  {:id :new, :name "newreg", :comment "New Registration"})
 
 
 (let [cfo (cfg-object :hostreg "Registration" HOSTREG-FDEFS HOSTREG-OBJ-TEMPLATE)]
@@ -164,7 +163,7 @@
     {:attr :password, :label "Password"}))
 
 (def USER-OBJ-TEMPLATE
-  {:id :new, :class :user, :name "newuser"})
+  {:id :new, :name "newuser"})
 
 (let [cfo (cfg-object :user "User" USER-FDEFS USER-OBJ-TEMPLATE)]
   (def user-list (:list cfo))

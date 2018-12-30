@@ -8,7 +8,8 @@
     [cljs-time.format :as ctf]
     [cljs.reader :refer [read-string]]
     [zico.util :as zu]
-    [cljsjs.lz-string]))
+    [cljsjs.lz-string]
+    [zico.io :as io]))
 
 
 (zs/register-sub
@@ -96,7 +97,7 @@
   (fn [{:keys [db]} _]
     {:db db
      :dispatch
-         [:xhr/post "../../../data/trace/search" nil
+         [:xhr/post (io/api "/trace") nil
           (make-filter db (count (get-in db [:data :trace :list])))
           :on-success [::handle-trace-search-result false]
           :on-error zv/DEFAULT-SERVER-ERROR]}))
@@ -120,7 +121,7 @@
           zf (js/LZString.compressToBase64 (pr-str flt))]
       {:db db
        :dispatch-n
-           [[:xhr/post "../../../data/trace/search" nil flt
+           [[:xhr/post (io/api "/trace") nil flt
              :on-success [::handle-trace-search-result true]
              :on-error zv/DEFAULT-SERVER-ERROR]
             (if history-push [:history-replace "mon/trace/list" {:q zf}] [:nop])]})))
@@ -133,7 +134,7 @@
           sel (get-in db [:view :trace :list :selected])
           uuids (into #{} (map :uuid data))
           evt (if (and sel (contains? uuids sel))
-                [:xhr/get (str "../../../data/trace/" sel "/detail") [:data :trace :list sel :detail] nil
+                [:xhr/get (io/api "/trace/" sel "?depth=1") [:data :trace :list sel :detail] nil
                  :on-error zv/DEFAULT-SERVER-ERROR]
                 [:nop])]
       {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))

@@ -5,7 +5,8 @@
     [zico.util :as zu]
     [zico.state :as zs]
     [zico.widgets :as zw]
-    [zico.views.common :as zv]))
+    [zico.views.common :as zv]
+    [zico.io :as io]))
 
 
 (defn data-list-sfn [sectn view sort-attr]
@@ -36,7 +37,7 @@
       :btn-details #(zs/dispatch [:to-screen "mon/trace/tree" {:uuid %}])
       :btn-dtrace #(zs/dispatch [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [% :dtrace-uuid])}])
       :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
-                          [:xhr/get (str "../../../data/trace/" % "/detail")
+                          [:xhr/get (io/api "/trace/" % "?depth=1")
                            [:data sect sub % :detail] nil
                            :on-error zv/DEFAULT-SERVER-ERROR]])
       :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))

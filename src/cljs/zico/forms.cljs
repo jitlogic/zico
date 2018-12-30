@@ -5,7 +5,8 @@
     [zico.state :as zs]
     [zico.widgets :as zw]
     [zico.views.common :as zv]
-    [zico.util :as zu]))
+    [zico.util :as zu]
+    [zico.io :as io]))
 
 ; ----------- Parsing and unparsing form data --------------
 
@@ -114,7 +115,7 @@
 (defn zorka-refresh-data [{:keys [db]} [_ sectn view]]
   {:db db
    :dispatch
-       [:xhr/get (str "../../../data/" (name sectn) "/" (name view))
+       [:xhr/get (io/api "/" (name sectn) "/" (name view))
         [:data sectn view] nil,
         :map-by :id]})
 

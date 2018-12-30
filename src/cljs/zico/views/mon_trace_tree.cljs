@@ -7,7 +7,8 @@
     [zico.views.mon-trace :as zvmt]
     [zico.util :as zu]
     [zico.io]
-    [cljs.pprint :as pp]))
+    [cljs.pprint :as pp]
+    [zico.io :as io]))
 
 
 (defn flatten-trace [collapsed t0 lvl {:keys [children duration pos] :as tr}]
@@ -140,7 +141,7 @@
        [:set [:view :trace :tree] {:uuid uuid, :collapsed {}}]
        [:set [:data :trace :tree] nil]])
     (zs/dispatch
-      [:xhr/get (str "../../../data/trace/" uuid "/tree") nil nil,
+      [:xhr/get (io/api "/trace/" uuid "?depth=9999") nil nil,
        :on-success [::handle-xhr-result nil]
        :on-error zv/DEFAULT-SERVER-ERROR]))
   (zv/render-screen

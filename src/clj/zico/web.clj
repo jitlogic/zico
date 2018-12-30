@@ -1,208 +1,260 @@
 (ns zico.web
   (:require
-    [compojure.core :refer [GET PUT POST ANY DELETE routes context]]
+    [clojure.data.json :as json]
+    [compojure.core :as cc]
     [compojure.route :refer [not-found resources]]
+    [compojure.api.sweet :as ca]
+    [compojure.api.meta]
     [hiccup.page :refer [include-js include-css html5]]
-    [ring.middleware.x-headers :refer [wrap-xss-protection wrap-frame-options wrap-content-type-options]]
-    [ring.middleware.session :refer [wrap-session]]
+    [ring.middleware.content-type :refer [wrap-content-type]]
+    [ring.middleware.cookies :refer [wrap-cookies]]
+    [ring.middleware.default-charset :refer [wrap-default-charset]]
+    [ring.middleware.gzip :refer [wrap-gzip]]
     [ring.middleware.keyword-params :refer [wrap-keyword-params]]
     [ring.middleware.multipart-params :refer [wrap-multipart-params]]
     [ring.middleware.params :refer [wrap-params]]
-    [ring.middleware.cookies :refer [wrap-cookies]]
-    [ring.middleware.content-type :refer [wrap-content-type]]
-    [ring.middleware.default-charset :refer [wrap-default-charset]]
     [ring.middleware.proxy-headers :refer [wrap-forwarded-remote-addr]]
+    [ring.middleware.session :refer [wrap-session]]
     [ring.middleware.ssl :refer [wrap-ssl-redirect wrap-hsts wrap-forwarded-scheme]]
-    [ring.middleware.gzip :refer [wrap-gzip]]
+    [ring.middleware.x-headers :refer [wrap-xss-protection wrap-frame-options wrap-content-type-options]]
+    [ring.util.http-response :as rhr]
+    [ring.util.http-status]
     [ring.util.request :refer [body-string]]
     [ring.util.response :refer [redirect]]
-    [clojure.data.json :as json]
-    [zico.auth :as zaut]
+    [schema.core :as s]
+    [slingshot.slingshot :refer [throw+]]
+    [taoensso.timbre :as log]
+    [zico.admin :as zadm]
+    [zico.auth :as zaut :refer [wrap-zico-auth]]
     [zico.objstore :as zobj]
+    [zico.schema.db]
+    [zico.schema.api]
+    [zico.schema.tdb]
     [zico.trace :as ztrc]
-    [zico.util :as zutl]
-    [zico.admin :as zadm])
+    [zico.util :as zutl])
   (:import (com.jitlogic.netkit.util NetkitUtil)))
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
 
-(defn render-loading-page []
-  (zutl/render-page
-    [:div#app [:h3 "Loading application ..."]]
-    (include-js "/js/app.js")))
+(defn render-loading-page [_]
+  {:status  200,
+   :headers {"Content-Type", "text/html;charset=utf-8"}
+   :body (zutl/render-page
+           [:div#app [:h3 "Loading application ..."]]
+           (include-js "/js/app.js"))})
 
 
-(def OBJ-CLASSES #{:app :env :host :ttype :hostreg :user})
+(defn zico-cfg-resource-0 [obj-store class schema]
+  (ca/resource
+    {:get  {:summary "list objects"
+            :responses {200 {:schema [schema]}}
+            :handler
+            (fn [_]
+              (rhr/ok
+                (for [r (zobj/find-and-get obj-store {:class class})]
+                  (dissoc r :class))))}
+     :post {:summary "add object"
+            :responses {201 {:schema schema :description "created object"}}
+            :parameters {:body-params (dissoc schema :id)}
+            :handler
+            (fn [{obj :body-params}]
+              (rhr/ok
+                (dissoc (zobj/put-obj obj-store (assoc obj :class class)) :class)))}}))
 
-(defn wrap-rest-response [f]
-  (fn [{:keys [headers] :as req}]
-    (let [{:keys [body] :as rslt} (f req)
-          content-type (or (get headers "accept") (get headers "content-type") "application/json")]
-      (cond
-        (nil? body) rslt
-        (not (map? body)) rslt
-        (not= :rest (:type body)) rslt
-        (.startsWith content-type "application/json")
-        (assoc-in
-          (assoc rslt :body (json/write-str (:data body)))
-          [:headers "content-type"] "application/json")
-        (.startsWith content-type "application/edn")
-        (assoc-in
-          (assoc rslt :body (pr-str (:data body)))
-          [:headers "content-type"] "application/edn")
-        :else
-        (assoc-in
-          (assoc rslt :body (json/write-str (:data body)))
-          [:headers "content-type"] "application/json")))))
 
-(defn parse-rest-params [headers body]
-  (let [^String content-type (get headers "content-type" "application/json")
-        body (body-string {:body body})]
-    (try
-      (cond
-        (empty? body) nil
-        (.startsWith content-type "application/json") (zutl/rekey-map (json/read-str body))
-        (.startsWith content-type "application/edn") (clojure.edn/read-string body)
-        (.startsWith content-type "application/zorka") {:format :cbor}
-        :else nil
-        ))))
+(defn zico-cfg-resource-1 [obj-store class schema]
+  (ca/resource
+    {:get    {:summary "get object"
+              :responses {200 {:schema schema}}
+              :parameters {:path-params {:id s/Int}}
+              :handler
+              (fn [{{:keys [id]} :path-params}]
+                (if-let [obj (zobj/get-obj obj-store {:class class, :id id})]
+                  (rhr/ok (dissoc obj :class))
+                  (rhr/not-found {:reason "no such object"})))}
+     :put    {:summary "update object"
+              :responses {200 {:schema schema}}
+              :parameters {:path-params {:id s/Int}, :body-params schema}
+              :handler
+              (fn [{{:keys [id]} :path-params, v :body-params}]
+                (if (zobj/get-obj obj-store {:class class, :id id})
+                  (rhr/ok (dissoc (zobj/put-obj obj-store (assoc v :id id, :class class)) :class))
+                  (rhr/not-found {:reason "no such object"})))}
+     :delete {:summary "delete object"
+              :parameters {:path-params {:id s/Int}}
+              :responses {204 {}}
+              :handler
+              (fn [{{:keys [id]} :path-params}]
+                (do
+                  (zobj/del-obj obj-store {:class class, :id id})
+                  (rhr/no-content)))}}))
 
-(defn arg-prep [arg]
+
+(defmacro zico-cfg-resource [obj-store class schema]
+  (let [uri (str "/cfg/" (name class))]
+    `(ca/context ~uri []
+       :tags ["cfg"]
+       (ca/context "/" [] (zico-cfg-resource-0 ~obj-store ~class ~schema))
+       (ca/context "/:id" [] (zico-cfg-resource-1 ~obj-store ~class ~schema)))))
+
+
+(defn trace-detail [app-state id depth]
+  (if-let [rslt (if (.contains id "_")
+               (ztrc/trace-detail-tid app-state depth false id)
+               (ztrc/trace-detail app-state depth id))]
+    (rhr/ok rslt)
+    (rhr/not-found {:reason "trace not found"})))
+
+
+(defn zico-error-handler [_ {:keys [reason status] :as data} _]
   (cond
-    (symbol? arg) {:keys ['body 'headers 'request-method] :as 'req}
-    (map? arg) (assoc arg :keys (into [] (into #{'headers 'body 'request-method} (:keys arg []))) :as 'req)
-    (vector? arg) {{:keys arg} :params :keys ['body 'headers 'request-method] :as 'req}
-    :else (throw (RuntimeException. (str "Illegal arg: " arg)))))
-
-(def EMPTY-METHODS #{:get :delete})
-
-(defmacro REST [[met uri arg & code]]
-  (let [argp (arg-prep arg)]
-    `(~met ~uri ~argp
-       (let [data# (parse-rest-params ~'headers ~'body)]
-         (cond
-           (and (nil? data#) (nil? (EMPTY-METHODS ~'request-method))) {:status 405, :msg "Cannot parse REST parameters."}
-           :else (let [~argp (assoc ~'req :data data#)] ~@code))))))
-
-(defn zorka-agent-routes [app-state]
-  (routes
-    ; Agent API
-    (REST
-      (POST "/agent/register" req
-        (ztrc/agent-register app-state req)))
-
-    (REST
-      (POST "/agent/session" req
-        (ztrc/agent-session app-state req)))
-
-    (POST "/agent/submit/agd" {:keys [headers body]}
-      (ztrc/submit-agd app-state
-                       (get headers "x-zorka-agent-id")
-                       (get headers "x-zorka-session-uuid")
-                       (NetkitUtil/toByteArray body)))
-
-    (POST "/agent/submit/trc" {:keys [headers body]}
-      (ztrc/submit-trc app-state
-                       (get headers "x-zorka-agent-id")
-                       (get headers "x-zorka-session-uuid")
-                       (get headers "x-zorka-trace-uuid")
-                       (NetkitUtil/toByteArray body)))))
+    (string? data) {:status 500, :headers {}, :body {:reason data}}
+    :else
+    {:status  (or status 500) :headers {} :body    {:reason reason}}))
 
 
-(defn zorka-web-routes [{:keys [obj-store] :as app-state}]
-  (routes
+(defn zico-api-routes [{:keys [obj-store] :as app-state}]
+  (ca/api
+    {:exceptions
+     {:handlers {:zico zico-error-handler}}
+     :swagger
+     {:ui   "/docs"
+      :spec "/swagger.json"
+      :data {:basePath "/api"
+             :info     {:version "1.90.6", :title "ZICO", :description "ZICO 2.x Collector API"
+                        :contact {:name "Zorka.io project", :url "http://zorka.io"}}
+             :tags     [{:name "admin", :description "admin & management"}
+                        {:name "cfg", :description "configuration objects"}
+                        {:name "system", :description "system information"}
+                        {:name "trace", :description "trace data search & browsing"}
+                        {:name "user", :description "current user information"}
+                        {:name "test", :description "testing API"}]
+             :consumes ["application/json", "application/edn"]
+             :produces ["application/json", "application/edn"]}}}
 
-    (GET "/" []
-      {:status  302, :body "Redirecting...",
-       :headers {"Location" "/view/mon/trace/list"}})
+    (zico-cfg-resource obj-store :app zico.schema.db/App)
+    (zico-cfg-resource obj-store :env zico.schema.db/Env)
+    (zico-cfg-resource obj-store :host zico.schema.db/Host)
+    (zico-cfg-resource obj-store :ttype zico.schema.db/TType)
+    (zico-cfg-resource obj-store :hostreg zico.schema.db/HostReg)
+    (zico-cfg-resource obj-store :user zico.schema.db/User)
 
-    ; Trace API
-    (GET "/data/trace/type" _ (zobj/find-and-get obj-store :ttype))
+    (ca/context "/system" []
+      :tags ["system"]
+      (ca/GET "/info" []
+        :summary "system information"
+        :return zico.schema.api/SystemInfo
+        (rhr/ok (zadm/system-info app-state))))
 
-    (REST
-      (POST "/data/trace/search" req
-        (ztrc/trace-search app-state req)))
+    (ca/context "/user" []
+      :tags ["user"]
+      (ca/GET "/info" req
+        :summary "current user info"
+        :return zico.schema.db/User
+        (rhr/ok (:user (:session req) zaut/ANON-USER)))
+      (ca/POST "/password" {{:keys [user]} :session}
+        :summary "change user password"
+        :body [body zico.schema.api/PasswordChange]
+        (zaut/change-password app-state user body)))
 
-    (GET "/data/trace/:id/detail" req
-      (let [^String id (-> req :params :id)]
-        (if (.contains id "_")
-          (ztrc/trace-detail-tid app-state 1, false id)
-          (ztrc/trace-detail app-state 1 id))))
+    (ca/context "/trace" []
+      :tags ["trace"]
+      (ca/POST "/" []
+        :summary "search traces according to posted query"
+        :body [query zico.schema.tdb/TraceSearchQuery]
+        :return [zico.schema.tdb/TraceSearchRecord]
+        (rhr/ok (ztrc/trace-search app-state query)))
+      (ca/GET "/:id" []
+        :summary "return trace execution tree"
+        :path-params [id :- s/Str]
+        :query-params [depth :- s/Int]
+        :return zico.schema.tdb/TraceRecord
+        (trace-detail app-state id (or depth 1)))
+      (ca/GET "/:id/stats" []
+        :summary "return trace method call stats"
+        :path-params [id :- s/Str]
+        :return [zico.schema.tdb/TraceStats]
+        (rhr/ok (ztrc/trace-stats app-state id))))
 
-    (GET "/data/trace/:id/tree" req
-      (let [^String id (-> req :params :id)]
-        (if (.contains id "_")
-          (ztrc/trace-detail-tid app-state Integer/MAX_VALUE, false id)
-          (ztrc/trace-detail app-state Integer/MAX_VALUE id))))
+    (ca/context "/admin" []
+      :tags ["admin"]
+      (ca/GET "/backup" []
+        :summary "lists all backups"
+        :return [zico.schema.api/BackupItem]
+        (rhr/ok (zadm/backup-list app-state nil)))
+      (ca/POST "/backup" []
+        :summary "performs backup of configuration database"
+        :return zico.schema.api/BackupItem
+        (rhr/ok (zadm/backup app-state nil)))
+      (ca/POST "/backup/:id" []
+        :summary "restores given backup"
+        :path-params [id :- s/Int]
+        (rhr/ok (zadm/restore app-state id))))))
 
-    (GET "/data/trace/:id/stats" req
-      (let [^String id (-> req :params :id)]
-        (ztrc/trace-stats app-state id)))
 
-    (GET "/data/cfg" _
-      (zutl/rest-result
-        {}))
+(defn json-resp [status body]
+  {:status  status,
+   :headers {"Content-Type" "application/json"}
+   :body    (json/print-json body)})
 
-    ; Configuration data API
-    (GET "/data/cfg/:class" [class]
-      (if (OBJ-CLASSES (keyword class))
-        (let [data (zobj/find-and-get obj-store {:class (keyword class)})]
-          (zutl/rest-result data))
-        (zutl/rest-error "Resource class not found." 404)))
 
-    (REST
-      (POST "/data/cfg/:class" {data :data {:keys [class]} :params}
-        (if (OBJ-CLASSES class)
-          (zobj/put-obj obj-store (assoc data :class (keyword class)))
-          (zutl/rest-error "Resource class not found." 404))))
+(defn handle-json-req [f app-state schema req]
+  (try
+    (let [args (json/read-str (body-string req))]
+      (if-let [chk (s/check schema args)]
+        (do
+          (log/error "Invalid request" (:uri req) ": " (pr-str args) ": " (pr-str chk))
+          (json-resp 400 {:reason "invalid request"}))
+        (let [{:keys [status body]} (f app-state args)]
+          (when (>= status 400)
+            (log/error "Error executing " (:uri req) ": " (pr-str args) ": " status ":" body))
+          (json-resp status body))))
+    (catch Exception _
+      (json-resp 500 {:reason "malformed request or server error"}))))
 
-    (GET "/data/cfg/:class/:id" [class id]
-      (if (OBJ-CLASSES class)
-        (if-let [obj (zobj/get-obj obj-store {:class (keyword class), :id id})]
-          (zutl/rest-result obj))
-        (zutl/rest-error "Resource class not found." 404)))
 
-    (REST
-      (PUT "/data/cfg/:class/:id" {data :data {:keys [class id]} :params}
-        (if (OBJ-CLASSES class)
-          (if-let [obj (zobj/get-obj obj-store {:class (keyword class), :id id})]
-            (zutl/rest-result (zobj/put-obj obj-store (merge obj data)))
-            (zutl/rest-error "Resource not found." 404)))))
+(defn zico-agent-routes [app-state]
+  (cc/routes
+    (cc/POST "/register" req
+      (handle-json-req ztrc/agent-register app-state zico.schema.api/AgentSessionReq req))
+    (cc/POST "/session" req
+      (handle-json-req ztrc/agent-session app-state zico.schema.api/AgentRegReq req))
+    (cc/POST "/submit/agd" {:keys [headers body]}
+      (ztrc/submit-agd
+        app-state
+        (get headers "x-zorka-agent-id")
+        (get headers "x-zorka-session-uuid")
+        (NetkitUtil/toByteArray body)))
+    (cc/POST "/submit/trc" {:keys [headers body]}
+      (ztrc/submit-trc
+        app-state
+        (get headers "x-zorka-agent-id")
+        (get headers "x-zorka-session-uuid")
+        (get headers "x-zorka-trace-uuid")
+        (NetkitUtil/toByteArray body)))))
 
-    (REST
-      (DELETE "/data/cfg/:class/:id" {{:keys [class id]} :params}
-        (when (OBJ-CLASSES (keyword class))
-          (let [qry {:class (keyword class), :id (zutl/to-int id)}
-                obj (zobj/get-obj obj-store qry)]
-            (if obj
-              (zutl/rest-result (zobj/del-obj obj-store qry))
-              (zutl/rest-error "Object not found." 404))))))
 
-    ; User info
-    (GET "/user/info" req
-      (zutl/rest-result zaut/*current-user*))
+(defn zorka-web-routes [{{{:keys [auth]} :auth} :conf :as app-state}]
+  (let [api-routes (zico-api-routes app-state)
+        agent-routes (zico-agent-routes app-state)]
+    (cc/routes
+      (cc/GET "/" []
+        {:status  302, :body "Redirecting...", :headers {"Location" "/view/mon/trace/list"}})
 
-    ; Changes password
-    (REST
-      (POST "/user/password" req
-        (zaut/change-password app-state req)))
+      (cc/context "/api" []
+        (wrap-zico-auth api-routes auth))
 
-    ; Application views
-    (GET "/view/:section" [_] (render-loading-page))
-    (GET "/view/:section/:name" [_] (render-loading-page))
-    (GET "/view/:section/:name/:cmp" [_] (render-loading-page))
+      (cc/context "/agent" [] agent-routes)
 
-    (ANY "/login" req (zaut/handle-login app-state req))
-    (GET "/logout" req (zaut/handle-logout app-state req))
+      (cc/context "/view" []
+        (wrap-zico-auth render-loading-page auth))
 
-    (POST "/admin/backup" req (zadm/backup app-state req))
-    (GET "/admin/backup" req (zadm/backup-list app-state req))
-    (POST "/admin/backup/:id/restore" req (zadm/restore app-state req))
+      (cc/GET "/login" req (zaut/handle-login app-state req))
+      (cc/POST "/login" req (zaut/handle-login app-state req))
+      (cc/GET "/logout" req (zaut/handle-logout app-state req))
 
-    (GET "/system/info" req (zadm/system-info app-state req))
-
-    (resources "/")
-    (not-found "Not Found.\n")))
+      (resources "/")
+      (not-found "Not Found.\n"))))
 
 
 (defn wrap-cache [f]
@@ -215,49 +267,30 @@
             (assoc-in [:headers "Pragma"] "no-cache"))))))
 
 
-(defn wrap-web-middleware [handler {{auth :auth} :conf, :keys [session-store] :as app-state}]
-  (let [wrap-auth (if (= :none (:auth auth)) identity zaut/wrap-user-auth)]
-    (-> handler
-        wrap-rest-response
-        wrap-keyword-params
-        wrap-multipart-params
-        wrap-params
-        wrap-gzip
-        wrap-auth
-        zaut/wrap-keep-session
-        (wrap-session {:store session-store})
-        wrap-cookies
-        wrap-content-type
-        (wrap-default-charset "utf-8")
-        ;(wrap-xss-protection {:mode :block})
-        (wrap-frame-options :sameorigin)
-        (wrap-content-type-options :nosniff)
-        ;wrap-hsts
-        ;wrap-ssl-redirect
-        wrap-forwarded-scheme
-        wrap-forwarded-remote-addr
-        wrap-cache
-        )))
-
-
-(defn wrap-agent-middleware [handler]
+(defn wrap-web-middleware [handler {:keys [session-store]}]
   (-> handler
-      wrap-rest-response))
-
-
-(defn web-agent-switch [web-handler agent-handler]
-  (fn [{:keys [uri] :as req}]
-    (if (.startsWith uri "/agent")
-      (agent-handler req)
-      (web-handler req))))
+      wrap-keyword-params
+      wrap-multipart-params
+      wrap-params
+      wrap-gzip
+      (wrap-session {:store session-store})
+      wrap-cookies
+      wrap-content-type
+      (wrap-default-charset "utf-8")
+      (wrap-xss-protection {:mode :block})
+      (wrap-frame-options :sameorigin)
+      (wrap-content-type-options :nosniff)
+      ;wrap-hsts
+      ;wrap-ssl-redirect
+      wrap-forwarded-scheme
+      wrap-forwarded-remote-addr
+      wrap-cache
+      ))
 
 
 (defn with-zorka-web-handler [app-state]
-  (let [web-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))
-        agent-handler (-> app-state zorka-agent-routes wrap-agent-middleware)
-        main-handler (web-agent-switch web-handler agent-handler)]
+  (let [main-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))]
     (assoc app-state
-      :agent-handler agent-handler
-      :web-handler web-handler
+      :web-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))
       :main-handler main-handler)))
 

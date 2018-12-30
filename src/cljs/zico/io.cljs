@@ -12,6 +12,10 @@
     goog.net.EventType
     [goog.events EventType]))
 
+(def API-ROOT (atom "/api"))
+
+(defn api [& path]
+  (apply str @API-ROOT path))
 
 (defn small-screen? []
   (< (.-innerWidth js/window) 512))

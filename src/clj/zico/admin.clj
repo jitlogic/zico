@@ -3,7 +3,7 @@
     [clojure.java.jdbc :as jdbc]
     [clojure.java.shell :as clsh]
     [zico.objstore :as zobj]
-    [zico.util :as zutl]
+    [zico.util :as zutl :refer [error]]
     [taoensso.timbre :as log])
   (:import (java.io File)
            (java.lang.management ManagementFactory)))
@@ -27,9 +27,8 @@
 
 
 (defn backup-list [app-state  _]
-  (zutl/rest-result
-    (for [{:keys [id tstamp size]} (list-backups (backup-dir app-state) 100)]
-      {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss tstamp), :size size})))
+  (for [{:keys [id tstamp size]} (list-backups (backup-dir app-state) 100)]
+    {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss tstamp), :size size}))
 
 
 (defn backup-new [app-state]
@@ -46,32 +45,22 @@
 
 (defmethod backup "h2" [{:keys [zico-db] :as app-state}  _]
   (let [[id outf] (backup-new app-state)]
-    (try
-      (jdbc/query zico-db ["SCRIPT DROP TO ?" (.getPath outf)])
-      (zutl/rest-result
-        {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf))})
-      (catch Exception e
-        (log/error "Error performing backup:" e)
-        (zutl/rest-error "Error performing backup.")))))
+    (jdbc/query zico-db ["SCRIPT DROP TO ?" (.getPath outf)])
+    {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}))
 
 
 (defmethod backup "mysql" [{{{:keys [mysqldump dbname host port user password]} :zico-db} :conf :as app-state} _]
   (let [[id outf] (backup-new app-state)]
-    (try
-      (let [r (clsh/sh mysqldump dbname "-h" host (str "-P" port) "-r" (.getPath outf) "-u" user (str "-p" password))]
-        (case (:exit r)
-          0 (zutl/rest-result
-              {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf))})
-          (do
-            (log/error "Error performing backup" r)
-            (zutl/rest-error "Error performing backup."))))
-      (catch Exception e
-        (log/error "Error performing backup:" e)
-        (zutl/rest-error "Error performing backup.")))))
+    (let [r (clsh/sh mysqldump dbname "-h" host (str "-P" port) "-r" (.getPath outf) "-u" user (str "-p" password))]
+      (case (:exit r)
+        0 {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}
+        (do
+          (log/error "Error performing backup" r)
+          (error 500 "Error performing backup."))))))
 
 
 (defmethod backup :default [_ _]
-  (zutl/rest-error "Backup not supported for this database backend." 400))
+  (error 500 "Backup not supported for this database backend."))
 
 
 (defmulti restore
@@ -79,44 +68,43 @@
     (-> conf :zico-db :subprotocol)))
 
 
-(defmethod restore "h2" [{:keys [obj-store zico-db] :as app-state} {{:keys [id]} :params}]
+(defmethod restore "h2" [{:keys [zico-db] :as app-state} id]
   (let [bdir (backup-dir app-state)
-        bkpf (if (re-matches #"[0-9]+" id) (File. ^File bdir (String/format "%06x.sql", (object-array [(Integer/parseInt id)]))))]
+        bkpf (File. ^File bdir (String/format "%06x.sql", (object-array [id])))]
     (cond
-      (not bkpf) (zutl/rest-error "Invalid ID" 400)
-      (not (.canRead bkpf)) (zutl/rest-error "No such backup" 404)
+      (not bkpf) (error 400 "Invalid ID")
+      (not (.canRead bkpf)) (error 404 "No such backup")
       :else
       (try
         (jdbc/execute! zico-db ["RUNSCRIPT FROM ?" (.getPath bkpf)])
-        (zutl/rest-result
-          {:id id})
+        {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
         (catch Exception e
           (log/error "Error restoring backup" e)
-          (zutl/rest-error "Error restoring backup."))))))
+          (error 500 "Error restoring backup."))))))
 
 
 (defmethod restore "mysql" [{{{:keys [mysql dbname host port user password]} :zico-db} :conf :as app-state}
                             {{:keys [id]} :params}]
   (let [bdir (backup-dir app-state)
-        bkpf (if (re-matches #"[0-9]+" id) (File. ^File bdir (String/format "%06x.sql", (object-array [(Integer/parseInt id)]))))]
+        bkpf (File. ^File bdir (String/format "%06x.sql", (object-array [id])))]
     (try
       (cond
-        (not bkpf) (zutl/rest-error "Invalid ID" 400)
-        (not (.canRead bkpf)) (zutl/rest-error "No such backup" 404)
+        (not bkpf) (error 400 "Invalid ID")
+        (not (.canRead bkpf)) (404 "No such backup")
         :else
         (let [r (clsh/sh  mysql dbname "-u" user (str "-P" port) "-h" host (str "-p" password) "-e" (str "source " bkpf))]
           (case (:exit r)
-            0 (zutl/rest-result {:id id})
+            0 {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
             (do
               (log/error "Error restoring backup." r)
-              (zutl/rest-error "Error restoring backup.")))))
+              (error 500 "Error restoring backup.")))))
       (catch Exception e
         (log/error "Error performing backup." e)
-        (zutl/rest-error "Error performing backup.")))))
+        (error 500 "Error performing backup.")))))
 
 
 (defmethod restore :default [_ _]
-  (zutl/rest-error "Backup not supported for this database backend." 400))
+  (error 400 "Backup not supported for this database backend."))
 
 
 (defn- str-uptime [ms]
@@ -126,16 +114,15 @@
       (String/format "%02d:%02d:%02d" (object-array [(mod h 24) (mod m 60) (mod s 60)])))))
 
 
-(defn system-info [{:keys [conf obj-store] :as _} _]
+(defn system-info [{:keys [conf obj-store] :as _}]
   (let [runtime (ManagementFactory/getRuntimeMXBean)
         memory (ManagementFactory/getMemoryMXBean)]
-    (zutl/rest-result
-      {:vm-version (.getVmVersion runtime)
-       :vm-name    (.getVmName runtime)
-       :uptime     (str-uptime (.getUptime runtime))
-       :mem-used   (.getUsed (.getHeapMemoryUsage memory))
-       :mem-max    (.getMax (.getHeapMemoryUsage memory))
-       :home-dir   (:home-dir conf)
-       :tstamps    {}                                       ; TODO timestamps
-       })))
+    {:vm-version (.getVmVersion runtime)
+     :vm-name    (.getVmName runtime)
+     :uptime     (str-uptime (.getUptime runtime))
+     :mem-used   (.getUsed (.getHeapMemoryUsage memory))
+     :mem-max    (.getMax (.getHeapMemoryUsage memory))
+     :home-dir   (:home-dir conf)
+     :tstamps    {}                                         ; TODO timestamps
+     }))
 

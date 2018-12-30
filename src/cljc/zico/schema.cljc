@@ -7,3 +7,6 @@
 (def UuidStr
   (s/pred #(re-matches RE-UUID %)))
 
+(s/defschema ZicoError
+  {(s/optional-key :status) s/Int
+   :reason                  s/Str})

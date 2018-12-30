@@ -65,6 +65,7 @@
   ds)
 
 
+; TODO move object class to dedicated parameter, so coding will be easier around schema coercions
 (defprotocol ObjectStore
   (put-obj     [this obj])
   (get-obj     [this attrs])
@@ -86,9 +87,8 @@
         (let [x (jdbc/insert! zico-db class (dissoc (assoc obj :id id) :class))]
           (assoc obj :id (second (first (first x)))))))
     (get-obj [_ {:keys [class id]}]
-      (assoc
-        (first (jdbc/query zico-db [(str " select * from " (zutl/to-str class) " where id = ?") id]))
-        :class class))
+      (when-let [obj (first (jdbc/query zico-db [(str " select * from " (zutl/to-str class) " where id = ?") id]))]
+        (assoc obj :class class)))
     (del-obj [_ {:keys [class id]}]
       (jdbc/delete! zico-db class ["id = ?" id]))
     (find-obj [_ {:keys [class] :as attrs}]

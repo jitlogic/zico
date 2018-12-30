@@ -4,7 +4,8 @@
     [zico.views.common :as zv]
     [zico.state :as zs]
     [zico.widgets :as zw]
-    [zico.views.mon-trace :as zvmt]))
+    [zico.views.mon-trace :as zvmt]
+    [zico.io :as io]))
 
 
 (defn trace-stats-list-ra [_ [_]]
@@ -55,7 +56,7 @@
   (zs/dispatch-sync
     [:set [:data :trace :stats] nil])
   (zs/dispatch
-    [:xhr/get (str "../../../data/trace/" uuid "/stats")
+    [:xhr/get (io/api "/trace/" uuid "/stats")
      [:data :trace :stats] nil
      :on-error zv/DEFAULT-SERVER-ERROR])
   (zv/render-screen

@@ -71,7 +71,7 @@
 
 
 (defn system-info-refresh []
-  (zs/dispatch [:xhr/get "/system/info" [:data :user :about] nil
+  (zs/dispatch [:xhr/get (io/api "/system/info") [:data :user :about] nil
                 :on-success [:system-info-check-timestamps]
                 :on-error zv/DEFAULT-SERVER-ERROR]))
 

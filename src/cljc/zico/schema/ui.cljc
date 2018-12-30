@@ -63,10 +63,10 @@
 
 
 (s/defschema TraceData
-  {:list {s/Str tdb/TraceSearchRecord}
-   :dist {s/Str tdb/TraceSearchRecord}
-   :tree tdb/TraceRecord
-   :stats [tdb/TraceStatsRecord]})
+  {(s/optional-key :list)  {s/Str tdb/TraceSearchRecord}
+   (s/optional-key :dist)  {s/Str tdb/TraceSearchRecord}
+   (s/optional-key :tree)  tdb/TraceRecord
+   (s/optional-key :stats) [tdb/TraceStats]})
 
 
 (s/defschema AppDb

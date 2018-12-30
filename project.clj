@@ -10,6 +10,7 @@
                  [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
                  [prismatic/schema "1.1.9"]
+                 [slingshot "0.12.2"]
 
                  [ring/ring-core "1.7.1"]
                  [ring/ring-devel "1.7.1"]
@@ -18,6 +19,8 @@
                  [bk/ring-gzip "0.3.0"]
 
                  [compojure "1.6.1"]
+                 [metosin/compojure-api "2.0.0-alpha28"]
+                 ;[buddy/buddy-auth "2.1.0"]
                  [hiccup "1.0.5"]
 
                  [org.slf4j/slf4j-api "1.7.25"]

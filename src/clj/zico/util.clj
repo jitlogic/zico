@@ -213,30 +213,6 @@
     m))
 
 
-(defn rest-result
-  ([data] {:status 200, :body {:type :rest, :data data}})
-  ([data status] (assoc (rest-result data) :status status)))
-
-
-(defn rest-error
-  ([msg] {:status 500, :body {:type :rest, :data {:error msg}}})
-  ([msg status] (assoc (rest-error msg) :status status)))
-
-(defmacro rest-error-logged [msg status & args]
-  `(do
-     (log/error "REST error" (str ~status " " ~msg " " (vector ~@args)))
-     (rest-error ~msg ~status)))
-
-(defn rest-msg
-  ([msg] {:status 200, :body {:type :rest, :data {:msg msg}}})
-  ([msg status] (assoc (rest-msg msg) :status status)))
-
-
-(defmacro log-rest-error [msg status & args]
-  `(do
-     (log/error ~msg ~@args)
-     (rest-error ~msg ~status)))
-
 (def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
 
 
@@ -245,7 +221,6 @@
     (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
       (let [cs (.split c "\\." 0), cl (alength cs)]
         {:result r, :package p, :class c, :method m, :args a}))))
-
 
 
 (defn render-page [& content]
@@ -266,3 +241,8 @@
     (number? x) (.longValue x)
     :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
 
+
+(defn error
+  [status reason & args]
+  (log/error "ERROR: " reason ": " (str args))
+  {:type :zico, :reason reason, :status status})

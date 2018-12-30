@@ -1,7 +1,8 @@
 (ns zico.trace
   (:require
     [taoensso.timbre :as log]
-    [zico.util :as zutl :refer [to-int]]
+    [zico.util :as zutl :refer [to-int error]]
+    [ring.util.http-response :as rhr]
     [zico.objstore :as zobj]
     [clj-time.coerce :as ctc]
     [clj-time.format :as ctf])
@@ -97,32 +98,31 @@
       (.setFullInfo (:full-info q false)))))
 
 
-(defn trace-search [{:keys [tstore]}
-                    {:keys [data]}]
-  (let [query (parse-search-query data)
-        limit (:limit data 100)
-        rslt (for [^TraceSearchResultItem r (.searchTraces tstore query)]
-               {:uuid        (.getUuid r),
-                :chunk-id    (.getChunkId r)
-                :descr       (.getDescription r)
-                :duration    (.getDuration r)
-                :ttype       (.getTypeId r)
-                :app         (.getAppId r)
-                :env         (.getEnvId r)
-                :host        (.getHostId r)
-                :tst         (.getTstamp r)
-                :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
-                :data-offs   (.getDataOffs r)
-                :start-offs  (.getStartOffs r)
-                :flags       #{}                             ; TODO flagi
-                :recs        (.getRecs r)
-                :calls       (.getCalls r)
-                :errs        (.getErrors r)
-                :dtrace-uuid (.getDtraceUuid r)
-                :dtrace-tid  (.getDtraceTid r)
-                :dtrace-out  (.isDtraceOut r)
-                })]
-    {:status 200, :body {:type :rest, :data (vec (take limit rslt))}}))
+(defn trace-search [{:keys [tstore]} query]
+  (vec
+    (take
+      (:limit query 100)
+      (for [r (.searchTraces tstore (parse-search-query query))]
+        {:uuid        (.getUuid r),
+         :chunk-id    (.getChunkId r)
+         :descr       (.getDescription r)
+         :duration    (.getDuration r)
+         :ttype       (.getTypeId r)
+         :app         (.getAppId r)
+         :env         (.getEnvId r)
+         :host        (.getHostId r)
+         :tst         (.getTstamp r)
+         :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
+         :data-offs   (.getDataOffs r)
+         :start-offs  (.getStartOffs r)
+         :flags       #{}                                   ; TODO flagi
+         :recs        (.getRecs r)
+         :calls       (.getCalls r)
+         :errs        (.getErrors r)
+         :dtrace-uuid (.getDtraceUuid r)
+         :dtrace-tid  (.getDtraceTid r)
+         :dtrace-out  (.isDtraceOut r)
+         }))))
 
 
 (defn resolve-attr-obj [obj resolver]
@@ -177,32 +177,29 @@
 (defn trace-detail [{:keys [tstore obj-store]} stack-limit uuid]
   (let [rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
         rslt (.retrieve tstore uuid rtr)]
-    {:status 200, :body {:type :rest, :data (merge {:uuid uuid} rslt)}}))
+    (merge {:uuid uuid} rslt)))
 
 
 (defn trace-detail-tid [{:keys [tstore] :as app-state} stack-limit is-out tid]
   (let [query (TraceSearchQuery. (doto (QmiNode.) (.setDtraceTid tid)) nil)
         rslt (.searchTraces tstore query)
         trc (first (for [r rslt :when (= is-out (.isDtraceOut r))] r))]
-    (if (some? trc)
-      (trace-detail app-state stack-limit (.getUuid trc))
-      {:status 404})))
+    (when (some? trc)
+      (trace-detail app-state stack-limit (.getUuid trc)))))
 
 
 (defn trace-stats [{:keys [tstore]} uuid]
   (let [f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
     (.retrieve tstore uuid rtr)
-    {:status 200,
-     :body {:type :rest,
-            :data (for [^TraceStatsResultItem s (.getStats f)]
-                    {:mid (.getMid s),
-                     :recs (.getRecs s),
-                     :errors (.getErrors s),
-                     :sum-duration (.getSumDuration s),
-                     :max-duration (.getMinDuration s),
-                     :min-duration (.getMaxDuration s),
-                     :method (.getMethod s)})
-            }}))
+    (vec
+      (for [^TraceStatsResultItem s (.getStats f)]
+        {:mid          (.getMid s),
+         :recs         (.getRecs s),
+         :errors       (.getErrors s),
+         :sum-duration (.getSumDuration s),
+         :max-duration (.getMinDuration s),
+         :min-duration (.getMaxDuration s),
+         :method       (.getMethod s)}))))
 
 
 (defn get-or-new [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state} class name]
@@ -236,7 +233,7 @@
 
 
 (defn update-host-data [{:keys [obj-store] :as app-state}                 ; app-state
-                         {{:keys [name app env attrs] :as data} :data :as req}
+                        {:keys [name app env attrs]}
                          old-host]
   (let [app-id (or (:id (get-or-new app-state :app app)) (:app old-host))
         env-id (or (:id (get-or-new app-state :env env)) (:env old-host))
@@ -250,23 +247,23 @@
 
 
 (defn register-host [{:keys [obj-store] :as app-state}                      ; app-state
-                         {{:keys [name app env attrs]} :data} ; req
+                     {:keys [name app env attrs]}           ; req
                          {:as hreg}]                          ; host-reg
   (let [app-id (or (:id (get-or-new app-state :app app)) (:app hreg))
         env-id (or (:id (get-or-new app-state :env env)) (:env hreg))]
     (cond
-      (nil? app-id) (zutl/rest-error (str "No such application: " app) 400)
-      (nil? env-id) (zutl/rest-error (str "No such environment:" env) 400)
+      (nil? app-id) (rhr/bad-request {:reason "no such application"})
+      (nil? env-id) (rhr/bad-request {:reason "no such environment"})
       :else
       (let [hobj {:class :host, :app app-id, :env env-id, :name name,
                   :comment "Auto-registered host.", :flags 0x01, :authkey (zutl/random-string 16 zutl/ALPHA-STR)}
             hobj (zobj/put-obj obj-store hobj)]
         (update-host-attrs app-state (:id hobj) attrs)
-        (zutl/rest-result {:id (:id hobj), :authkey (:authkey hobj)} 201)))))
+        (rhr/created {:id (:id hobj), :authkey (:authkey hobj)} 201)))))
 
 
 (defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
-                      {{:keys [rkey akey name id]} :data :as req}]
+                      {:keys [rkey akey name id] :as req}]
   (try
     (if (and rkey name)
       (let [{:keys [regkey] :as hreg} (zobj/find-and-get-1 obj-store {:class :hostreg, :regkey rkey})
@@ -275,40 +272,39 @@
           (and (string? akey) (= akey authkey))
           (do
             (update-host-data app-state req host)
-            (zutl/rest-result {:id (:id host), :authkey authkey}))
-          (some? host) (zutl/rest-error "Access denied." 401)
-          (not (:host reg)) (zutl/rest-error "No such host.")
-          (not= rkey regkey) (zutl/rest-error "Access denied." 401)
+            (rhr/ok {:id (:id host), :authkey authkey}))
+          (some? host) (rhr/unauthorized {:reason "access denied"})
+          (not (:host reg)) (rhr/unauthorized {:reason "no such host"})
+          (not= rkey regkey) (rhr/unauthorized {:reason "access denied"})
           (= rkey regkey) (register-host app-state req hreg)
-          :else (zutl/rest-error-logged "Registration denied." 401)))
-      (zutl/rest-error-logged "Missing arguments." 400))
+          :else (rhr/unauthorized {:reason "Registration denied."})))
+      (rhr/bad-request {:reason "Missing arguments."}))
     (catch Exception e
       (log/error e "Error registering host.")
-      (zutl/rest-error "Internal error." 500))))
+      (rhr/internal-server-error {:reason "Internal error."}))))
 
 
-(defn agent-session [{:keys [obj-store tstore]}        ; app-state
-                     {{:keys [id authkey]} :data}]        ; req
+(defn agent-session [{:keys [obj-store tstore]} {:keys [id authkey]}]
   (if (and id authkey)
     (if-let [obj (zobj/get-obj obj-store {:class :host, :id id})]
       (if (= (:authkey obj) authkey)
-        (zutl/rest-result {:session (.getSession ^TraceStore tstore id)})
-        (zutl/rest-error-logged "Access denied." 401 id authkey))
-      (zutl/rest-error-logged "No such agent." 400 id authkey))
-    (zutl/rest-error-logged "Missing arguments." 400 id authkey)))
+        (rhr/ok {:session (.getSession ^TraceStore tstore id)})
+        (rhr/unauthorized {:reason "access denied"}))
+      (rhr/bad-request {:reason "no such agent"}))
+    (rhr/bad-request {:reason "missing arguments"})))
 
 
 (defn submit-agd [{:keys [tstore]} agent-id session-uuid data]
   (try
     ; TODO weryfikacja argumentów
     (.handleAgentData tstore agent-id session-uuid data)
-    (zutl/rest-result {:result "Submitted"} 202)
+    (rhr/accepted)
     (catch MissingSessionException _
-      (zutl/rest-error "Missing session UUID header." 412))
+      (rhr/bad-request {:reason "Missing session UUID header."}))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch Exception e
       (log/error e (str "Error processing AGD data: " (ZorkaUtil/hex data) (String. ^bytes data "UTF-8")))
-      (zutl/rest-error "Internal error." 500))))
+      (rhr/internal-server-error {:reason "internal error"}))))
 
 
 (defn submit-trc [{:keys [obj-store tstore]} agent-id session-uuid trace-uuid data]
@@ -320,14 +316,14 @@
                           (doto (ChunkMetadata.)
                             (.setAppId (:app agent))
                             (.setEnvId (:env agent))))
-        (zutl/rest-result {:result "Submitted"} 202))
-      (zutl/rest-error "No such agent." 401))
+        (rhr/accepted))
+      (rhr/unauthorized {:reason "no such agent"}))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch MissingSessionException _
-      (zutl/rest-error "Missing session UUID header." 412))
+      (rhr/unauthorized {:reason "missing session UUID header"}))
     (catch Exception e
       (log/error e "Error processing TRC data: " (ZorkaUtil/hex data))
-      (zutl/rest-error "Internal error." 500))))
+      (rhr/internal-server-error {:reason "internal error"}))))
 
 
 (defn trace-id-translate [obj-store data tn]

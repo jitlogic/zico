@@ -5,7 +5,8 @@
     [zico.views.common :as zv]
     [zico.views.mon-trace :as zvmt]
     [zico.state :as zs]
-    [clojure.string :as cs]))
+    [clojure.string :as cs]
+    [zico.io :as io]))
 
 
 (defn dtrace-path-compare [p1 p2]
@@ -63,7 +64,7 @@
   (zs/dispatch-sync
     [:set [:data :dtrace :tree] []])
   (zs/dispatch
-    [:xhr/post "../../../data/trace/search" nil
+    [:xhr/post (io/api "/trace") nil
      {:limit 1000, :offset 0 :qmi {:dtrace-uuid dtrace-uuid}}
      :on-success [:set [:data :dtrace :tree]],
      :on-error zv/DEFAULT-SERVER-ERROR,

@@ -4,6 +4,7 @@
     [taoensso.timbre :as log]
     [zico.objstore :as zobj]
     [ring.util.response :refer [redirect]]
+    [ring.util.http-response :as rhr]
     [clojure.data.xml :as xml]
     [clojure.string :as cs])
   (:import (java.security MessageDigest)
@@ -12,15 +13,14 @@
 
 
 (def ANON-USER
-  {:uuid :none
+  {:id 0
    :name "anonymous"
    :fullname "Anonymous Admin"
    :comment ""
    :email ""
-   :flags 3})
+   :flags 3
+   :roles #{:viewer :admin}})
 
-
-(def ^:dynamic *current-user* ANON-USER)
 
 
 (defn render-login-form [& {:keys [error info]}]
@@ -95,7 +95,8 @@
           :error "Not allowed"
           "User not allowed to log in."
           "Contact system.administrator.")
-        :else (assoc (redirect "/") :session (assoc session :user (dissoc user :password)))))))
+        :else (assoc (redirect "/") :session (assoc session :user (dissoc user :password :class)))))))
+
 
 
 (defn cas20-parse-response [r]
@@ -191,10 +192,12 @@
 
 
 (defn handle-local-login [{:keys [obj-store]} {{:keys [username password]} :params session :session}]
-  (let [user (zobj/find-and-get-1 obj-store {:name username})]
+  (let [user (zobj/find-and-get-1 obj-store {:class :user :name username})
+        roles (if (= (:flags user) 3) #{:viewer :admin} #{:viewer})
+        usr1 (-> user (dissoc :password) (assoc :roles roles))]
     (cond
       (nil? user) (login-failed username "User not found in database.")
-      (password-check (:password user) password) (assoc (redirect "/") :session (assoc session :user (dissoc user :password)))
+      (password-check (:password user) password) (assoc (redirect "/") :session (assoc session :user usr1))
       :else (login-failed username "Password check failed."))))
 
 
@@ -216,52 +219,33 @@
    :status 200, :headers {"content-type" "text/html"}, :session {}})
 
 
-(def AUTH-URI
-  [["/view" :VIEWER]
-   ["/user" :VIEWER]
-   ["/data" :VIEWER]
-   ["/info" :VIEWER]
-   ["/admin" :VIEWER]
-   ])
-
-
-(defn auth-uri [uri]
-  (or (first (for [[p m] AUTH-URI :when (.startsWith uri p)] m)) :NONE))
-
-
-(defn wrap-user-auth [f]
-  (fn [{:keys [uri session] :as req}]
-    (let [auth (auth-uri uri)]
-      (cond
-        (= auth :NONE) (f req)
-        (= auth :none) (f req)
-        (nil? (:user session)) (redirect "/login")
-        :else (binding [*current-user* (:user session)] (f req))))))
-
-
-(defn wrap-keep-session [f]
-  (fn [{:keys [session] :as req}]
-    (let [resp (f req)]
-      (assoc resp :session (:session resp session)))))
-
-
-(defn change-password [{{:keys [auth]} :conf, :keys [obj-store]}
-                       {{:keys [user]} :session, {:keys [oldPassword newPassword repeatPassword]} :data}]
+(defn change-password [{{:keys [auth]} :conf, :keys [obj-store]} user {:keys [oldPassword newPassword repeatPassword]}]
   (cond
-    (nil? user) (zutl/log-rest-error "Not logged in." 401)
-    (not= :local (:auth auth)) (zutl/log-rest-error "Not available in this mode." 404)
-    (not= newPassword repeatPassword) (zutl/log-rest-error "Password mismatch." 400 "user=" (:name user))
-    (not (password-strong? newPassword)) (zutl/log-rest-error "Password too simple." 400 "user=" (:name user))
+    (nil? user) (rhr/unauthorized {:reason "not logged in"})
+    (not= :local (:auth auth)) (rhr/forbidden {:reason "not in this mode"})
+    (not= newPassword repeatPassword) (rhr/unauthorized {:reason "password mismatch"})
+    (not (password-strong? newPassword)) (rhr/unauthorized {:reason "password too simple"})
     :else
-    (let [urec (zobj/find-and-get-1 obj-store {:uuid (:uuid user)})]
+    (let [urec (zobj/find-and-get-1 obj-store {:id (:id user)})]
       (cond
-        (nil? urec)
-        (zutl/log-rest-error "User not in database." 403 "user=" (:name user))
-        (not (password-check (:password urec) oldPassword))
-        (zutl/log-rest-error "Authentication failed." 401 "user=" user)
+        (nil? urec) (rhr/forbidden {:reason "user not in database"})
+        (not (password-check (:password urec) oldPassword)) (rhr/forbidden {:reason "authentication failed"})
         :else
         (do
           (nil? (zobj/put-obj obj-store (assoc urec :password (password-hash newPassword))))
-          (zutl/rest-msg "Password changed."))
+          (rhr/no-content))
         ))))
+
+
+(defn wrap-zico-login-auth [f]
+  (fn [{:keys [session] :as req}]
+    (let [resp (if (:user session) (f req) (redirect "/login"))]
+      (assoc resp :session (:session resp session)))))
+
+; TODO rozszyć poszczególne metody logowania
+
+(defn wrap-zico-auth [f auth]
+  (cond
+    (or (= auth :none) (nil? auth)) f
+    :else (wrap-zico-login-auth f)))
 
