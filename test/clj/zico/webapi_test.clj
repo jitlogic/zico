@@ -6,7 +6,8 @@
      [zorka-integ-fixture *root-path* time-travel zorka obj-store trace-store]]
     [clojure.test :refer :all]
     [zico.objstore :as zobj]
-    [zico.trace :as ztrc])
+    [zico.trace :as ztrc]
+    [clojure.data.json :as json])
   (:import (io.zorka.tdb.store TraceStore)))
 
 
@@ -15,9 +16,10 @@
 
 (defn rest-post [uri data]
   (let [r (zorka {:uri     uri, :request-method :post,
+                  :scheme  "http"
                   :headers {"content-type" "application/edn"}
-                  :body    (pr-str data)})]
-    (if (string? (:body r)) (assoc r :data (read-string (:body r))) r)))
+                  :body    (json/write-str data)})]
+    (if (some? (:body r)) (assoc r :body (json/read-str (:body r) :key-fn keyword)) r)))
 
 
 (deftest test-agent-registration
@@ -26,7 +28,7 @@
           host (zobj/find-and-get-1 obj-store {:class :host, :name "test"})
           data {:id (:id host), :authkey (:authkey host)}]
       (is (some? host))
-      (is (= (dissoc rslt :body) {:status 201, :headers {"content-type" "application/edn"}, :data data}))
+      (is (= (dissoc rslt :headers) {:status 200, :body data}))
       (is (= "test" (:name host)))
       (is (= {} (ztrc/get-host-attrs zorka-app-state (:uuid host))))
       (is (= "APP" (:name (zobj/get-obj obj-store {:class :app, :id (:app host)}))))
@@ -82,9 +84,9 @@
     (let [rrslt (rest-post "/agent/register" {:rkey "zorka", :name "test"})
           host (zobj/find-and-get-1 obj-store {:class :host, :name "test"})
           rdata {:id (:id host), :authkey (:authkey host)}
-          srslt (zorka {:uri  "/agent/session", :request-method :post,
-                        :data {:id    (-> rrslt :body :data :id),
-                               :authkey (-> rrslt :body :data :authkey)}})
+          srslt (zorka {:uri  "/agent/session", :request-method :post, :scheme "http",
+                        :body (json/write-str {:id      (-> rrslt :body :data :id),
+                                               :authkey (-> rrslt :body :data :authkey)})})
           sdata {:session (.getSession ^TraceStore trace-store (str (:id host)))}]
       (is (some? host))
       (is (some? sdata))

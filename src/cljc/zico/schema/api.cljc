@@ -22,13 +22,13 @@
    :size s/Int})
 
 (s/defschema AgentRegReq
-  {:id                     s/Int
+  {(s/optional-key :id)    s/Int
    :rkey                   s/Str
-   :akey                   s/Str
+   (s/optional-key :akey)  s/Str
    :name                   s/Str
    (s/optional-key :app)   s/Str
    (s/optional-key :env)   s/Str
-   (s/optional-key :attrs) {s/Str s/Str}
+   (s/optional-key :attrs) {s/Any s/Str}
    })
 
 (s/defschema AgentRegResp

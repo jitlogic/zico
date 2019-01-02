@@ -199,30 +199,32 @@
 (defn json-resp [status body]
   {:status  status,
    :headers {"Content-Type" "application/json"}
-   :body    (json/print-json body)})
+   :body    (json/write-str body)})
 
 
 (defn handle-json-req [f app-state schema req]
-  (try
-    (let [args (json/read-str (body-string req))]
-      (if-let [chk (s/check schema args)]
-        (do
-          (log/error "Invalid request" (:uri req) ": " (pr-str args) ": " (pr-str chk))
-          (json-resp 400 {:reason "invalid request"}))
-        (let [{:keys [status body]} (f app-state args)]
-          (when (>= status 400)
-            (log/error "Error executing " (:uri req) ": " (pr-str args) ": " status ":" body))
-          (json-resp status body))))
-    (catch Exception _
-      (json-resp 500 {:reason "malformed request or server error"}))))
+  (let [body (body-string req)]
+    (try
+      (let [args (json/read-str body :key-fn keyword)]
+        (if-let [chk (s/check schema args)]
+          (do
+            (log/error "Invalid request" (:uri req) ": " (pr-str args) ": " (pr-str chk))
+            (json-resp 400 {:reason "invalid request"}))
+          (let [{:keys [status body] :as r} (f app-state args)]
+            (when (>= status 400)
+              (log/error "Error executing " (:uri req) ": " (pr-str args) ": " status ":" body))
+            (json-resp status body))))
+      (catch Exception e
+        (log/error e "Server error:" body)
+        (json-resp 500 {:reason "malformed request or server error"})))))
 
 
 (defn zico-agent-routes [app-state]
   (cc/routes
     (cc/POST "/register" req
-      (handle-json-req ztrc/agent-register app-state zico.schema.api/AgentSessionReq req))
+      (handle-json-req ztrc/agent-register app-state zico.schema.api/AgentRegReq req))
     (cc/POST "/session" req
-      (handle-json-req ztrc/agent-session app-state zico.schema.api/AgentRegReq req))
+      (handle-json-req ztrc/agent-session app-state zico.schema.api/AgentSessionReq req))
     (cc/POST "/submit/agd" {:keys [headers body]}
       (ztrc/submit-agd
         app-state

@@ -259,7 +259,7 @@
                   :comment "Auto-registered host.", :flags 0x01, :authkey (zutl/random-string 16 zutl/ALPHA-STR)}
             hobj (zobj/put-obj obj-store hobj)]
         (update-host-attrs app-state (:id hobj) attrs)
-        (rhr/created {:id (:id hobj), :authkey (:authkey hobj)} 201)))))
+        (rhr/ok {:id (:id hobj), :authkey (:authkey hobj)})))))
 
 
 (defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
