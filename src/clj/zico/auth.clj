@@ -6,7 +6,8 @@
     [ring.util.response :refer [redirect]]
     [ring.util.http-response :as rhr]
     [clojure.data.xml :as xml]
-    [clojure.string :as cs])
+    [clojure.set :as cs]
+    [compojure.api.meta])
   (:import (java.security MessageDigest)
            (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)
            (com.jitlogic.zorka.common.util ZorkaUtil)))
@@ -248,4 +249,17 @@
   (cond
     (or (= auth :none) (nil? auth)) f
     :else (wrap-zico-login-auth f)))
+
+
+(defn wrap-allow-roles [f allowed]
+  (fn [req]
+    (let [roles (-> req :session :user :roles)]
+      (if (empty? (cs/intersection allowed roles))
+        (rhr/forbidden {:reason "User not allowed."})
+        (f req)))))
+
+
+(defmethod compojure.api.meta/restructure-param :allow-roles [_ roles acc]
+  (update-in acc [:middleware] conj [wrap-allow-roles roles]))
+
 

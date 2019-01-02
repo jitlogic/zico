@@ -4,7 +4,6 @@
     [compojure.core :as cc]
     [compojure.route :refer [not-found resources]]
     [compojure.api.sweet :as ca]
-    [compojure.api.meta]
     [hiccup.page :refer [include-js include-css html5]]
     [ring.middleware.content-type :refer [wrap-content-type]]
     [ring.middleware.cookies :refer [wrap-cookies]]
@@ -25,7 +24,7 @@
     [slingshot.slingshot :refer [throw+]]
     [taoensso.timbre :as log]
     [zico.admin :as zadm]
-    [zico.auth :as zaut :refer [wrap-zico-auth]]
+    [zico.auth :as zaut :refer [wrap-zico-auth wrap-allow-roles]]
     [zico.objstore :as zobj]
     [zico.schema.db]
     [zico.schema.api]
@@ -54,6 +53,7 @@
                 (for [r (zobj/find-and-get obj-store {:class class})]
                   (dissoc r :class))))}
      :post {:summary "add object"
+            :middleware [[wrap-allow-roles #{:admin}]]
             :responses {201 {:schema schema :description "created object"}}
             :parameters {:body-params (dissoc schema :id)}
             :handler
@@ -73,6 +73,7 @@
                   (rhr/ok (dissoc obj :class))
                   (rhr/not-found {:reason "no such object"})))}
      :put    {:summary "update object"
+              :middleware [[wrap-allow-roles #{:admin}]]
               :responses {200 {:schema schema}}
               :parameters {:path-params {:id s/Int}, :body-params schema}
               :handler
@@ -81,8 +82,8 @@
                   (rhr/ok (dissoc (zobj/put-obj obj-store (assoc v :id id, :class class)) :class))
                   (rhr/not-found {:reason "no such object"})))}
      :delete {:summary "delete object"
+              :middleware [[wrap-allow-roles #{:admin}]]
               :parameters {:path-params {:id s/Int}}
-              :responses {204 {}}
               :handler
               (fn [{{:keys [id]} :path-params}]
                 (do
@@ -179,14 +180,17 @@
     (ca/context "/admin" []
       :tags ["admin"]
       (ca/GET "/backup" []
+        :allow-roles #{:admin}
         :summary "lists all backups"
         :return [zico.schema.api/BackupItem]
         (rhr/ok (zadm/backup-list app-state nil)))
       (ca/POST "/backup" []
+        :allow-roles #{:admin}
         :summary "performs backup of configuration database"
         :return zico.schema.api/BackupItem
         (rhr/ok (zadm/backup app-state nil)))
       (ca/POST "/backup/:id" []
+        :allow-roles #{:admin}
         :summary "restores given backup"
         :path-params [id :- s/Int]
         (rhr/ok (zadm/restore app-state id))))))

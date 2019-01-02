@@ -160,6 +160,7 @@
     {:attr :comment, :label "Comment"}
     {:attr :fullname, :label "Full name", :list-col2 true}
     {:attr :email, :label "Email"}
+    {:attr :flags, :label "Flags", :type :int}
     {:attr :password, :label "Password"}))
 
 (def USER-OBJ-TEMPLATE
