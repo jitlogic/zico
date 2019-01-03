@@ -4,7 +4,9 @@
             [clj-time.format :as ctfo]
             [hiccup.page :refer [include-js include-css html5]]
             [clojure.string :as cs]
-            [clojure.data.json :as json])
+            [aero.core]
+            [clojure.data.json :as json]
+            [schema.core :as s])
   (:import (java.io File)
            (java.util UUID Properties HashMap)
            (java.util.concurrent ExecutorService TimeUnit)
@@ -247,3 +249,8 @@
   [status reason & args]
   (log/error "ERROR: " reason ": " (str args))
   {:type :zico, :reason reason, :status status})
+
+(defn read-config [schema & sources]
+  (let [cfg (reduce recursive-merge (map aero.core/read-config sources))]
+    (s/validate schema cfg)
+    cfg))

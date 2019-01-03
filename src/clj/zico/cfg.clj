@@ -1,7 +1,7 @@
 (ns zico.cfg
-  "ZICO configuration file schema"
+  "ZICO configuration file schema and access functions."
   (:require
-    [clojure.spec.alpha :as csa]
+    [aero.core]
     [schema.core :as s]))
 
 (s/defschema JettyHttpConf

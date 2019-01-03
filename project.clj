@@ -11,6 +11,7 @@
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
                  [prismatic/schema "1.1.9"]
                  [slingshot "0.12.2"]
+                 [aero "1.1.3"]
 
                  [ring/ring-core "1.7.1"]
                  [ring/ring-devel "1.7.1"]

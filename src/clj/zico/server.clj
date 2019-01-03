@@ -54,20 +54,6 @@
       (ztrc/with-tracer-components old-state)
       zweb/with-zorka-web-handler)))
 
-(defn load-conf [home-dir]
-  (let [path (zutl/to-path home-dir "zico.conf")
-        conf (if (zutl/is-file? path)
-               (zutl/recursive-merge DEFAULT-CONF (read-string (slurp path)))
-               DEFAULT-CONF)
-        updf #(if (string? %) (.replace % "${zico.home}" home-dir))]
-    (s/validate zcfg/ZicoConf conf)
-    (->
-      conf
-      (assoc :home-dir home-dir)
-      (update-in [:backup :path] updf)
-      (update-in [:zico-db :subname] updf)
-      (update-in [:tstore :path] updf)
-      (update-in [:log :main :path] updf))))
 
 (def TRAPPER-LEVELS
   {ZorkaLogLevel/TRACE :trace,
@@ -88,7 +74,18 @@
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
-   (let [conf (load-conf (zutl/ensure-dir home-dir)), logs (-> conf :log :main)]
+   (let [updf #(if (string? %) (.replace % "${zico.home}" home-dir))
+         conf (->
+                (zutl/read-config
+                  zcfg/ZicoConf
+                  (io/resource "zico/zico.conf")
+                  (zutl/to-path (zutl/ensure-dir home-dir) "zico.conf"))
+                (assoc :home-dir home-dir)
+                (update-in [:backup :path] updf)
+                (update-in [:zico-db :subname] updf)
+                (update-in [:tstore :path] updf)
+                (update-in [:log :main :path] updf))
+         logs (-> conf :log :main)]
      (zutl/ensure-dir (-> conf :backup :path))
      (zutl/ensure-dir (-> conf :tstore :path))
      (zutl/ensure-dir (-> conf :log :main :path))
