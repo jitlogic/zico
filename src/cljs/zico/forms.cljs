@@ -258,6 +258,11 @@
       (str url "/edit") id fdefs])])
 
 
+(defn resolve-ref [rsub id]
+  (let [data @(zs/subscribe [rsub])]
+    (first (for [d data :when (= id (:id d))] (:name d)))))
+
+
 (defn render-item [detail? &{:keys [vpath dpath fdefs url list-col1 list-col2 xhr-url]
                      :or {list-col1 :name, list-col2 :comment} :as cfg}]
   (fn [{:keys [id glyph] :as obj}]
@@ -274,12 +279,16 @@
         (render-btns cfg obj))]
      (when detail?
        [:div.kvl
-        (for [{:keys [attr label] :as fdef} fdefs
-              :when (not= attr :glyph)]
-          ^{:key attr}
-          [:div.kv
-           [:div.k label]
-           [:div.v (attr obj)]])])]))
+        (doall
+          (for [{:keys [attr label rsub] :as fdef} fdefs
+                :when (not= attr :glyph)]
+            ^{:key attr}
+            [:div.kv
+             [:div.k label]
+             [:div.v
+              (if rsub
+                (resolve-ref rsub (attr obj))
+                (attr obj))]]))])]))
 
 
 (defn render-list [&{:keys [vpath dpath data class fdefs url xhr-url template title on-refresh]}]

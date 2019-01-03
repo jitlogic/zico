@@ -99,9 +99,10 @@
     {:attr :comment, :label "Comment"}
     {:attr :authkey, :label "Auth key"}
     {:attr   :app, :label "Application", :show :detail,
-     :widget :select, :rsub :data/cfg-app-list}
+     :widget :select, :rsub :data/cfg-app-list, :type :int}
     {:attr   :env, :label "Environment", :show :detail,
-     :widget :select, :rsub :data/cfg-env-list}))
+     :widget :select, :rsub :data/cfg-env-list, :type :int}))
+
 
 (let [cfo (cfg-object :host "Host" HOST-FDEFS HOST-TEMPLATE)]
   (def host-list (:list cfo))
