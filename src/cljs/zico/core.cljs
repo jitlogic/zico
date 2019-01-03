@@ -18,17 +18,23 @@
     [zico.views.common :as zv]))
 
 
-
 ;; Load basic dictionary data and initialize UI state
 
 (zs/dispatch [:once :set [:view :menu :open?] false])
 
 
-
 (defn current-page []
-  (if-let [[view {params :query-params}] (rs/get :current-page)]
-    [:div#top [view params]]
-    [:div "No such view."]))
+  (zs/dispatch
+    [:xhr/get (io/api "/user/info") [:user :info] nil
+     :on-error zv/DEFAULT-SERVER-ERROR])
+  (fn []
+    (if @zv/USER-INFO
+      (if-let [[view {params :query-params}] (rs/get :current-page)]
+        [:div#top [view params]]
+        [:div.splash-centered
+         [:div.splash-frame "No such view."]])
+      [:div.splash-centered
+       [:div.splash-frame "Loading profile, please wait."]])))
 
 
 (defn main-routes [& {:as routes}]
@@ -92,7 +98,6 @@
 (defonce
   system-info-timer
   (js/setInterval (fn [] (system-info-refresh)) 10000))     ; TODO this is stateful
-
 
 
 ;; -------------------------

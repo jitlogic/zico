@@ -270,7 +270,8 @@
           [:div.ci (zw/svg-icon f i c)]))
       [:div.c1.dsc [:div.n (list-col1 obj)]]
       [:div.c2.cmt (list-col2 obj)]
-      (render-btns cfg obj)]
+      (if (zv/has-role :admin)
+        (render-btns cfg obj))]
      (when detail?
        [:div.kvl
         (for [{:keys [attr label] :as fdef} fdefs
@@ -292,7 +293,7 @@
                   :vpath vpath
                   :title title,
                   :on-refresh on-refresh,
-                  :add-left (when template
+                  :add-left (when (and template (zv/has-role :admin))
                               [:div (zw/svg-button
                                       :awe :plus :green "New"
                                       [:form/edit-new vpath dpath

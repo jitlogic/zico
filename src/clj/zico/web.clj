@@ -38,9 +38,11 @@
 (defn render-loading-page [_]
   {:status  200,
    :headers {"Content-Type", "text/html;charset=utf-8"}
-   :body (zutl/render-page
-           [:div#app [:h3 "Loading application ..."]]
-           (include-js "/js/app.js"))})
+   :body    (zutl/render-page
+              [:div#app
+               [:div.splash-centered
+                [:div.splash-frame "Loading application ..."]]]
+              (include-js "/js/app.js"))})
 
 
 (defn zico-cfg-resource-0 [obj-store class schema]

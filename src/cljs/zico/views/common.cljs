@@ -12,6 +12,14 @@
 
 (zs/dispatch [:once :set [:view :menu] MENU-INITIAL-STATE])
 
+(def USER-INFO
+  (zs/subscribe [:get [:user :info]]))
+
+
+(defn has-role [role]
+  (let [roles (:roles @USER-INFO)]
+    (and (set? roles) (roles role))))
+
 
 (defn menu-item [family glyph label path {:keys [changed?] :as params}]
   [:div.itm {:on-click (zs/to-handler [:to-screen path]), :title label}
@@ -32,8 +40,10 @@
           [:div.itm (zw/svg-button :awe :home :white "Hosts" [:to-screen "cfg/host/list"])]
           [:div.itm (zw/svg-button :awe :tags :white "Trace types" [:to-screen "cfg/ttype/list"])]
           [:div.itm (zw/svg-button :awe :lightbulb :white "Registrations" [:to-screen "cfg/hostreg/list"])]
-          [:div.itm (zw/svg-button :awe :user :white "Users" [:to-screen "cfg/user/list"])]
-          [:div.itm (zw/svg-button :awe :hdd :white "Backup" [:to-screen "adm/backup"])]
+          (if (has-role :admin)
+            [:div.itm (zw/svg-button :awe :user :white "Users" [:to-screen "cfg/user/list"])])
+          (if (has-role :admin)
+            [:div.itm (zw/svg-button :awe :hdd :white "Backup" [:to-screen "adm/backup"])])
           ]]))))
 
 

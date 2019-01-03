@@ -19,6 +19,7 @@
 (def register-sub rfc/reg-sub-raw)
 
 (def reg-event-fx rfc/reg-event-fx)
+(def reg-fx rfc/reg-fx)
 
 (def initial-state
   {:user {}, :data {}, :view {}, :system {}})
