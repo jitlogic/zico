@@ -12,8 +12,7 @@
             [ring.middleware.session.memory]
             [zico.objstore :as zobj]
             [zico.cfg :as zcfg])
-  (:gen-class)
-  (:import (org.slf4j.impl ZorkaLoggerFactory ZorkaTrapper ZorkaLogLevel)))
+  (:gen-class))
 
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
@@ -32,9 +31,6 @@
           (require sym :reload))
         (log/info "Reloading configuration.")
         (reload-fn)))))
-
-(def DEFAULT-CONF
-  (read-string (slurp (io/resource "zico/zico.conf"))))
 
 
 (defonce ^:dynamic zorka-app-state {})
@@ -55,22 +51,6 @@
       zweb/with-zorka-web-handler)))
 
 
-(def TRAPPER-LEVELS
-  {ZorkaLogLevel/TRACE :trace,
-   ZorkaLogLevel/DEBUG :debug,
-   ZorkaLogLevel/INFO  :info,
-   ZorkaLogLevel/WARN  :warn,
-   ZorkaLogLevel/ERROR :error,
-   ZorkaLogLevel/FATAL :fatal})
-
-(defn timbre-trapper []
-  (reify
-    ZorkaTrapper
-    (trap [_ level tag msg e args]
-      (cond
-        (nil? e) (log/log (TRAPPER-LEVELS level :info) tag msg (seq args))
-        :else (log/log (TRAPPER-LEVELS level :info) e tag msg (seq args))))))
-
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
@@ -89,11 +69,9 @@
      (zutl/ensure-dir (-> conf :backup :path))
      (zutl/ensure-dir (-> conf :tstore :path))
      (zutl/ensure-dir (-> conf :log :main :path))
-     ; TODO konfiguracja logów przed inicjacją serwera - tak aby logi slf4j trafiły od razu we właściwe miejsce
      (taoensso.timbre/merge-config!
        {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
                     :println {:enabled? false}}})
-     (.swapTrapper (ZorkaLoggerFactory/getInstance) (timbre-trapper))
      (taoensso.timbre/set-level! (-> conf :log :level))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 

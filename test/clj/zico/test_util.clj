@@ -2,7 +2,8 @@
   (:require
     [zico.server :as zsvr]
     [clojure.java.jdbc :as jdbc]
-    [zico.util :as zutl])
+    [zico.util :as zutl]
+    [clojure.java.io :as io])
   (:import
     (java.io File)
     (org.apache.tomcat.dbcp.dbcp BasicDataSource)))
@@ -37,9 +38,11 @@
   ;(when-let [^RotatingTraceStore ts (-> app-state :trace-store)] (.close ts))
   )
 
+(def DEFAULT-CONF
+  (read-string (slurp (io/resource "zico/zico.conf"))))
 
 (defn zorka-integ-fixture [f]
-  (let [conf (zutl/recursive-merge zsvr/DEFAULT-CONF (read-string (slurp "testdata/zorka.conf")))
+  (let [conf (zutl/recursive-merge DEFAULT-CONF (read-string (slurp "testdata/zorka.conf")))
         _ (rm-rf (File. "/tmp/zico-test"))
         app-state (zsvr/new-app-state {} conf)
         root-path "/tmp/zico-test", root (File. root-path)]

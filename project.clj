@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/tools.reader "1.3.2"]
 
-                 [io.zorka/zorka-tdb "1.90.6-SNAPSHOT"]
+                 [io.zorka/zorka-tdb "1.90.6-SNAPSHOT" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
                  [com.jitlogic.zorka/zorka-netkit "1.90.6-SNAPSHOT"]
                  [prismatic/schema "1.1.9"]
                  [slingshot "0.12.2"]
@@ -26,6 +26,7 @@
 
                  [org.slf4j/slf4j-api "1.7.25"]
                  [com.taoensso/timbre "4.10.0"]
+                 [com.fzakaria/slf4j-timbre "0.3.12"]
 
                  [honeysql "0.9.4"]
                  [org.clojure/java.jdbc "0.7.7"]
