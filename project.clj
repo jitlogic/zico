@@ -39,8 +39,7 @@
             [lein-cljsbuild "1.1.7"]
             [lein-asset-minifier "0.4.5" :exclusions [org.clojure/clojure]]]
 
-  :ring {:handler zico.handler/app
-         :uberwar-name "zico.war"}
+  :ring {:uberwar-name "zico.war"}
 
   :min-lein-version "2.8.3"
 
@@ -50,7 +49,7 @@
 
   :uberjar-exclusions [#"assets/.*.json" "public/css/zico.css"]
 
-  :main zico.server
+  :main zico.server.main
 
   :clean-targets ^{:protect false}
   [:target-path
@@ -107,7 +106,7 @@
 
   :sass {:src "src/sass/" :dst "resources/public/css/"}
 
-  :profiles {:dev      {:repl-options {:init-ns          zico.server
+  :profiles {:dev      {:repl-options {:init-ns          zico.server.main
                                        :nrepl-middleware [cider.piggieback/wrap-cljs-repl]}
 
                         :dependencies [[figwheel-sidecar "0.5.18"]

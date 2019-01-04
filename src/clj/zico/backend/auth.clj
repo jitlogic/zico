@@ -1,16 +1,17 @@
-(ns zico.auth
+(ns zico.backend.auth
   (:require
-    [zico.util :as zutl]
     [taoensso.timbre :as log]
-    [zico.objstore :as zobj]
     [ring.util.response :refer [redirect]]
     [ring.util.http-response :as rhr]
     [clojure.data.xml :as xml]
     [clojure.set :as cs]
-    [compojure.api.meta])
-  (:import (java.security MessageDigest)
-           (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)
-           (com.jitlogic.zorka.common.util ZorkaUtil)))
+    [compojure.api.meta]
+    [zico.backend.objstore :as zobj]
+    [zico.backend.util :as zbu])
+  (:import
+    (java.security MessageDigest)
+    (com.jitlogic.netkit.http HttpStreamClient HttpConfig HttpMessage)
+    (com.jitlogic.zorka.common.util ZorkaUtil)))
 
 
 (def ANON-USER
@@ -23,9 +24,8 @@
    :roles #{:viewer :admin}})
 
 
-
 (defn render-login-form [& {:keys [error info]}]
-  (zutl/render-page
+  (zbu/render-page
     [:form#login {:method :post :autocomplete :off, :action "/login"}
      [:div.login-form
       [:h1.login-title "ZICO"]
@@ -47,7 +47,7 @@
 
 
 (defn render-message-form [mode title & msgs]
-  (zutl/render-page
+  (zbu/render-page
     [:div.login-short.login-form.login-short
      [(case mode
         :error :h1.login-title.c-red
@@ -169,7 +169,7 @@
 (defn password-hash
   "Generates SSHA hash from password."
   ([password]
-   (password-hash password (zutl/random-string 3 zutl/SALT-STR)))
+   (password-hash password (zbu/random-string 3 zbu/SALT-STR)))
   ([password salt]
     (let [md (MessageDigest/getInstance "SHA-512")
           hs (.digest md (.getBytes (str salt password)))]
@@ -181,7 +181,7 @@
   (cond
     (.startsWith pwhash "SSHA512:")
     (first
-      (for [c1 zutl/SALT-STR, c2 zutl/SALT-STR, c3 zutl/SALT-STR,
+      (for [c1 zbu/SALT-STR, c2 zbu/SALT-STR, c3 zbu/SALT-STR,
             :let [h (password-hash password (str c1 c2 c3))]
             :when (= pwhash h)] true))
     :else (= pwhash password)))

@@ -1,29 +1,16 @@
-(ns zico.util
+(ns zico.backend.util
   (:require [taoensso.timbre :as log]
+            [aero.core :as aero]
+            [hiccup.page :refer [html5 include-css]]
+            [schema.core :as s]
             [clj-time.coerce :as ctco]
-            [clj-time.format :as ctfo]
-            [hiccup.page :refer [include-js include-css html5]]
-            [clojure.string :as cs]
-            [aero.core]
-            [clojure.data.json :as json]
-            [schema.core :as s])
+            [clj-time.format :as ctfo])
   (:import (java.io File)
-           (java.util UUID Properties HashMap)
-           (java.util.concurrent ExecutorService TimeUnit)
-           (io.zorka.tdb.util TrivialExecutor)
-           (java.net Socket)))
+           (java.util Properties HashMap)
+           (java.net Socket)
+           (java.util.concurrent Executors Executor ExecutorService TimeUnit)))
 
-(def ALPHA-STR "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-(def SALT-STR (str ALPHA-STR "!@#$%^&*!@#$%%^^&*"))
-
-
-(defn random-string
-  "Generates random string of alphanumeric characters of given length."
-  ([len]
-   (random-string len ALPHA-STR))
-  ([len s]
-   (apply str (for [_ (range len)] (rand-nth s)))))
-
+(def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
 
 (defn cur-time
   ([] (cur-time 0))
@@ -32,39 +19,6 @@
 
 (defn to-path [home-dir path]
   (if (.startsWith path "/") path (str home-dir "/" path)))
-
-
-(defn tst [t]
-  "Generates timestamp from (any)."
-  (cond
-    (nil? t) nil
-    (re-matches #"\d\d" t) (ctco/to-date-time (str t ":00:00"))
-    (re-matches #"\d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
-    (re-matches #"\d\d:\d\d:\d\d" t) (ctco/to-date-time t)
-    (re-matches #"\d\d \d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t ":00"))
-    (re-matches #"\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t))
-    (re-matches #"\d\d\d\d-\d\d-\d\d" t) (ctco/to-date-time (str t " 00:00:00"))
-    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
-    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time t)
-    (re-matches #"\d{8}T\d{6}Z" t) (ctco/to-date-time t)
-    :else (throw (RuntimeException. (str "Invalid date time format '" t "'")))))
-
-
-(defn to-java-time [t]
-  (ctco/to-long (tst t)))
-
-
-(defn to-unix-time [t]
-  (/ (ctco/to-long (tst t)) 1000))
-
-
-(defn str-time-yymmdd-hhmmss-sss
-  ([]
-   (str-time-yymmdd-hhmmss-sss (cur-time)))
-  ([t]
-   (ctfo/unparse
-     (:date-hour-minute-second-ms ctfo/formatters)
-     (ctco/from-long t))))
 
 
 (defn conf-reload-task [reload-fn home & files]
@@ -92,7 +46,6 @@
      (empty? coll) nil
      (= item (first coll)) idx
      :else (recur item (rest coll) (inc idx)))))
-
 
 (defn to-str [v]
   (cond
@@ -122,12 +75,14 @@
   (let [f (File. path)]
     (and (.exists f) (.isFile f))))
 
+
 (defn ensure-dir [^String path]
   (let [f (File. path)]
     (cond
       (not (.exists f)) (if (.mkdirs f) (.getPath f) (throw (RuntimeException. (str "Cannot create directory: " f))))
       (.isDirectory f) (.getPath f)
       :else (throw (RuntimeException. (str "Not a directory: " f))))))
+
 
 (defn partition-split [n coll]
   (when coll
@@ -151,38 +106,23 @@
   ([conf]
    (conf-to-props conf "" (Properties.)))
   ([conf prefix]
-    (conf-to-props conf prefix (Properties.)))
+   (conf-to-props conf prefix (Properties.)))
   ([conf prefix prop]
    (doseq [[k v] conf]
      (cond
        (map? v) (conf-to-props v (str prefix (to-str k) ".") prop)
        (some? v) (.setProperty prop (str prefix (to-str k)) (to-str v))))
-    prop))
-
-
-(defn simple-executor [new-nthreads old-nthreads ^ExecutorService old-executor]
-  (if (or (nil? old-executor) (not= old-nthreads new-nthreads))
-    (let [new-executor (TrivialExecutor/newExecutor new-nthreads)]
-      (when (instance? ExecutorService old-executor)
-        (.execute new-executor
-          (fn []
-            (Thread/sleep 12000)
-            (log/info "Shutting down old indexer thread pool ...")
-            (.shutdown old-executor)
-            (log/info "Waiting for old thread pool to finish ...")
-            (.awaitTermination old-executor 300 TimeUnit/SECONDS))))
-      new-executor)
-    old-executor))
+   prop))
 
 
 (defn filter-unique
   ([seq]
-    (filter-unique seq #{}))
+   (filter-unique seq #{}))
   ([[obj & seq] acc]
-    (cond
-      (nil? obj) nil
-      (acc obj) (recur seq acc)
-      :else (lazy-seq (cons obj (filter-unique seq (conj acc obj)))))))
+   (cond
+     (nil? obj) nil
+     (acc obj) (recur seq acc)
+     :else (lazy-seq (cons obj (filter-unique seq (conj acc obj)))))))
 
 
 (defn java-hash-map [& {:as data}]
@@ -216,14 +156,87 @@
     m))
 
 
-(def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
+(defn read-config [schema & sources]
+  (let [cfg (reduce recursive-merge (map aero/read-config sources))]
+    (s/validate schema cfg)
+    cfg))
 
 
-(defn parse-method-str [s]
-  (when s
-    (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
-      (let [cs (.split c "\\." 0), cl (alength cs)]
-        {:result r, :package p, :class c, :method m, :args a}))))
+(defn to-int [x]
+  (cond
+    (int? x) x
+    (string? x) (Integer/parseInt x)
+    (number? x) (.longValue x)
+    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
+
+
+
+
+(defn tst [t]
+  "Generates timestamp from (any)."
+  (cond
+    (nil? t) nil
+    (re-matches #"\d\d" t) (ctco/to-date-time (str t ":00:00"))
+    (re-matches #"\d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
+    (re-matches #"\d\d:\d\d:\d\d" t) (ctco/to-date-time t)
+    (re-matches #"\d\d \d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t ":00"))
+    (re-matches #"\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t))
+    (re-matches #"\d\d\d\d-\d\d-\d\d" t) (ctco/to-date-time (str t " 00:00:00"))
+    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
+    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time t)
+    (re-matches #"\d{8}T\d{6}Z" t) (ctco/to-date-time t)
+    :else (throw (RuntimeException. (str "Invalid date time format '" t "'")))))
+
+
+(defn to-java-time [t]
+  (ctco/to-long (tst t)))
+
+
+(defn to-unix-time [t]
+  (/ (ctco/to-long (tst t)) 1000))
+
+
+(def ALPHA-STR "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+(def SALT-STR (str ALPHA-STR "!@#$%^&*!@#$%%^^&*"))
+
+(defn random-string
+  "Generates random string of alphanumeric characters of given length."
+  ([len]
+   (random-string len ALPHA-STR))
+  ([len s]
+   (apply str (for [_ (range len)] (rand-nth s)))))
+
+
+(defn str-time-yymmdd-hhmmss-sss
+  ([]
+   (str-time-yymmdd-hhmmss-sss (cur-time)))
+  ([t]
+   (ctfo/unparse
+     (:date-hour-minute-second-ms ctfo/formatters)
+     (ctco/from-long t))))
+
+
+(defn new-executor [nthreads]
+  (if (> nthreads 0)
+    (Executors/newFixedThreadPool nthreads)
+    (reify
+      Executor
+      (execute [_ command]
+        (.run command)))))
+
+(defn simple-executor [new-nthreads old-nthreads ^ExecutorService old-executor]
+  (if (or (nil? old-executor) (not= old-nthreads new-nthreads))
+    (let [new-executor (new-executor new-nthreads)]
+      (when (instance? ExecutorService old-executor)
+        (.execute new-executor
+                  (fn []
+                    (Thread/sleep 12000)
+                    (log/info "Shutting down old indexer thread pool ...")
+                    (.shutdown old-executor)
+                    (log/info "Waiting for old thread pool to finish ...")
+                    (.awaitTermination old-executor 300 TimeUnit/SECONDS))))
+      new-executor)
+    old-executor))
 
 
 (defn render-page [& content]
@@ -235,22 +248,3 @@
      (include-css (str "/css/zico" (if (System/getProperty "zico.dev.mode") ".css" ".min.css")))]
     [:body {:class "body-container"}
      content]))
-
-
-(defn to-int [x]
-  (cond
-    (int? x) x
-    (string? x) (Integer/parseInt x)
-    (number? x) (.longValue x)
-    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
-
-
-(defn error
-  [status reason & args]
-  (log/error "ERROR: " reason ": " (str args))
-  {:type :zico, :reason reason, :status status})
-
-(defn read-config [schema & sources]
-  (let [cfg (reduce recursive-merge (map aero.core/read-config sources))]
-    (s/validate schema cfg)
-    cfg))

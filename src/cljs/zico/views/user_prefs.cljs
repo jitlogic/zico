@@ -1,9 +1,10 @@
 (ns zico.views.user-prefs
   (:require
     [reagent.ratom :as ra]
-    [zico.state :as zs]
+    [zico.widgets.state :as zs]
     [zico.views.common :as zv]
-    [zico.widgets :as zw]))
+    [zico.widgets.widgets :as zw]
+    [zico.widgets.screen :as zws]))
 
 (def RE-PASS [#".*[a-z].*" #".*[A-Z].*" #".*[0-9].*" #".*[^a-zA-Z0-9].*"])
 
@@ -79,7 +80,9 @@
         ))))
 
 (defn render-user-prefs []
-  (zv/render-screen
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :caption "User preferences"
     :central [user-prefs-panel]))
 

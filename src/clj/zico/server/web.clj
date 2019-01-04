@@ -1,6 +1,5 @@
-(ns zico.web
+(ns zico.server.web
   (:require
-    [clojure.data.json :as json]
     [compojure.core :as cc]
     [compojure.route :refer [not-found resources]]
     [compojure.api.sweet :as ca]
@@ -22,83 +21,14 @@
     [ring.util.response :refer [redirect]]
     [schema.core :as s]
     [slingshot.slingshot :refer [throw+]]
-    [taoensso.timbre :as log]
-    [zico.admin :as zadm]
-    [zico.auth :as zaut :refer [wrap-zico-auth wrap-allow-roles]]
-    [zico.objstore :as zobj]
-    [zico.schema.db]
+    [zico.backend.admin :as zadm]
+    [zico.backend.auth :as zaut :refer [wrap-zico-auth wrap-allow-roles]]
+    [zico.backend.web :as zbw]
     [zico.schema.api]
+    [zico.schema.db]
     [zico.schema.tdb]
-    [zico.trace :as ztrc]
-    [zico.util :as zutl])
+    [zico.server.trace :as ztrc])
   (:import (com.jitlogic.netkit.util NetkitUtil)))
-
-(def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
-
-(defn render-loading-page [_]
-  {:status  200,
-   :headers {"Content-Type", "text/html;charset=utf-8"}
-   :body    (zutl/render-page
-              [:div#app
-               [:div.splash-centered
-                [:div.splash-frame "Loading application ..."]]]
-              (include-js "/js/app.js"))})
-
-
-(defn zico-cfg-resource-0 [obj-store class schema]
-  (ca/resource
-    {:get  {:summary "list objects"
-            :responses {200 {:schema [schema]}}
-            :handler
-            (fn [_]
-              (rhr/ok
-                (for [r (zobj/find-and-get obj-store {:class class})]
-                  (dissoc r :class))))}
-     :post {:summary "add object"
-            :middleware [[wrap-allow-roles #{:admin}]]
-            :responses {201 {:schema schema :description "created object"}}
-            :parameters {:body-params (dissoc schema :id)}
-            :handler
-            (fn [{obj :body-params}]
-              (rhr/ok
-                (dissoc (zobj/put-obj obj-store (assoc obj :class class)) :class)))}}))
-
-
-(defn zico-cfg-resource-1 [obj-store class schema]
-  (ca/resource
-    {:get    {:summary "get object"
-              :responses {200 {:schema schema}}
-              :parameters {:path-params {:id s/Int}}
-              :handler
-              (fn [{{:keys [id]} :path-params}]
-                (if-let [obj (zobj/get-obj obj-store {:class class, :id id})]
-                  (rhr/ok (dissoc obj :class))
-                  (rhr/not-found {:reason "no such object"})))}
-     :put    {:summary "update object"
-              :middleware [[wrap-allow-roles #{:admin}]]
-              :responses {200 {:schema schema}}
-              :parameters {:path-params {:id s/Int}, :body-params schema}
-              :handler
-              (fn [{{:keys [id]} :path-params, v :body-params}]
-                (if (zobj/get-obj obj-store {:class class, :id id})
-                  (rhr/ok (dissoc (zobj/put-obj obj-store (assoc v :id id, :class class)) :class))
-                  (rhr/not-found {:reason "no such object"})))}
-     :delete {:summary "delete object"
-              :middleware [[wrap-allow-roles #{:admin}]]
-              :parameters {:path-params {:id s/Int}}
-              :handler
-              (fn [{{:keys [id]} :path-params}]
-                (do
-                  (zobj/del-obj obj-store {:class class, :id id})
-                  (rhr/no-content)))}}))
-
-
-(defmacro zico-cfg-resource [obj-store class schema]
-  (let [uri (str "/cfg/" (name class))]
-    `(ca/context ~uri []
-       :tags ["cfg"]
-       (ca/context "/" [] (zico-cfg-resource-0 ~obj-store ~class ~schema))
-       (ca/context "/:id" [] (zico-cfg-resource-1 ~obj-store ~class ~schema)))))
 
 
 (defn trace-detail [app-state id depth]
@@ -109,17 +39,10 @@
     (rhr/not-found {:reason "trace not found"})))
 
 
-(defn zico-error-handler [_ {:keys [reason status] :as data} _]
-  (cond
-    (string? data) {:status 500, :headers {}, :body {:reason data}}
-    :else
-    {:status  (or status 500) :headers {} :body    {:reason reason}}))
-
-
 (defn zico-api-routes [{:keys [obj-store] :as app-state}]
   (ca/api
     {:exceptions
-     {:handlers {:zico zico-error-handler}}
+     {:handlers {:zico zbw/zico-error-handler}}
      :swagger
      {:ui   "/docs"
       :spec "/swagger.json"
@@ -135,12 +58,12 @@
              :consumes ["application/json", "application/edn"]
              :produces ["application/json", "application/edn"]}}}
 
-    (zico-cfg-resource obj-store :app zico.schema.db/App)
-    (zico-cfg-resource obj-store :env zico.schema.db/Env)
-    (zico-cfg-resource obj-store :host zico.schema.db/Host)
-    (zico-cfg-resource obj-store :ttype zico.schema.db/TType)
-    (zico-cfg-resource obj-store :hostreg zico.schema.db/HostReg)
-    (zico-cfg-resource obj-store :user zico.schema.db/User)
+    (zbw/zico-db-resource obj-store :app zico.schema.db/App)
+    (zbw/zico-db-resource obj-store :env zico.schema.db/Env)
+    (zbw/zico-db-resource obj-store :host zico.schema.db/Host)
+    (zbw/zico-db-resource obj-store :ttype zico.schema.db/TType)
+    (zbw/zico-db-resource obj-store :hostreg zico.schema.db/HostReg)
+    (zbw/zico-db-resource obj-store :user zico.schema.db/User)
 
     (ca/context "/system" []
       :tags ["system"]
@@ -198,35 +121,12 @@
         (rhr/ok (zadm/restore app-state id))))))
 
 
-(defn json-resp [status body]
-  {:status  status,
-   :headers {"Content-Type" "application/json"}
-   :body    (json/write-str body)})
-
-
-(defn handle-json-req [f app-state schema req]
-  (let [body (body-string req)]
-    (try
-      (let [args (json/read-str body :key-fn keyword)]
-        (if-let [chk (s/check schema args)]
-          (do
-            (log/error "Invalid request" (:uri req) ": " (pr-str args) ": " (pr-str chk))
-            (json-resp 400 {:reason "invalid request"}))
-          (let [{:keys [status body] :as r} (f app-state args)]
-            (when (>= status 400)
-              (log/error "Error executing " (:uri req) ": " (pr-str args) ": " status ":" body))
-            (json-resp status body))))
-      (catch Exception e
-        (log/error e "Server error:" body)
-        (json-resp 500 {:reason "malformed request or server error"})))))
-
-
 (defn zico-agent-routes [app-state]
   (cc/routes
     (cc/POST "/register" req
-      (handle-json-req ztrc/agent-register app-state zico.schema.api/AgentRegReq req))
+      (zbw/handle-json-req ztrc/agent-register app-state zico.schema.api/AgentRegReq req))
     (cc/POST "/session" req
-      (handle-json-req ztrc/agent-session app-state zico.schema.api/AgentSessionReq req))
+      (zbw/handle-json-req ztrc/agent-session app-state zico.schema.api/AgentSessionReq req))
     (cc/POST "/submit/agd" {:keys [headers body]}
       (ztrc/submit-agd
         app-state
@@ -255,7 +155,7 @@
       (cc/context "/agent" [] agent-routes)
 
       (cc/context "/view" []
-        (wrap-zico-auth render-loading-page auth))
+        (wrap-zico-auth zbw/render-loading-page auth))
 
       (cc/GET "/login" req (zaut/handle-login app-state req))
       (cc/POST "/login" req (zaut/handle-login app-state req))
@@ -263,16 +163,6 @@
 
       (resources "/")
       (not-found "Not Found.\n"))))
-
-
-(defn wrap-cache [f]
-  (fn [{:keys [uri] :as req}]
-    (let [resp (f req)]
-      (if (and (not DEV-MODE) (or (.endsWith uri ".css") (.endsWith uri ".svg")))
-        (assoc-in resp [:headers "Cache-Control"] "max-age=3600")
-        (-> resp
-            (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
-            (assoc-in [:headers "Pragma"] "no-cache"))))))
 
 
 (defn wrap-web-middleware [handler {:keys [session-store]}]
@@ -288,12 +178,9 @@
       (wrap-xss-protection {:mode :block})
       (wrap-frame-options :sameorigin)
       (wrap-content-type-options :nosniff)
-      ;wrap-hsts
-      ;wrap-ssl-redirect
       wrap-forwarded-scheme
       wrap-forwarded-remote-addr
-      wrap-cache
-      ))
+      zbw/wrap-cache))
 
 
 (defn with-zorka-web-handler [app-state]

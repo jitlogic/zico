@@ -1,9 +1,9 @@
 (ns zico.views.user-about
   (:require-macros
     [zico.macros :refer [zorka-build-info zorka-version-info]])
-  (:require [zico.state :as zs]
+  (:require [zico.widgets.state :as zs]
             [zico.views.common :as zv]
-            [zico.widgets :as zw]))
+            [zico.widgets.screen :as zws]))
 
 
 (def VERSION (str "zorka " (zorka-version-info)))
@@ -27,7 +27,9 @@
 
 
 (defn render-about-screen []
-  (zv/render-screen
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :caption "About zorka"
     :central [render-about-interior]))
 

@@ -1,15 +1,16 @@
 (ns zico.views.mon-trace-list
   (:require
     [reagent.ratom :as ra]
-    [zico.state :as zs]
+    [zico.widgets.state :as zs]
     [zico.views.common :as zv]
     [zico.views.mon-trace :as zvmt]
-    [zico.widgets :as zw]
+    [zico.widgets.widgets :as zw]
     [cljs-time.format :as ctf]
     [cljs.reader :refer [read-string]]
-    [zico.util :as zu]
+    [zico.widgets.util :as zu]
     [cljsjs.lz-string]
-    [zico.io :as io]))
+    [zico.widgets.io :as io]
+    [zico.widgets.screen :as zws]))
 
 
 (zs/register-sub
@@ -290,8 +291,11 @@
                 [:once [:data/refresh :cfg :app]]
                 [:once [:data/refresh :cfg :env]]
                 [:once [:data/refresh :cfg :host]]])
-  (zv/render-screen
-    :toolbar [zv/list-screen-toolbar
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
+    :user-menu zv/USER-MENU
+    :toolbar [zws/list-screen-toolbar
               :vpath [:view :trace :list]
               :title "Traces",
               :add-left [toolbar-left],
@@ -299,7 +303,7 @@
               :sort-ctls {},
               :search-box true,
               :on-refresh [::refresh-list true]]
-    :central [zv/list-interior
+    :central [zws/list-interior
               :vpath [:view :trace :list]
               :data [:data/trace-list-list]
               :render-item (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)

@@ -1,11 +1,11 @@
-(ns zico.trace
+(ns zico.server.trace
   (:require
-    [taoensso.timbre :as log]
-    [zico.util :as zutl :refer [to-int error]]
-    [ring.util.http-response :as rhr]
-    [zico.objstore :as zobj]
     [clj-time.coerce :as ctc]
-    [clj-time.format :as ctf])
+    [clj-time.format :as ctf]
+    [ring.util.http-response :as rhr]
+    [taoensso.timbre :as log]
+    [zico.backend.objstore :as zobj]
+    [zico.backend.util :as zbu :refer [to-int]])
   (:import
     (java.io File)
     (io.zorka.tdb.store
@@ -112,7 +112,7 @@
          :env         (.getEnvId r)
          :host        (.getHostId r)
          :tst         (.getTstamp r)
-         :tstamp      (zutl/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
+         :tstamp      (zbu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
          :data-offs   (.getDataOffs r)
          :start-offs  (.getStartOffs r)
          :flags       #{}                                   ; TODO flagi
@@ -153,6 +153,14 @@
                  :file (.resolve resolver (.getFileId si))
                  :line (.getLineNum si)})})))
 
+(def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
+
+(defn parse-method-str [s]
+  (when s
+    (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
+      (let [cs (.split c "\\." 0), cl (alength cs)]
+        {:result r, :package p, :class c, :method m, :args a}))))
+
 
 (defn trace-record-filter [obj-store]
   "Returns trace record filter "
@@ -163,7 +171,7 @@
             method (.resolve resolver (.getMid tr))
             ]
         (merge
-          {:method   (zutl/parse-method-str method)
+          {:method   (parse-method-str method)
            :pos      (.getPos tr)
            :errors   (.getErrors tr)
            :duration (- (.getTstop tr) (.getTstart tr))}
@@ -256,7 +264,7 @@
       (nil? env-id) (rhr/bad-request {:reason "no such environment"})
       :else
       (let [hobj {:class :host, :app app-id, :env env-id, :name name,
-                  :comment "Auto-registered host.", :flags 0x01, :authkey (zutl/random-string 16 zutl/ALPHA-STR)}
+                  :comment "Auto-registered host.", :flags 0x01, :authkey (zbu/random-string 16 zbu/ALPHA-STR)}
             hobj (zobj/put-obj obj-store hobj)]
         (update-host-attrs app-state (:id hobj) attrs)
         (rhr/ok {:id (:id hobj), :authkey (:authkey hobj)})))))
@@ -370,7 +378,7 @@
 (defn open-tstore [new-conf old-conf old-store obj-store]
   (let [old-root (when (:path old-conf) (File. ^String (:path old-conf))),
         idx-cache (if old-store (.getIndexerCache old-store) (HashMap.))
-        new-root (File. ^String (:path new-conf)), new-props (zutl/conf-to-props new-conf "store.")]
+        new-root (File. ^String (:path new-conf)), new-props (zbu/conf-to-props new-conf "store.")]
     (when-not (.exists new-root) (.mkdirs new-root))        ; TODO handle errors here, check if directory is writable etc.
     (cond
       (or (nil? old-store) (not (= old-root new-root)))

@@ -1,15 +1,18 @@
-(ns zico.admin
+(ns zico.backend.admin
   (:require
     [clojure.java.jdbc :as jdbc]
     [clojure.java.shell :as clsh]
-    [zico.objstore :as zobj]
-    [zico.util :as zutl :refer [error]]
-    [taoensso.timbre :as log])
+    [taoensso.timbre :as log]
+    [zico.backend.util :as zbu])
   (:import (java.io File)
            (java.lang.management ManagementFactory)))
 
 (def RE-BKPF #"([0-9a-fA-F]{6})\.sql")
 
+(defn error
+  [status reason & args]
+  (log/error "ERROR: " reason ": " (str args))
+  {:type :zico, :reason reason, :status status})
 
 (defn- list-backups [^File bdir limit]
   (let [files (for [^String fname (.list bdir)
@@ -28,7 +31,7 @@
 
 (defn backup-list [app-state  _]
   (for [{:keys [id tstamp size]} (list-backups (backup-dir app-state) 100)]
-    {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss tstamp), :size size}))
+    {:id id, :tstamp (zbu/str-time-yymmdd-hhmmss-sss tstamp), :size size}))
 
 
 (defn backup-new [app-state]
@@ -46,14 +49,14 @@
 (defmethod backup "h2" [{:keys [zico-db] :as app-state}  _]
   (let [[id outf] (backup-new app-state)]
     (jdbc/query zico-db ["SCRIPT DROP TO ?" (.getPath outf)])
-    {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}))
+    {:id id, :tstamp (zbu/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}))
 
 
 (defmethod backup "mysql" [{{{:keys [mysqldump dbname host port user password]} :zico-db} :conf :as app-state} _]
   (let [[id outf] (backup-new app-state)]
     (let [r (clsh/sh mysqldump dbname "-h" host (str "-P" port) "-r" (.getPath outf) "-u" user (str "-p" password))]
       (case (:exit r)
-        0 {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}
+        0 {:id id, :tstamp (zbu/str-time-yymmdd-hhmmss-sss (.lastModified outf)), :size (.length outf)}
         (do
           (log/error "Error performing backup" r)
           (error 500 "Error performing backup."))))))
@@ -77,7 +80,7 @@
       :else
       (try
         (jdbc/execute! zico-db ["RUNSCRIPT FROM ?" (.getPath bkpf)])
-        {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
+        {:id id, :tstamp (zbu/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
         (catch Exception e
           (log/error "Error restoring backup" e)
           (error 500 "Error restoring backup."))))))
@@ -94,7 +97,7 @@
         :else
         (let [r (clsh/sh  mysql dbname "-u" user (str "-P" port) "-h" host (str "-p" password) "-e" (str "source " bkpf))]
           (case (:exit r)
-            0 {:id id, :tstamp (zutl/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
+            0 {:id id, :tstamp (zbu/str-time-yymmdd-hhmmss-sss (.lastModified bkpf)), :size (.length bkpf)}
             (do
               (log/error "Error restoring backup." r)
               (error 500 "Error restoring backup.")))))

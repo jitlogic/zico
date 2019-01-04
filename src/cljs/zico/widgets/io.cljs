@@ -1,11 +1,11 @@
-(ns zico.io
+(ns zico.widgets.io
   "All stateful event handlers and code is located here."
   (:require
     [re-frame.core :as rfc]
     [secretary.core :as sc]
     [cljs.reader :refer [read-string]]
     [goog.events :as ge]
-    [zico.util :as zutl]
+    [zico.widgets.util :as zutl]
     [clojure.string :as cs])
   (:import
     goog.net.XhrIo

@@ -1,11 +1,11 @@
-(ns zico.state
+(ns zico.widgets.state
   (:require-macros
     [reagent.ratom :as ra])
   (:require
     [clojure.string :as cs]
     [re-frame.core :as rfc]
     [cljs.reader :refer [read-string]]
-    [zico.util :refer [deref?]])
+    [zico.widgets.util :as zwu])
   (:import
     goog.net.XhrIo
     goog.net.EventType
@@ -159,7 +159,7 @@
   :sort-by
   (fn [db [_ path sort-fn]]
     (let [data (ra/reaction (get-in @db path))]
-      (ra/reaction (sort-by (deref? sort-fn) @data)))))
+      (ra/reaction (sort-by (zwu/deref? sort-fn) @data)))))
 
 
 

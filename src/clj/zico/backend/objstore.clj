@@ -1,13 +1,14 @@
-(ns zico.objstore
+(ns zico.backend.objstore
   "Object Store definitions and access functions."
   (:require
-    [clojure.set :as cs]
-    [zico.util :as zutl]
     [clojure.java.jdbc :as jdbc]
-    [taoensso.timbre :as log])
-  (:import (org.apache.tomcat.dbcp.dbcp BasicDataSource)
-           (org.flywaydb.core Flyway)
-           (java.io File)))
+    [taoensso.timbre :as log]
+    [zico.backend.util :as zbu])
+  (:import
+    (org.apache.tomcat.dbcp.dbcp BasicDataSource)
+    (org.flywaydb.core Flyway)
+    (java.io File)))
+
 
 (defn jdbc-datasource [{:keys [subprotocol subname host port dbname user password classname] :as conf}]
   "Configures and returns pooled data source."
@@ -87,7 +88,7 @@
         (let [x (jdbc/insert! zico-db class (dissoc (assoc obj :id id) :class))]
           (assoc obj :id (second (first (first x)))))))
     (get-obj [_ {:keys [class id]}]
-      (when-let [obj (first (jdbc/query zico-db [(str " select * from " (zutl/to-str class) " where id = ?") id]))]
+      (when-let [obj (first (jdbc/query zico-db [(str " select * from " (zbu/to-str class) " where id = ?") id]))]
         (assoc obj :class class)))
     (del-obj [_ {:keys [class id]}]
       (jdbc/delete! zico-db class ["id = ?" id]))
@@ -102,7 +103,7 @@
     ManagedStore
     (backup [_ path]
       (try
-        (let [fname (str "conf-" (zutl/str-time-yymmdd-hhmmss-sss) ".sql")
+        (let [fname (str "conf-" (zbu/str-time-yymmdd-hhmmss-sss) ".sql")
               fpath (str (or path "data/backup") "/" fname)]
           (log/info "Backing up configuration to: " fpath)
           (doall (jdbc/query zico-db [(str "script drop to '" fpath "'")])))
@@ -141,14 +142,14 @@
       (log/warn e "Cannot read init file for class: " class)
       nil)))
 
+
 (defn slurp-init-classpath [class]
   (read-string
     (slurp (clojure.java.io/resource  (str "db/init/" (name class) ".edn")))))
 
-(def INIT-CLASSES [:app :env :hostreg :ttype :user])
 
-(defn load-initial-data [obj-store {:keys [init-source init-mode]} homedir]
-  (doseq [class INIT-CLASSES
+(defn load-initial-data [obj-store init-classes {:keys [init-source init-mode]} homedir]
+  (doseq [class init-classes
           :let [data (concat
                        (if (#{:internal :all} init-source) (slurp-init-classpath class))
                        (if (#{:external :all} init-source) (slurp-init-file homedir class)))]]

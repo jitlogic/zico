@@ -1,17 +1,16 @@
-(ns zico.server
-  (:require [zico.web :as zweb]
-            [zico.util :as zutl]
-            [zico.trace :as ztrc]
-            [clojure.java.io :as io]
-            [ring.adapter.jetty :refer [run-jetty]]
-            [compojure.core :refer [GET routes]]
-            [taoensso.timbre.appenders.3rd-party.rotor :refer [rotor-appender]]
-            [taoensso.timbre :as log]
-            [schema.core :as s]
-            [ns-tracker.core :refer [ns-tracker]]
-            [ring.middleware.session.memory]
-            [zico.objstore :as zobj]
-            [zico.cfg :as zcfg])
+(ns zico.server.main
+  (:require
+    [clojure.java.io :as io]
+    [ring.adapter.jetty :refer [run-jetty]]
+    [ring.middleware.session.memory]
+    [ns-tracker.core :refer [ns-tracker]]
+    [taoensso.timbre.appenders.3rd-party.rotor :refer [rotor-appender]]
+    [taoensso.timbre :as log]
+    [zico.backend.objstore :as zobj]
+    [zico.backend.util :as zbu]
+    [zico.server.schema :as zcfg]
+    [zico.server.trace :as ztrc]
+    [zico.server.web :as zweb])
   (:gen-class))
 
 
@@ -38,12 +37,13 @@
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
 
+(def INIT-CLASSES [:app :env :hostreg :ttype :user])
 
 (defn  new-app-state [old-state conf]
   (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
         obj-store (zobj/jdbc-store zico-db)]
     (zobj/jdbc-migrate zico-db)
-    (zobj/load-initial-data obj-store (:zico-db conf) (:home-dir conf))
+    (zobj/load-initial-data obj-store INIT-CLASSES (:zico-db conf) (:home-dir conf))
     (->
       {:conf conf, :zico-db zico-db, :obj-store obj-store,
        :session-store (or (:session-store old-state) (ring.middleware.session.memory/memory-store))}
@@ -56,19 +56,19 @@
   ([home-dir]
    (let [updf #(if (string? %) (.replace % "${zico.home}" home-dir))
          conf (->
-                (zutl/read-config
+                (zbu/read-config
                   zcfg/ZicoConf
                   (io/resource "zico/zico.conf")
-                  (zutl/to-path (zutl/ensure-dir home-dir) "zico.conf"))
+                  (zbu/to-path (zbu/ensure-dir home-dir) "zico.conf"))
                 (assoc :home-dir home-dir)
                 (update-in [:backup :path] updf)
                 (update-in [:zico-db :subname] updf)
                 (update-in [:tstore :path] updf)
                 (update-in [:log :main :path] updf))
          logs (-> conf :log :main)]
-     (zutl/ensure-dir (-> conf :backup :path))
-     (zutl/ensure-dir (-> conf :tstore :path))
-     (zutl/ensure-dir (-> conf :log :main :path))
+     (zbu/ensure-dir (-> conf :backup :path))
+     (zbu/ensure-dir (-> conf :tstore :path))
+     (zbu/ensure-dir (-> conf :log :main :path))
      (taoensso.timbre/merge-config!
        {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
                     :println {:enabled? false}}})
@@ -101,7 +101,7 @@
   (let [{:keys [http]} (:conf zorka-app-state)]
     (reset!
       conf-autoreload-f
-      (zutl/conf-reload-task #'reload (System/getProperty "zico.home") "zico.conf"))
+      (zbu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.conf"))
     ; Set up Jetty container
     (System/setProperty "org.eclipse.jetty.server.Request.maxFormContentSize" (str (:max-form-size http)))
     (run-jetty zorka-main-handler http)

@@ -1,8 +1,8 @@
-(ns zico.popups
+(ns zico.widgets.popups
   (:require
-    [zico.state :as zs]
-    [zico.widgets :as zw]
-    [zico.util :as zu]))
+    [zico.widgets.state :as zs]
+    [zico.widgets.widgets :as zw]
+    [zico.widgets.util :as zu]))
 
 
 (def POPUP-ROOT [:view :popups])

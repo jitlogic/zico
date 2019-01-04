@@ -1,7 +1,7 @@
 (ns zico.webapi-test
   (:require
     [zico.web :as zweb]
-    [zico.server :as zsvr :refer [zorka-app-state]]
+    [zico.main :as zsvr :refer [zorka-app-state]]
     [zico.test-util :refer
      [zorka-integ-fixture *root-path* time-travel zorka obj-store trace-store]]
     [clojure.test :refer :all]

@@ -2,11 +2,11 @@
   (:require
     [reagent.ratom :as ra]
     [clojure.string :as cs]
-    [zico.util :as zu]
-    [zico.state :as zs]
-    [zico.widgets :as zw]
+    [zico.widgets.util :as zu]
+    [zico.widgets.state :as zs]
+    [zico.widgets.widgets :as zw]
     [zico.views.common :as zv]
-    [zico.io :as io]))
+    [zico.widgets.io :as io]))
 
 
 (defn data-list-sfn [sectn view sort-attr]

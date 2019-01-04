@@ -1,7 +1,7 @@
 (ns zico.objstore-test
   (:require
     [clojure.test :refer :all]
-    [zico.server :as zsvr :refer [zorka-app-state]]
+    [zico.main :as zsvr :refer [zorka-app-state]]
     [zico.test-util :refer [zorka-integ-fixture *root-path* time-travel]]
     [zico.objstore :as zobj]
     [clojure.java.jdbc :as jdbc]))

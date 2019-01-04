@@ -1,12 +1,12 @@
-(ns zico.widgets
+(ns zico.widgets.widgets
   (:require
     [reagent.core :as rc]
     [cljs-time.core :as ct]
     [cljs-time.format :as ctf]
-    [zico.util :as zu]
-    [zico.state :as zs])
+    [zico.widgets.util :as zu]
+    [zico.widgets.state :as zs])
   (:require-macros
-    [zico.macros :refer [svg-compiled-icon-set]]))
+    [zico.widgets.macros :refer [svg-compiled-icon-set]]))
 
 
 (def svg-icons (svg-compiled-icon-set "assets/icons" nil))

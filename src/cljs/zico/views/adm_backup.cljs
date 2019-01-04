@@ -1,9 +1,10 @@
 (ns zico.views.adm-backup
   (:require-macros [reagent.ratom :as ra])
   (:require
-    [zico.state :as zs]
-    [zico.popups :as zp]
-    [zico.widgets :as zw]
+    [zico.widgets.state :as zs]
+    [zico.widgets.popups]
+    [zico.widgets.widgets :as zw]
+    [zico.widgets.screen :as zws]
     [zico.views.common :as zv]))
 
 (def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil
@@ -54,8 +55,10 @@
 
 (defn adm-backup-screen []
   (zs/dispatch [:once REFRESH-EVENT])
-  (zv/render-screen
+  (zws/render-screen
     :caption "Backup / Restore"
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :central [backup-panel]
     :toolbar [:div.flexible.flex
               [:div.flexible.flex.itm

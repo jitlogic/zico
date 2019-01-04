@@ -2,13 +2,14 @@
   (:require
     [reagent.ratom :as ra]
     [zico.views.common :as zv]
-    [zico.state :as zs]
-    [zico.widgets :as zw]
+    [zico.widgets.state :as zs]
+    [zico.widgets.widgets :as zw]
     [zico.views.mon-trace :as zvmt]
-    [zico.util :as zu]
-    [zico.io]
+    [zico.widgets.util :as zu]
+    [zico.widgets.io]
     [cljs.pprint :as pp]
-    [zico.io :as io]))
+    [zico.widgets.io :as io]
+    [zico.widgets.screen :as zws]))
 
 
 (defn flatten-trace [collapsed t0 lvl {:keys [children duration pos] :as tr}]
@@ -144,14 +145,16 @@
       [:xhr/get (io/api "/trace/" uuid "?depth=9999") nil nil,
        :on-success [::handle-xhr-result nil]
        :on-error zv/DEFAULT-SERVER-ERROR]))
-  (zv/render-screen
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar
+    :toolbar [zws/list-screen-toolbar
               :vpath [:view :trace :tree],
               :title     "Call tree",
               :sort-ctls {},
               :add-right [toolbar-tree-right]]
-    :central [zv/list-interior
+    :central [zws/list-interior
               :vpath [:view :trace :tree]
               :data [:data/trace-tree-list]
               :render-item render-trace-tree-item,

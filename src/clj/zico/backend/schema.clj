@@ -1,8 +1,7 @@
-(ns zico.cfg
-  "ZICO configuration file schema and access functions."
+(ns zico.backend.schema
   (:require
-    [aero.core]
     [schema.core :as s]))
+
 
 (s/defschema JettyHttpConf
   {:host                            s/Str
@@ -24,41 +23,6 @@
    (s/optional-key :client-auth)    s/Keyword
    :max-form-size                   s/Int})
 
-(s/defschema LoggerConfig
-  {:level s/Keyword                                         ; #{:trace :debug :info :warn :error}
-   :main  {:path     s/Str
-           :backlog  s/Int
-           :max-size s/Int}})
-
-(s/defschema AuthConfig
-  {:auth s/Keyword                                          ; #{:none :local :cas10 :cas20}
-   (s/optional-key :cas-url) s/Str
-   (s/optional-key :app-url) s/Str})
-
-(s/defschema AcctConfig
-  {:create? s/Bool,
-   :update? s/Bool,
-   :attrmap {:fullname s/Str
-             :comment s/Str
-             :email s/Str}
-   :rolemap {:attr s/Keyword
-             :admin s/Str
-             :viewer s/Str}})
-
-(s/defschema TextIndex
-  {:base-size s/Int
-   :max-size s/Int})
-
-(s/defschema TraceStoreConfig
-  {:path            s/Str
-   :maint-threads   s/Int
-   :maint-interval  s/Int
-   :session-timeout s/Int
-   :rotate          {
-                     :max-size s/Int
-                     :max-num  s/Int}
-   :text TextIndex
-   :meta TextIndex})
 
 (s/defschema DatabaseConfig
   {:subprotocol s/Str                                       ; #{"h2" "mysql"}
@@ -74,22 +38,27 @@
    :init-mode   s/Keyword                                   ; #{:append :overwrite :skip}
    })
 
-(s/defschema BackupConfig
-  {:path s/Str
-   :history s/Int})
 
-(s/defschema AgentConfig
-  {:register {:host s/Bool
-              :app s/Bool
-              :env s/Bool
-              :attrdesc s/Bool}})
+(s/defschema LoggerConfig
+  {:level s/Keyword                                         ; #{:trace :debug :info :warn :error}
+   :main  {:path     s/Str
+           :backlog  s/Int
+           :max-size s/Int}})
 
-(s/defschema ZicoConf
-  {:http JettyHttpConf
-   :log  LoggerConfig
-   :auth AuthConfig
-   :account AcctConfig
-   :tstore TraceStoreConfig
-   :zico-db DatabaseConfig
-   :backup BackupConfig
-   :agent AgentConfig})
+
+(s/defschema AuthConfig
+  {:auth s/Keyword                                          ; #{:none :local :cas10 :cas20}
+   (s/optional-key :cas-url) s/Str
+   (s/optional-key :app-url) s/Str})
+
+
+(s/defschema AcctConfig
+  {:create? s/Bool,
+   :update? s/Bool,
+   :attrmap {:fullname s/Str
+             :comment s/Str
+             :email s/Str}
+   :rolemap {:attr s/Keyword
+             :admin s/Str
+             :viewer s/Str}})
+

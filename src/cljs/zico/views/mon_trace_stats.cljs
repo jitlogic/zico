@@ -2,10 +2,11 @@
   (:require
     [reagent.ratom :as ra]
     [zico.views.common :as zv]
-    [zico.state :as zs]
-    [zico.widgets :as zw]
+    [zico.widgets.state :as zs]
+    [zico.widgets.widgets :as zw]
     [zico.views.mon-trace :as zvmt]
-    [zico.io :as io]))
+    [zico.widgets.io :as io]
+    [zico.widgets.screen :as zws]))
 
 
 (defn trace-stats-list-ra [_ [_]]
@@ -59,14 +60,16 @@
     [:xhr/get (io/api "/trace/" uuid "/stats")
      [:data :trace :stats] nil
      :on-error zv/DEFAULT-SERVER-ERROR])
-  (zv/render-screen
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar
+    :toolbar [zws/list-screen-toolbar
               :vpath [:view :trace :stats]
               :title     "Method Call Stats"
               :sort-ctls {}
               :add-left  [toolbar-stats-left]]
-    :central [zv/list-interior
+    :central [zws/list-interior
               :vpath [:view :trace :stats]
               :data [:data/trace-stats-list]
               :render-item render-trace-stats-item

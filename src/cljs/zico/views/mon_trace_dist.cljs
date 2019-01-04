@@ -1,12 +1,13 @@
 (ns zico.views.mon-trace-dist
   (:require
     [reagent.ratom :as ra]
-    [zico.widgets :as zw]
+    [zico.widgets.widgets :as zw]
     [zico.views.common :as zv]
     [zico.views.mon-trace :as zvmt]
-    [zico.state :as zs]
+    [zico.widgets.state :as zs]
     [clojure.string :as cs]
-    [zico.io :as io]))
+    [zico.widgets.io :as io]
+    [zico.widgets.screen :as zws]))
 
 
 (defn dtrace-path-compare [p1 p2]
@@ -69,14 +70,16 @@
      :on-success [:set [:data :dtrace :tree]],
      :on-error zv/DEFAULT-SERVER-ERROR,
      :map-by :uuid])
-  (zv/render-screen
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
     :hide-menu-btn true
-    :toolbar [zv/list-screen-toolbar
+    :toolbar [zws/list-screen-toolbar
               :vpath [:view :dtrace :tree]
               :title     "Distributed tracing",
               :sort-ctls {}
               :add-left  [dtrace-toolbar-left]]
-    :central [zv/list-interior
+    :central [zws/list-interior
               :vpath [:view :dtrace :tree]
               :data [:data/dtrace-tree-list]
               :render-item (zvmt/render-trace-list-item-fn :dtrace-links false)
