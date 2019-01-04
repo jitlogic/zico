@@ -99,9 +99,9 @@
     {:attr :comment, :label "Comment"}
     {:attr :authkey, :label "Auth key"}
     {:attr   :app, :label "Application", :show :detail,
-     :widget :select, :rsub :data/cfg-app-list, :type :int}
+     :widget :select, :ds-getter [:data/cfg-app-list], :type :int}
     {:attr   :env, :label "Environment", :show :detail,
-     :widget :select, :rsub :data/cfg-env-list, :type :int}))
+     :widget :select, :ds-getter [:data/cfg-env-list], :type :int}))
 
 
 (let [cfo (cfg-object :host "Host" HOST-FDEFS HOST-TEMPLATE)]
@@ -139,9 +139,9 @@
     {:attr :comment, :label "Comment"}
     {:attr :regkey, :label "Reg. key",}
     {:attr   :app, :label "Application", :show :detail,
-     :widget :select, :rsub :data/cfg-app-list,}
+     :widget :select, :ds-getter [:data/cfg-app-list],}
     {:attr   :env, :label "Environment", :show :detail,
-     :widget :select, :rsub :data/cfg-env-list}))
+     :widget :select, :ds-getter [:data/cfg-env-list]}))
 
 (def HOSTREG-OBJ-TEMPLATE
   {:id :new, :name "newreg", :comment "New Registration"})

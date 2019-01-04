@@ -33,23 +33,13 @@
 
 
 ; Renders input box
-(defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-fn? tooltip style attrs on-update on-key-enter on-key-esc]
+(defn input [&{:keys [id getter setter type tag-ok tag-err valid? partial-valid? tooltip style attrs
+                      on-update on-key-enter on-key-esc]
               :or {tag-ok :input.input, tag-err :input.input.error, type :string,
-                   valid? true, partial-fn? (constantly true), attrs {}}}]
-  "Renders input box. Parameters:
-   :id - element ID
-   :getter - value getter (ref, subscription, reaction, string)
-   :setter - value setter (event)
-   :type - data type
-   :tag-ok - HTML tag when in normal mode
-   :tag-err - HTML tag when in error mode
-   :valid? - valid/invalid flag (ref, reaction, boolean)
-   :partial-fn? - function that receives text and returns true if text is valid but incomplete
-   :on-update - value update handler
-   :on-key-enter - ENTER key handler
-   :on-key-esc - ESC key handler"
+                   valid? true, partial-valid? (constantly true), attrs {}}}]
+  "Renders input box: zico.schema.ui.widgets/InputWidget"
   (let [on-change #(let [text (.. % -target -value)]
-                     (when (partial-fn? text)
+                     (when (partial-valid? text)
                        (zs/dispatch-sync [:do (conj setter text) (conj on-update text)])))
         on-key-down (when (or on-key-enter on-key-esc)
                       #(case (.-keyCode %)
@@ -67,19 +57,11 @@
 
 
 ; Renders option box
-(defn select [&{:keys [id getter setter style type tag-ok tag-err rsub rvfn rnfn attrs valid?]
+(defn select [&{:keys [id getter setter style type tag-ok tag-err ds-getter ds-val-fn ds-name-fn attrs valid?]
                :or {tag-ok :select.select, tag-err :select.error.select type :nil,
-                    rsub identity, rvfn first, rnfn second, valid? true}}]
-  "Renders select box. Parameters:
-   :id - element ID
-   :path - path to edited value
-   :type - data type (string, date etc.)
-   :rsub - data source subscription key
-   :rvfn - value function - maps subscribed data to edited value
-   :rnfn - name function - renders visible option names
-   :on-change - change value handler"
-  (let [
-        rdata (zs/subscribe (if (vector? rsub) rsub [rsub]))
+                    ds-getter identity, ds-val-fn first, ds-name-fn second, valid? true}}]
+  "Renders select box: zico.schema.ui.widgets/SelectWidget"
+  (let [rdata (zs/subscribe ds-getter)
         on-change #(let [text (.. % -target -value)]
                      (zs/dispatch-sync (conj setter text)))
         attrs (merge attrs {:style style, :on-change on-change} (when id {:id id}))]
@@ -88,7 +70,7 @@
         [(if (zu/deref? valid?) tag-ok tag-err)
          (assoc attrs :value text)
          [:option {:value nil} "-"]
-         (for [d data :let [v (rvfn d), n (rnfn d)]]
+         (for [d data :let [v (ds-val-fn d), n (ds-name-fn d)]]
            ^{:key v} [:option {:value v} n])]))))
 
 

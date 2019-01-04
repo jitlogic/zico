@@ -1,4 +1,4 @@
-(ns zico.schema.ui
+(ns zico.schema.ui.app-db
   (:require
     [zico.schema.tdb :as tdb]
     [zico.schema.db :as db]
@@ -9,8 +9,7 @@
    (s/optional-key :value)  s/Any})
 
 (s/defschema Form
-  {:uuid s/Str
-   })
+  {:uuid s/Str})
 
 (s/defschema CfgView
   {:app s/Any
@@ -30,8 +29,7 @@
    (s/optional-key :ttype) TraceFilter
    (s/optional-key :host) TraceFilter
    (s/optional-key :time) TraceFilter
-   (s/optional-key :min-duration) TraceFilter
-   })
+   (s/optional-key :min-duration) TraceFilter})
 
 
 (s/defschema TraceListView
@@ -41,8 +39,7 @@
    :deep-search s/Bool
    :suppress s/Bool
    :search {:text s/Str}
-   :selected s/Str
-   })
+   :selected s/Str})
 
 
 (s/defschema TraceView

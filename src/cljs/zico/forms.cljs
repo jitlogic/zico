@@ -138,13 +138,14 @@
   (fn [_ fdef] (:widget fdef :input)))
 
 
-(defmethod render-widget :select [vpath {:keys [attr type rsub valid?]}]
-  (let [rnfn #(str (:name %) " - " (:comment %))
+(defmethod render-widget :select [vpath {:keys [attr type ds-getter valid?]}]
+  (let [ds-name-fn #(str (:name %) " - " (:comment %))
         vpa (vec (concat vpath [:edit :form attr]))]
     [zw/select
      :getter (zs/subscribe [:get (concat vpa [:text])]),
      :setter [:form/set-text vpa (or type :nil)],
-     :type (or type :nil), :rsub rsub, :rvfn :id, :rnfn rnfn, :valid? (or valid? true)]))
+     :type (or type :nil), :valid? (or valid? true),
+     :ds-getter ds-getter, :ds-val-fn :id, :ds-name-fn ds-name-fn]))
 
 
 (defmethod render-widget :input [vpath {:keys [attr type valid?]}]
@@ -259,7 +260,7 @@
 
 
 (defn resolve-ref [rsub id]
-  (let [data @(zs/subscribe [rsub])]
+  (let [data @(zs/subscribe rsub)]
     (first (for [d data :when (= id (:id d))] (:name d)))))
 
 
@@ -280,14 +281,14 @@
      (when detail?
        [:div.kvl
         (doall
-          (for [{:keys [attr label rsub] :as fdef} fdefs
+          (for [{:keys [attr label ds-getter] :as fdef} fdefs
                 :when (not= attr :glyph)]
             ^{:key attr}
             [:div.kv
              [:div.k label]
              [:div.v
-              (if rsub
-                (resolve-ref rsub (attr obj))
+              (if ds-getter
+                (resolve-ref ds-getter (attr obj))
                 (attr obj))]]))])]))
 
 

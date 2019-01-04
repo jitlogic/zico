@@ -1,6 +1,6 @@
 (ns zico.schema
   (:require
-    [schema.core :as s :include-macros true]))
+    [schema.core :as s]))
 
 (def RE-UUID #"(\p{XDigit}{8})-(\p{XDigit}{4})-(\p{XDigit}{4})-(\p{XDigit}{4})-(\p{XDigit}{12})")
 

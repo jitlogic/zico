@@ -25,9 +25,6 @@
   {:user {}, :data {}, :view {}, :system {}})
 
 
-; TODO this is quite reusable namespace, document it
-
-
 (defn to-handler [code & {:keys [sink]}]                    ; TODO simplify this thing
   (let [sink (if sink sink (= :sink (first code)))
         code (if (= :sink (first code)) (vec (rest code)) code)
