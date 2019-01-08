@@ -36,7 +36,7 @@
    :authkey s/Str})
 
 (s/defschema AgentSessionReq
-  {:id s/Int
+  {:id s/Str
    :authkey s/Str})
 
 (s/defschema AgentSessionResp
