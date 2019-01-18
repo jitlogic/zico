@@ -83,7 +83,8 @@
 (defn init! []
   (ac/configure-navigation!
     {:nav-handler  (fn [path] (sc/dispatch! path))
-     :path-exists? (fn [path] (sc/locate-route path))})
+     :path-exists? (fn [path] (sc/locate-route path))
+     :reload-same-path? true})
   (ac/dispatch-current!)
   (mount-root))
 

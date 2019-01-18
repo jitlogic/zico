@@ -112,7 +112,13 @@
    (when-let [dto (get attrs "DTRACE_OUT")]
      (zw/svg-button
        :awe :right-big :blue "Go to target trace..."
-       [:to-screen "mon/trace/tree" {:uuid dto}]
+       [:do ; TODO this is crutch to overcome router limitations (venantius/accountant)
+        [:to-screen "mon/trace/tree" {:uuid dto}]
+        [:set [:view :trace :tree] {:uuid dto, :collapsed {}}]
+        [:set [:data :trace :tree] nil]
+        [:xhr/get (io/api "/trace/" dto "?depth=9999") nil nil,
+         :on-success [::handle-xhr-result nil]
+         :on-error zv/DEFAULT-SERVER-ERROR]]
        ))])
 
 
