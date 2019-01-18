@@ -102,6 +102,7 @@
         :return [zico.schema.tdb/TraceStats]
         (rhr/ok (ztrc/trace-stats app-state id))))
 
+
     (ca/context "/admin" []
       :tags ["admin"]
       (ca/GET "/backup" []

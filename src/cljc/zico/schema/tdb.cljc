@@ -4,10 +4,10 @@
 
 (s/defschema QmiNode
   {(s/optional-key :type)         s/Keyword
-   (s/optional-key :app)          s/Str
-   (s/optional-key :env)          s/Str
-   (s/optional-key :host)         s/Str
-   (s/optional-key :ttype)        s/Str
+   (s/optional-key :app)          s/Int
+   (s/optional-key :env)          s/Int
+   (s/optional-key :host)         s/Int
+   (s/optional-key :ttype)        s/Int
    (s/optional-key :min-duration) s/Int
    (s/optional-key :max-duration) s/Int
    (s/optional-key :min-calls)    s/Int

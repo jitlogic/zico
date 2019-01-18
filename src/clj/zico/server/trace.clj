@@ -304,7 +304,6 @@
 
 (defn submit-agd [{:keys [tstore]} agent-id session-uuid data]
   (try
-    ; TODO weryfikacja argumentów
     (.handleAgentData tstore agent-id session-uuid data)
     (rhr/accepted)
     (catch MissingSessionException _
@@ -403,10 +402,9 @@
           nmt (doall (for [n (range (:maint-threads new-conf 2))]
                        (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))
           postproc (TemplatingMetadataProcessor.)
-          trace-descs {}                                       ; TODO (into {} (for [obj (zobj/find-and-get obj-store {:class :ttype})] {(:id obj), (:descr obj)}))
-          ]
+          trace-descs (zobj/find-and-get obj-store {:class :ttype})]
       ; Set up template descriptions for rendering top level DESC field;
-      (doseq [[id descr] trace-descs :when id :when descr :let [id id]]
+      (doseq [{:keys [id descr]} trace-descs :when id :when descr]
         (.putTemplate postproc id descr))
       ; Stop old maintenance threads (new ones are already started)
       (doseq [t maint-threads]
