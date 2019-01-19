@@ -5,9 +5,10 @@
     [zico.widgets.popups]
     [zico.widgets.widgets :as zw]
     [zico.widgets.screen :as zws]
-    [zico.views.common :as zv]))
+    [zico.views.common :as zv]
+    [zico.widgets.io :as io]))
 
-(def REFRESH-EVENT [:xhr/get "/admin/backup" [:data :admin :backup] nil
+(def REFRESH-EVENT [:xhr/get (io/api "/admin/backup") [:data :admin :backup] nil
                     :on-error zv/DEFAULT-SERVER-ERROR])
 
 
@@ -25,7 +26,7 @@
           [:div.col1
            [zw/button
             :icon [:awe :download :green], :text "Backup",
-            :on-click [:xhr/post "/admin/backup" nil {}
+            :on-click [:xhr/post (io/api "/admin/backup") nil {}
                        :on-success REFRESH-EVENT
                        :on-error zv/DEFAULT-SERVER-ERROR]]]
           [:div.col2
@@ -40,8 +41,8 @@
                        :caption (str "Restoring database from snapshot: " selected),
                        :text ["Restore will override current configuration.", "Proceed ?"],
                        :buttons
-                       [{:id :ok, :text "Restore", :icon [:awe :upload :yellow]
-                         :on-click [:xhr/post (str "/admin/backup/" selected "/restore") nil {}
+                       [{:id       :ok, :text "Restore", :icon [:awe :upload :yellow]
+                         :on-click [:xhr/post (io/api (str "/admin/backup/" selected "/restore")) nil {}
                                     :on-success [:alert "Database restored."]
                                     :on-error zv/DEFAULT-SERVER-ERROR]}
                         {:id :cancel, :text "Cancel", :icon [:awe :cancel :red]}]]]]
