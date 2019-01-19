@@ -243,11 +243,12 @@
     (let [resp (if (:user session) (f req) (redirect "/login"))]
       (assoc resp :session (:session resp session)))))
 
-; TODO rozszyć poszczególne metody logowania
 
 (defn wrap-zico-auth [f auth]
   (cond
-    (or (= auth :none) (nil? auth)) f
+    (or (= auth :none) (nil? auth))
+    (fn [req]
+      (f (assoc-in req [:session :user] ANON-USER)))
     :else (wrap-zico-login-auth f)))
 
 
