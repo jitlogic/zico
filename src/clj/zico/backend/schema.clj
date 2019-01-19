@@ -4,24 +4,24 @@
 
 
 (s/defschema JettyHttpConf
-  {:host                            s/Str
-   :http?                           s/Bool
-   :port                            s/Int
-   :ssl?                            s/Bool
-   :ssl-port                        s/Int
-   :exclude-ciphers                 [s/Str]
-   :exclude-protocols               [s/Str]
-   :join?                           s/Bool
-   :daemon?                         s/Bool
-   :keystore                        s/Str
-   :key-password                    s/Str
-   (s/optional-key :truststore)     s/Str
-   (s/optional-key :trust-password) s/Str
-   :min-threads                     s/Int
-   :max-threads                     s/Int
-   :max-queued-requests             s/Int
-   (s/optional-key :client-auth)    s/Keyword
-   :max-form-size                   s/Int})
+  {:host                               s/Str
+   :http?                              s/Bool
+   :port                               s/Int
+   (s/optional-key :ssl?)              s/Bool
+   (s/optional-key :ssl-port)          s/Int
+   (s/optional-key :exclude-ciphers)   [s/Str]
+   (s/optional-key :exclude-protocols) [s/Str]
+   :join?                              s/Bool
+   :daemon?                            s/Bool
+   (s/optional-key :keystore)          s/Str
+   (s/optional-key :key-password)      s/Str
+   (s/optional-key :truststore)        s/Str
+   (s/optional-key :trust-password)    s/Str
+   :min-threads                        s/Int
+   :max-threads                        s/Int
+   :max-queued-requests                s/Int
+   (s/optional-key :client-auth)       s/Keyword
+   :max-form-size                      s/Int})
 
 
 (s/defschema DatabaseConfig

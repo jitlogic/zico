@@ -51,7 +51,8 @@ start() {
     else
       echo -n "Starting collector ..."
       cd $ZICO_HOME
-      setsid $JAVA_HOME/bin/java -Dzico.app=$Z_NAME -Dzico.home=$ZICO_HOME $JAVA_OPTS -jar zico.jar >$ZICO_HOME/log/console.log 2>&1 &
+      echo "$(date) starting ZICO ..." > $ZICO_HOME/log/console.log
+      setsid $JAVA_HOME/bin/java -Dzico.app=$Z_NAME -Dzico.home=$ZICO_HOME $JAVA_OPTS -jar zico.jar >>$ZICO_HOME/log/console.log 2>&1 &
       echo "OK."
     fi
 }

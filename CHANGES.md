@@ -1,3 +1,12 @@
+ZICO 1.90.6 (2019-01-19)
+------------------------
+
+* UI fixes and cleanups;
+* internal refactorings;
+* switched to binary agent-collector protcol (no base64 anymore);
+* switch to jetty, optional TLS/HTTPS;
+
+
 ZICO 1.90.5 (2018-11-05)
 ------------------------
 
