@@ -102,8 +102,11 @@
                                       [:form/edit-new vpath dpath
                                        (str url "/edit") template fdefs])])]
         :central [zws/list-interior :vpath vpath, :data data, :class class
-                  :render-item (render-item false :vpath vpath, :dpath dpath, :list-col1 list-col1, :list-col2 list-col2, :xhr-url xhr-url, :url url)
-                  :render-details (render-item true :vpath vpath, :dpath dpath, :url url, :xhr-url xhr-url, :fdefs fdefs)
+                  :render-item (render-item false :vpath vpath, :dpath dpath,
+                                            :list-col1 list-col1, :list-col2 list-col2,
+                                            :xhr-url xhr-url, :url url, :fdefs fdefs)
+                  :render-details (render-item true :vpath vpath, :dpath dpath, :url url,
+                                               :xhr-url xhr-url, :fdefs fdefs)
                   ]))))
 
 
@@ -142,6 +145,8 @@
 
 
 (defn cfg-object [class title fdefs template]
+  (when class
+    (zs/dispatch (vec (concat [:once] [:data/refresh :cfg class]))))
   {:list
    (render-list
      :vpath [:view :cfg class]
@@ -256,9 +261,9 @@
     {:attr :comment, :label "Comment"}
     {:attr :regkey, :label "Reg. key",}
     {:attr   :app, :label "Application", :show :detail, :ds-name-fn DS-NAME-FN
-     :widget :select, :ds-getter [:data/cfg-app-list]}
+     :widget :select, :ds-getter [:data/cfg-app-list], :type :int}
     {:attr   :env, :label "Environment", :show :detail, :ds-name-fn DS-NAME-FN
-     :widget :select, :ds-getter [:data/cfg-env-list]}))
+     :widget :select, :ds-getter [:data/cfg-env-list], :type :int}))
 
 (def HOSTREG-OBJ-TEMPLATE
   {:id :new, :name "newreg", :comment "New Registration"})
