@@ -1,12 +1,11 @@
 (ns zico.webapi-test
   (:require
-    [zico.web :as zweb]
-    [zico.main :as zsvr :refer [zorka-app-state]]
+    [zico.server.main :refer [zorka-app-state]]
     [zico.test-util :refer
      [zorka-integ-fixture *root-path* time-travel zorka obj-store trace-store]]
     [clojure.test :refer :all]
-    [zico.objstore :as zobj]
-    [zico.trace :as ztrc]
+    [zico.backend.objstore :as zobj]
+    [zico.server.trace :as ztrc]
     [clojure.data.json :as json])
   (:import (io.zorka.tdb.store TraceStore)))
 
@@ -44,7 +43,6 @@
           app-t (zobj/find-and-get-1 obj-store {:class :app, :name "TEST"})
           env-t (zobj/find-and-get-1 obj-store {:class :app, :name "TEST"})
           data {:uuid (:uuid host), :authkey (:authkey host)}]
-      (println rslt)
       (is (some? host))
       ;(is (= {:status 201, :headers {"content-type" "application/edn"}, :data data} (dissoc rslt :body)))
       (is (= {:class :app, :id app, :name "TEST", :comment "New :app",

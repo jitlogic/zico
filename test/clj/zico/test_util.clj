@@ -1,8 +1,7 @@
 (ns zico.test-util
   (:require
-    [zico.main :as zsvr]
+    [zico.server.main :as zsvr]
     [clojure.java.jdbc :as jdbc]
-    [zico.util :as zutl]
     [zico.backend.util :as zbu]
     [clojure.java.io :as io])
   (:import
