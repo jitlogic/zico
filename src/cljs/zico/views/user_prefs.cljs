@@ -4,7 +4,8 @@
     [zico.widgets.state :as zs]
     [zico.views.common :as zv]
     [zico.widgets.widgets :as zw]
-    [zico.widgets.screen :as zws]))
+    [zico.widgets.screen :as zws]
+    [zico.widgets.io :as io]))
 
 (def RE-PASS [#".*[a-z].*" #".*[A-Z].*" #".*[0-9].*" #".*[^a-zA-Z0-9].*"])
 
@@ -22,7 +23,7 @@
   (let [state (zs/subscribe [:get [:view :user :prefs]])
         match? (ra/reaction (= (-> @state :new :value) (-> @state :rep :value)))
         ready? (ra/reaction
-                 (let [{:keys [status], {old :value} :old, {new :value} :new, {rep :value} :rep} @state]
+                 (let [{:keys [status old new rep]} @state]
                    (and (not= status :wait) (not (empty? old)) (not (empty? new)) (= new rep))))]
     (fn []
       (let [{:keys [status msg new old rep]} @state]
@@ -39,45 +40,46 @@
           [:div.col2
            [zw/autofocus
             [zw/input
-             :path [:view :user :prefs :old],
-             :getter (zs/subscribe [:get [:view :user :prefs :old :text]]),
-             :setter [:form/set-text [:view :user :prefs :old] :nil],
+             :getter (zs/subscribe [:get [:view :user :prefs :old]]),
+             :setter [:set [:view :user :prefs :old]],
              :attrs {:type :password}]]]]
          [:div.form-row
           [:div.col1.label "New password:"]
           [:div.col2
            [zw/input
-            :path [:view :user :prefs :new],
-            :getter (zs/subscribe [:get [:view :user :prefs :new :text]]),
-            :setter [:form/set-text [:view :user :prefs :new] :nil],
+            :getter (zs/subscribe [:get [:view :user :prefs :new]]),
+            :setter [:set [:view :user :prefs :new]],
             :attrs {:type :password}, :valid? match?]]
           [:div.aux (passwd-strength (:value new))]]
          [:div.form-row
           [:div.col1.label "Repeat password:"]
           [:div.col2
            [zw/input
-            :path [:view :user :prefs :rep],
-            :getter (zs/subscribe [:get [:view :user :prefs :rep :text]]),
-            :setter [:form/set-text [:view :user :prefs :rep] :nil],
+            :getter (zs/subscribe [:get [:view :user :prefs :rep]]),
+            :setter [:set [:view :user :prefs :rep]],
             :attrs {:type :password}, :valid? match?]]
           (when-not @match?
             [:div.aux [:div.i.c-red "Passwords don't match"]])]
          [:div.button-row
           [zw/button
            :text     "Change", :icon [:ent :key :yellow], :enabled? ready?,
-           :on-click
-           [:xhr/post "/user/password" nil
-            {:oldPassword (:value old),
-             :newPassword (:value new),
-             :repeatPassword (:value rep)}
-            :on-success
-            [:set [:view :user :prefs]
-             {:status :ok :msg "Password changed."}]
-            :on-error
-            [:do
-             [:set [:view :user :prefs :status] :error]
-             [:set [:view :user :prefs :msg] "Password change failed."]]]]]]
+           :on-click [::change-password]]]]
         ))))
+
+(zs/reg-event-fx
+  ::change-password
+  (fn [{:keys [db]}]
+    (let [{:keys [old new rep]} (get-in db [:view :user :prefs])]
+      {:db       (assoc-in db [:view :user :prefs] nil)
+       :dispatch [:xhr/post (io/api "/user/password") nil
+                  {:oldPassword    old, :newPassword    new, :repeatPassword rep}
+                  :on-success
+                  [:set [:view :user :prefs] {:status :ok :msg "Password changed."}]
+                  :on-error
+                  [:do
+                   [:set [:view :user :prefs :status] :error]
+                   [:set [:view :user :prefs :msg] "Password change failed."]]]
+       })))
 
 (defn render-user-prefs []
   (zws/render-screen

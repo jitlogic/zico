@@ -93,7 +93,7 @@ CREATE TABLE user (
   fullname VARCHAR(255),           -- full name
   comment  VARCHAR(255),           -- some comment
   email    VARCHAR(255),           -- email address
-  password VARCHAR(128),           -- hashed password (for local authentication): SSHA512
+  password VARCHAR(140),           -- hashed password (for local authentication): SSHA512
   flags    INT NOT NULL DEFAULT 1, -- b0: enabled, b1: admin
   PRIMARY KEY (id)
 );

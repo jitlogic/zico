@@ -227,7 +227,7 @@
     (not= newPassword repeatPassword) (rhr/unauthorized {:reason "password mismatch"})
     (not (password-strong? newPassword)) (rhr/unauthorized {:reason "password too simple"})
     :else
-    (let [urec (zobj/find-and-get-1 obj-store {:id (:id user)})]
+    (let [urec (zobj/find-and-get-1 obj-store {:class :user :id (:id user)})]
       (cond
         (nil? urec) (rhr/forbidden {:reason "user not in database"})
         (not (password-check (:password urec) oldPassword)) (rhr/forbidden {:reason "authentication failed"})
