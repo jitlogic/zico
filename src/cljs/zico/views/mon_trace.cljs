@@ -24,10 +24,10 @@
   (data-list-sfn :trace :type :name))
 
 
-(def CFG-TTYPES (zs/subscribe [:get [:data :cfg :ttype]]))
-(def CFG-HOSTS (zs/subscribe [:get [:data :cfg :host]]))
-(def CFG-ENVS (zs/subscribe [:get [:data :cfg :env]]))
-(def CFG-APPS (zs/subscribe [:get [:data :cfg :app]]))
+(def CFG-TTYPES (zs/subscribe [:get [:data :TODO :ttype]]))
+(def CFG-HOSTS (zs/subscribe [:get [:data :TODO :host]]))
+(def CFG-ENVS (zs/subscribe [:get [:data :TODO :env]]))
+(def CFG-APPS (zs/subscribe [:get [:data :TODO :app]]))
 (def CFG-TRACES (zs/subscribe [:get [:data :trace :list]]))
 
 (defn trace-list-click-handler-fn [sect sub]

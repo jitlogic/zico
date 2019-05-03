@@ -180,7 +180,7 @@
 (def TRACE-TYPE-ITEMS
   (filtered-items
     [:view :trace :list :filter :ttype :selected]
-    (zs/subscribe [:get [:data :cfg :ttype]])
+    (zs/subscribe [:get [:data :TODO :ttype]])
     #(zu/glyph-parse (:glyph %) "awe/list-alt#text")
     :filter-fn #(= 0x08 (bit-and (:flags %) 0x08))))
 
@@ -188,20 +188,20 @@
 (def APP-ITEMS
   (filtered-items
     [:view :trace :list :filter :app :selected]
-    (zs/subscribe [:get [:data :cfg :app]])
+    (zs/subscribe [:get [:data :TODO :app]])
     [:awe :cubes :text]))
 
 
 (def ENV-ITEMS
   (filtered-items
     [:view :trace :list :filter :env :selected]
-    (zs/subscribe [:get [:data :cfg :env]])
+    (zs/subscribe [:get [:data :TODO :env]])
     [:awe :sitemap :text]))
 
 
 ; TODO this is too complicated; filters need to have its own unified data structure working on single loop
 (defn clear-filter-items []
-  (let [cfg (zs/subscribe [:get [:data :cfg]])
+  (let [cfg (zs/subscribe [:get [:data :TODO]])
         filter (zs/subscribe [:get [:view :trace :list :filter]])
         search (zs/subscribe [:get [:view :trace :list :search]])
         fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
@@ -286,11 +286,7 @@
   "Trace seach/listing panel: [:view :trace :list]"
   (zs/dispatch [::parse-filter-query (:q params)])
   (zs/dispatch [::refresh-list])
-  (zs/dispatch [:do
-                [:once [:data/refresh :cfg :ttype]]
-                [:once [:data/refresh :cfg :app]]
-                [:once [:data/refresh :cfg :env]]
-                [:once [:data/refresh :cfg :host]]])
+
   (zws/render-screen
     :main-menu zv/main-menu
     :user-menu zv/USER-MENU

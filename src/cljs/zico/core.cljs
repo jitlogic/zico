@@ -4,14 +4,10 @@
     [accountant.core :as ac]
     [zico.widgets.state :as zs]
     [zico.widgets.io :as io]
-    [zico.views.cfg :as zvc]
     [zico.views.mon-trace-list]
     [zico.views.mon-trace-dist]
     [zico.views.mon-trace-tree]
     [zico.views.mon-trace-stats]
-    [zico.views.adm-backup :as zvbkp]
-    [zico.views.user-about :as zvabt]
-    [zico.views.user-prefs :as zvupr]
     [zico.views.common :as zv]
     [zico.widgets.screen :as zws]
     [secretary.core :as sc]))
@@ -26,29 +22,6 @@
   "mon/trace/tree"    #'zico.views.mon-trace-tree/trace-tree
   "mon/trace/dtree"   #'zico.views.mon-trace-dist/dtrace-tree
   "mon/trace/stats"   #'zico.views.mon-trace-stats/trace-stats
-
-  ; Config items - lists
-  "cfg/app/list"     #'zvc/app-list
-  "cfg/env/list"     #'zvc/env-list
-  "cfg/host/list"    #'zvc/host-list
-  "cfg/user/list"    #'zvc/user-list
-  "cfg/group/list"   #'zvc/group-list
-  "cfg/ttype/list"   #'zvc/ttype-list
-  "cfg/hostreg/list" #'zvc/hostreg-list
-
-  ; Config items - editors
-  "cfg/app/edit"     #'zvc/app-edit
-  "cfg/env/edit"     #'zvc/env-edit
-  "cfg/host/edit"    #'zvc/host-edit
-  "cfg/user/edit"    #'zvc/user-edit
-  "cfg/group/edit"   #'zvc/group-edit
-  "cfg/ttype/edit"   #'zvc/ttype-edit
-  "cfg/hostreg/edit" #'zvc/hostreg-edit
-
-  ; Various other things
-  "adm/backup"   #'zvbkp/adm-backup-screen
-  "user/about"   #'zvabt/render-about-screen
-  "user/prefs"   #'zvupr/render-user-prefs
   )
 
 

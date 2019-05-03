@@ -12,17 +12,7 @@
          [:div.pnl
           [:div.itm (zw/svg-button :awe :menu :white "Close menu" [:toggle [:view :menu :open?]])]
           [:div.itm ""]
-          [:div.itm (zw/svg-button :awe :search :white "Search" [:to-screen "mon/trace/list"])]
-          [:div.itm (zw/svg-button :awe :cube :white "Applications" [:to-screen "cfg/app/list"])]
-          [:div.itm (zw/svg-button :awe :sitemap :white "Environments" [:to-screen "cfg/env/list"])]
-          [:div.itm (zw/svg-button :awe :home :white "Hosts" [:to-screen "cfg/host/list"])]
-          [:div.itm (zw/svg-button :awe :tags :white "Trace types" [:to-screen "cfg/ttype/list"])]
-          [:div.itm (zw/svg-button :awe :lightbulb :white "Registrations" [:to-screen "cfg/hostreg/list"])]
-          (if (zws/has-role :admin)
-            [:div.itm (zw/svg-button :awe :user :white "Users" [:to-screen "cfg/user/list"])])
-          (if (zws/has-role :admin)
-            [:div.itm (zw/svg-button :awe :hdd :white "Backup" [:to-screen "adm/backup"])])
-          ]]))))
+          [:div.itm (zw/svg-button :awe :search :white "Search" [:to-screen "mon/trace/list"])]]]))))
 
 
 (def USER-MENU
@@ -31,12 +21,7 @@
     [:popup/open :menu, :caption "User Menu",
      :position :top-right,
      :items
-     [{:key :about, :text "About ...",
-       :icon [:awe :info-circled  :blue],
-       :on-click [:to-screen "user/about" {}]}
-      {:key :prefs, :text "My profile",
-       :icon [:awe :user], :on-click [:to-screen "user/prefs" {}]}
-      {:key :logout, :text "Logout",
+     [{:key :logout, :text "Logout",
        :icon [:awe :logout], :on-click [:set-location "/logout"]}]]))
 
 
