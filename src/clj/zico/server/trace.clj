@@ -9,17 +9,17 @@
   (:import
     (java.io File)
     (io.zorka.tdb.store
-      RotatingTraceStore TraceStore TemplatingMetadataProcessor TraceRecordFilter
-      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceTypeResolver TraceSearchResultItem TraceStatsRecordFilter TraceStatsResultItem)
+      RotatingTraceStore TraceRecordFilter
+      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceStatsRecordFilter TraceStatsResultItem TraceStore)
     (java.util HashMap Map List ArrayList)
     (io.zorka.tdb.meta ChunkMetadata StructuredTextIndex)
-    (io.zorka.tdb MissingSessionException)
     (io.zorka.tdb.search TraceSearchQuery SortOrder QmiNode)
     (io.zorka.tdb.search.lsn AndExprNode OrExprNode)
     (io.zorka.tdb.search.ssn TextNode)
     (io.zorka.tdb.search.tsn KeyValSearchNode)
     (io.zorka.tdb.util ZicoMaintThread)
-    (com.jitlogic.zorka.common.util ZorkaUtil)))
+    (com.jitlogic.zorka.common.util ZorkaUtil)
+    (io.zorka.tdb ZicoException)))
 
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
@@ -31,13 +31,17 @@
       (.add lst n))
     lst))
 
+(defn parse-hex-tid [^String s]
+  "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."
+  (cond
+    (nil? s) nil
+    (re-matches #"[0-9a-fA-F]{16}" s) [(.longValue (BigInteger. s 16)) 0]
+    (re-matches #"[0-9a-fA-F]{32}" s) [(.longValue (BigInteger. (.substring s 0 16) 16))
+                                       (.longValue (BigInteger. (.substring s 16 32) 16))]
+    :else nil))
 
 (defn parse-qmi-node [q]
   (doto (QmiNode.)
-    (.setAppId (to-int (:app q 0)))
-    (.setEnvId (to-int (:env q 0)))
-    (.setHostId (to-int (:host q 0)))
-    (.setTypeId (to-int (:ttype q 0)))
     (.setMinDuration (to-int (:min-duration q 0)))
     (.setMaxDuration (to-int (:max-duration q Long/MAX_VALUE)))
     (.setMinCalls (to-int (:min-calls q 0)))
@@ -47,9 +51,7 @@
     (.setMinRecs (to-int (:min-recs q 0)))
     (.setMaxRecs (to-int (:max-recs q Long/MAX_VALUE)))
     (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
-    (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))
-    (.setDtraceUuid (:dtrace-uuid q))
-    (.setDtraceTid (:dtrace-tid q))))
+    (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))))
 
 
 (def TYPES {"or" :or, "text" :text, "xtext" :xtext, "kv" :kv})
@@ -103,14 +105,7 @@
     (take
       (:limit query 100)
       (for [r (.searchTraces tstore (parse-search-query query))]
-        {:uuid        (.getUuid r),
-         :chunk-id    (.getChunkId r)
-         :descr       (.getDescription r)
-         :duration    (.getDuration r)
-         :ttype       (.getTypeId r)
-         :app         (.getAppId r)
-         :env         (.getEnvId r)
-         :host        (.getHostId r)
+        {:duration    (.getDuration r)
          :tst         (.getTstamp r)
          :tstamp      (zbu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
          :data-offs   (.getDataOffs r)
@@ -119,9 +114,6 @@
          :recs        (.getRecs r)
          :calls       (.getCalls r)
          :errs        (.getErrors r)
-         :dtrace-uuid (.getDtraceUuid r)
-         :dtrace-tid  (.getDtraceTid r)
-         :dtrace-out  (.isDtraceOut r)
          }))))
 
 
@@ -178,27 +170,21 @@
           (when children {:children children})
           (when attrs {:attrs (resolve-attr-obj attrs resolver)})
           (when (not= 0 (.getEid tr)) {:exception (resolve-exception resolver (.getEid tr))})
-          (when (not= 0 (.getType tr)) {:ttype (first (zobj/find-obj obj-store {:class :ttype, :id (.getType tr)}))})
+          ;(when (not= 0 (.getType tr)) {:ttype (first (zobj/find-obj obj-store {:class :ttype, :id (.getType tr)}))})
           )))))
 
 
-(defn trace-detail [{:keys [tstore obj-store]} stack-limit uuid]
-  (let [rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
-        rslt (.retrieve tstore uuid rtr)]
-    (merge {:uuid uuid} rslt)))
+(defn trace-detail [{:keys [tstore obj-store]} stack-limit tid sid]
+  (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
+        rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
+        rslt (.retrieve tstore tid1 tid2 sid1 rtr)]
+    (merge {:trace-id tid :span-id sid} rslt)))
 
 
-(defn trace-detail-tid [{:keys [tstore] :as app-state} stack-limit is-out tid]
-  (let [query (TraceSearchQuery. (doto (QmiNode.) (.setDtraceTid tid)) nil)
-        rslt (.searchTraces tstore query)
-        trc (first (for [r rslt :when (= is-out (.isDtraceOut r))] r))]
-    (when (some? trc)
-      (trace-detail app-state stack-limit (.getUuid trc)))))
-
-
-(defn trace-stats [{:keys [tstore]} uuid]
-  (let [f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
-    (.retrieve tstore uuid rtr)
+(defn trace-stats [{:keys [tstore]} tid sid]
+  (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
+        f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
+    (.retrieve tstore tid1 tid2 sid1 rtr)
     (vec
       (for [^TraceStatsResultItem s (.getStats f)]
         {:mid          (.getMid s),
@@ -210,178 +196,41 @@
          :method       (.getMethod s)}))))
 
 
-(defn get-or-new [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state} class name]
-  (if (some? name)
-    (let [nobj (zobj/find-and-get-1 obj-store {:class class, :name name})]
-      (cond
-        (some? nobj) nobj
-        (not (get reg class)) nil
-        :else
-        (let [nobj {:class class, :name name, :comment (str "New " class), :flags 1, :glyph "awe/cube"}]
-          (zobj/put-obj obj-store nobj))))))
-
-
-(defn get-host-attrs [{:keys [obj-store]} host-id]
-  "Retrieves custom attributes for given host. Returns :ATTR -> 'value' map."
-  (let [host-attrs (zobj/find-and-get obj-store {:class :hostattr, :hostid host-id})]
-    (into {}
-          (for [{:keys [attrid attrval]} host-attrs
-                :let [{attrname :name} (zobj/get-obj obj-store {:class :attrdesc, :id attrid})]]
-            {(keyword attrname) attrval}))))
-
-
-(defn update-host-attrs [{:keys [obj-store] :as app-state} host-id attrs]
-  "Adds or updates host attributes. Missing but previously posted attributes are not removed."
-  (let [host-attrs (get-host-attrs app-state host-id)]
-    (doseq [[k v] attrs :when (not= v (host-attrs k))
-            :let [adesc (get-or-new app-state :attrdesc (name k))]
-            :let [hattr (zobj/find-and-get-1 obj-store {:class :hostattr, :hostid host-id, :attrid (:id adesc)})]]
-      (zobj/put-obj obj-store (merge (or hattr {}) {:class :hostattr, :hostid host-id,
-                                                    :attrid (:id adesc), :attrval v})))))
-
-
-(defn update-host-data [{:keys [obj-store] :as app-state}                 ; app-state
-                        {:keys [name app env attrs]}
-                         old-host]
-  (let [app-id (or (:id (get-or-new app-state :app app)) (:app old-host))
-        env-id (or (:id (get-or-new app-state :env env)) (:env old-host))
-        new-host (merge old-host
-                        (if app-id {:app app-id})
-                        (if env-id {:env env-id})
-                        (if name {:name name}))
-        new-host (if (not= old-host new-host) (zobj/put-obj obj-store new-host))]
-    (update-host-attrs app-state (:id new-host) attrs)
-    new-host))
-
-
-(defn register-host [{:keys [obj-store] :as app-state}                      ; app-state
-                     {:keys [name app env attrs]}           ; req
-                         {:as hreg}]                          ; host-reg
-  (let [app-id (or (:id (get-or-new app-state :app app)) (:app hreg))
-        env-id (or (:id (get-or-new app-state :env env)) (:env hreg))]
-    (cond
-      (nil? app-id) (rhr/bad-request {:reason "no such application"})
-      (nil? env-id) (rhr/bad-request {:reason "no such environment"})
-      :else
-      (let [hobj {:class :host, :app app-id, :env env-id, :name name,
-                  :comment "Auto-registered host.", :flags 0x01, :authkey (zbu/random-string 16 zbu/ALPHA-STR)}
-            hobj (zobj/put-obj obj-store hobj)]
-        (update-host-attrs app-state (:id hobj) attrs)
-        (rhr/ok {:id (:id hobj), :authkey (:authkey hobj)})))))
-
-
-(defn agent-register [{:keys [obj-store] {{reg :register} :agent} :conf :as app-state}
-                      {:keys [rkey akey name id] :as req}]
+(defn submit-agd [{:keys [tstore]} session-id session-renew data]
   (try
-    (if (and rkey name)
-      (let [{:keys [regkey] :as hreg} (zobj/find-and-get-1 obj-store {:class :hostreg, :regkey rkey})
-            {:keys [authkey] :as host} (when id (zobj/find-and-get-1 obj-store {:class :host, :id id}))]
-        (cond
-          (and (string? akey) (= akey authkey))
-          (do
-            (update-host-data app-state req host)
-            (rhr/ok {:id (:id host), :authkey authkey}))
-          (some? host) (rhr/unauthorized {:reason "access denied"})
-          (not (:host reg)) (rhr/unauthorized {:reason "no such host"})
-          (not= rkey regkey) (rhr/unauthorized {:reason "access denied"})
-          (= rkey regkey) (register-host app-state req hreg)
-          :else (rhr/unauthorized {:reason "Registration denied."})))
-      (rhr/bad-request {:reason "Missing arguments."}))
-    (catch Exception e
-      (log/error e "Error registering host.")
-      (rhr/internal-server-error {:reason "Internal error."}))))
-
-
-(defn agent-session [{:keys [obj-store tstore]} {:keys [id authkey]}]
-  (if (and id authkey)
-    (if-let [obj (zobj/get-obj obj-store {:class :host, :id id})]
-      (if (= (:authkey obj) authkey)
-        (rhr/ok {:session (.getSession ^TraceStore tstore id)})
-        (rhr/unauthorized {:reason "access denied"}))
-      (rhr/bad-request {:reason "no such agent"}))
-    (rhr/bad-request {:reason "missing arguments"})))
-
-
-(defn submit-agd [{:keys [tstore]} agent-id session-uuid data]
-  (try
-    (.handleAgentData tstore agent-id session-uuid data)
+    (.handleAgentData tstore session-id (= "true" session-renew) data)
     (rhr/accepted)
-    (catch MissingSessionException _
-      (rhr/bad-request {:reason "Missing session UUID header."}))
+    ; TODO session-renew - handle broken sessions
+    ;(catch Exception _ (rhr/bad-request {:reason "Missing session UUID header."}))
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch Exception e
-      (log/error e (str "Error processing AGD data: " (ZorkaUtil/hex data) (String. ^bytes data "UTF-8")))
+      (log/error e (str "Error processing AGD data: " (String. ^bytes data "UTF-8")))
       (rhr/internal-server-error {:reason "internal error"}))))
 
 
-(defn submit-trc [{:keys [obj-store tstore]} agent-id session-uuid trace-uuid data]
+(defn submit-trc [{:keys [tstore]} session-id trace-id data]
   (try
     ; TODO weryfikacja argumentów
-    (if-let [agent (zobj/get-obj obj-store {:class :host, :id agent-id})]
-      (do
-        (.handleTraceData tstore agent-id session-uuid trace-uuid data
-                          (doto (ChunkMetadata.)
-                            (.setAppId (:app agent))
-                            (.setEnvId (:env agent))))
-        (rhr/accepted))
-      (rhr/unauthorized {:reason "no such agent"}))
+    (if-let [[tid1 tid2] (parse-hex-tid trace-id)]
+      (.handleTraceData tstore session-id data (ChunkMetadata. tid1 tid2 0 0 0))
+      (rhr/bad-request {:reason "Invalid trace ID header"}))
+    (rhr/accepted)
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
-    (catch MissingSessionException _
-      (rhr/unauthorized {:reason "missing session UUID header"}))
+    (catch ZicoException _
+      (rhr/unauthorized {:reason "invalid or missing session ID header"}))
     (catch Exception e
       (log/error e "Error processing TRC data: " (ZorkaUtil/hex data))
       (rhr/internal-server-error {:reason "internal error"}))))
 
 
-(defn trace-id-translate [obj-store data tn]
-  (let [tid (get @data tn)]
-    (cond
-      (nil? tn) (do (log/error "Trace with NULL name obtained.") 0)
-      tid tid
-      :else
-      (locking obj-store
-        (when-not (get @data tn)
-          (reset!
-            data
-            (into {} (for [{:keys [name id flags] :as r} (zobj/find-and-get obj-store {:class :ttype})]
-                       {name {:tid id, :id id, :flags flags}}))))
-        (when-not (get @data tn)
-          (let [{:keys [id flags] :as tt} (zobj/put-obj
-                     obj-store
-                     {:class   :ttype,
-                      :name tn,
-                      :descr    (str "Trace type: " tn),
-                      :glyph   "awe/cube",
-                      :flags   1,
-                      :comment "Auto-registered. Please edit."})
-                ti {:tid id, :id id, :flags flags}]
-            (swap! data assoc tn ti)))
-        (get @data tn)))))
-
-
-(defn trace-id-translator [obj-store]
-  (let [data (atom {})]
-    (reify
-      TraceTypeResolver
-      (resolve [_ tn]
-        (let [{:keys [tid id flags] :as tr} (trace-id-translate obj-store data tn)]
-          (when (= 0 (bit-and flags 0x08))
-            (log/info "Marking trace type" id "as used.")
-            (let [rec (zobj/get-obj obj-store {:class :ttype, :id id})
-                  flags (bit-or (:flags rec) 0x08)]
-              (zobj/put-obj obj-store (assoc rec :flags flags))
-              (swap! data assoc tn (assoc tr :flags flags))))
-          tid)))))
-
-
-(defn open-tstore [new-conf old-conf old-store obj-store]
+(defn open-tstore [new-conf old-conf old-store]
   (let [old-root (when (:path old-conf) (File. ^String (:path old-conf))),
         idx-cache (if old-store (.getIndexerCache old-store) (HashMap.))
         new-root (File. ^String (:path new-conf)), new-props (zbu/conf-to-props new-conf "store.")]
     (when-not (.exists new-root) (.mkdirs new-root))        ; TODO handle errors here, check if directory is writable etc.
     (cond
       (or (nil? old-store) (not (= old-root new-root)))
-      (let [store (RotatingTraceStore. new-root new-props (trace-id-translator obj-store) idx-cache)]
+      (let [store (RotatingTraceStore. new-root new-props idx-cache)]
         (when old-store                                     ; TODO reconfigure without closing
           (future
             (log/info "Waiting for old trace store to close.")
@@ -398,21 +247,13 @@
 (defn with-tracer-components [{{new-conf :tstore} :conf obj-store :obj-store :as app-state}
                               {{old-conf :tstore} :conf :keys [tstore maint-threads]}]
   (if (:enabled new-conf true)
-    (let [tstore (open-tstore new-conf old-conf tstore obj-store)
+    (let [tstore (open-tstore new-conf old-conf tstore)
           nmt (doall (for [n (range (:maint-threads new-conf 2))]
-                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))
-          postproc (TemplatingMetadataProcessor.)
-          trace-descs (zobj/find-and-get obj-store {:class :ttype})]
-      ; Set up template descriptions for rendering top level DESC field;
-      (doseq [{:keys [id descr]} trace-descs :when id :when descr]
-        (.putTemplate postproc id descr))
-      ; Stop old maintenance threads (new ones are already started)
+                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))]
       (doseq [t maint-threads]
         (.stop t))
-      (.setPostproc tstore postproc)
       (assoc app-state
         :maint-threads nmt
-        :tstore tstore
-        :trace-postproc postproc))
+        :tstore tstore))
     app-state))
 

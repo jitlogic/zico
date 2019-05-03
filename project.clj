@@ -111,7 +111,7 @@
 
                         :dependencies [[figwheel-sidecar "0.5.18"]
                                        [org.clojure/test.check "0.9.0"]
-                                       [cider/piggieback "0.3.10"]
+                                       [cider/piggieback "0.4.0"]
                                        [day8.re-frame/test "0.1.5"]]
 
                         :source-paths ["env/dev/clj"]

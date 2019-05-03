@@ -31,10 +31,8 @@
   (:import (com.jitlogic.netkit.util NetkitUtil)))
 
 
-(defn trace-detail [app-state id depth]
-  (if-let [rslt (if (.contains id "_")
-               (ztrc/trace-detail-tid app-state depth false id)
-               (ztrc/trace-detail app-state depth id))]
+(defn trace-detail [app-state tid sid depth]
+  (if-let [rslt (ztrc/trace-detail app-state depth tid sid)]
     (rhr/ok rslt)
     (rhr/not-found {:reason "trace not found"})))
 
@@ -49,8 +47,7 @@
       :data {:basePath "/api"
              :info     {:version "1.90.6", :title "ZICO", :description "ZICO 2.x Collector API"
                         :contact {:name "Zorka.io project", :url "http://zorka.io"}}
-             :tags     [{:name "admin", :description "admin & management"}
-                        {:name "cfg", :description "configuration objects"}
+             :tags     [{:name "cfg", :description "configuration objects"}
                         {:name "system", :description "system information"}
                         {:name "trace", :description "trace data search & browsing"}
                         {:name "user", :description "current user information"}
@@ -90,56 +87,33 @@
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/TraceSearchRecord]
         (rhr/ok (ztrc/trace-search app-state query)))
-      (ca/GET "/:id" []
+      (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
-        :path-params [id :- s/Str]
+        :path-params [tid :- s/Str, sid :- s/Str]
         :query-params [depth :- s/Int]
         :return zico.schema.tdb/TraceRecord
-        (trace-detail app-state id (or depth 1)))
+        (trace-detail app-state (or depth 1) tid sid))
       (ca/GET "/:id/stats" []
         :summary "return trace method call stats"
-        :path-params [id :- s/Str]
+        :path-params [tid :- s/Str, sid :- s/Str]
         :return [zico.schema.tdb/TraceStats]
-        (rhr/ok (ztrc/trace-stats app-state id))))
-
-
-    (ca/context "/admin" []
-      :tags ["admin"]
-      (ca/GET "/backup" []
-        :allow-roles #{:admin}
-        :summary "lists all backups"
-        :return [zico.schema.api/BackupItem]
-        (rhr/ok (zadm/backup-list app-state nil)))
-      (ca/POST "/backup" []
-        :allow-roles #{:admin}
-        :summary "performs backup of configuration database"
-        :return zico.schema.api/BackupItem
-        (rhr/ok (zadm/backup app-state nil)))
-      (ca/POST "/backup/:id" []
-        :allow-roles #{:admin}
-        :summary "restores given backup"
-        :path-params [id :- s/Int]
-        (rhr/ok (zadm/restore app-state id))))))
+        (rhr/ok (ztrc/trace-stats app-state tid sid))))
+    ))
 
 
 (defn zico-agent-routes [app-state]
   (cc/routes
-    (cc/POST "/register" req
-      (zbw/handle-json-req ztrc/agent-register app-state zico.schema.api/AgentRegReq req))
-    (cc/POST "/session" req
-      (zbw/handle-json-req ztrc/agent-session app-state zico.schema.api/AgentSessionReq req))
     (cc/POST "/submit/agd" {:keys [headers body]}
       (ztrc/submit-agd
         app-state
-        (get headers "x-zorka-agent-id")
-        (get headers "x-zorka-session-uuid")
+        (get headers "x-zorka-session-id")
+        (get headers "x-zorka-session-renew")
         (NetkitUtil/toByteArray body)))
     (cc/POST "/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc
         app-state
-        (get headers "x-zorka-agent-id")
-        (get headers "x-zorka-session-uuid")
-        (get headers "x-zorka-trace-uuid")
+        (get headers "x-zorka-session-id")
+        (get headers "x-zorka-trace-id")
         (NetkitUtil/toByteArray body)))))
 
 
