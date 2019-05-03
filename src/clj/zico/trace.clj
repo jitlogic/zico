@@ -1,11 +1,10 @@
-(ns zico.server.trace
+(ns zico.trace
   (:require
     [clj-time.coerce :as ctc]
     [clj-time.format :as ctf]
     [ring.util.http-response :as rhr]
     [taoensso.timbre :as log]
-    [zico.backend.objstore :as zobj]
-    [zico.backend.util :as zbu :refer [to-int]])
+    [zico.util :as zbu :refer [to-int]])
   (:import
     (java.io File)
     (io.zorka.tdb.store

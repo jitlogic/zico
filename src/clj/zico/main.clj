@@ -1,4 +1,4 @@
-(ns zico.server.main
+(ns zico.main
   (:require
     [clojure.java.io :as io]
     [ring.adapter.jetty :refer [run-jetty]]
@@ -6,13 +6,11 @@
     [ns-tracker.core :refer [ns-tracker]]
     [taoensso.timbre.appenders.3rd-party.rotor :refer [rotor-appender]]
     [taoensso.timbre :as log]
-    [zico.backend.objstore :as zobj]
-    [zico.backend.util :as zbu]
-    [zico.server.schema :as zcfg]
-    [zico.server.trace :as ztrc]
-    [zico.server.web :as zweb])
+    [zico.util :as zbu]
+    [zico.schema :as zcfg]
+    [zico.trace :as ztrc]
+    [zico.web :as zweb])
   (:gen-class))
-
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -31,25 +29,17 @@
         (log/info "Reloading configuration.")
         (reload-fn)))))
 
-
 (defonce ^:dynamic zorka-app-state {})
 (defonce ^:dynamic stop-f (atom nil))
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
 
-(def INIT-CLASSES [:app :env :hostreg :ttype :user])
-
 (defn  new-app-state [old-state conf]
-  (let [zico-db (zobj/jdbc-reconnect (:zico-db old-state) (:zico-db (:conf old-state)) (:zico-db conf)),
-        obj-store (zobj/jdbc-store zico-db)]
-    (zobj/jdbc-migrate zico-db)
-    (zobj/load-initial-data obj-store INIT-CLASSES (:zico-db conf) (:home-dir conf))
-    (->
-      {:conf conf, :zico-db zico-db, :obj-store obj-store,
-       :session-store (or (:session-store old-state) (ring.middleware.session.memory/memory-store))}
-      (ztrc/with-tracer-components old-state)
-      zweb/with-zorka-web-handler)))
-
+  (->
+    {:conf          conf,
+     :session-store (or (:session-store old-state) (ring.middleware.session.memory/memory-store))}
+    (ztrc/with-tracer-components old-state)
+    zweb/with-zorka-web-handler))
 
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
@@ -61,12 +51,9 @@
                   (io/resource "zico/zico.conf")
                   (zbu/to-path (zbu/ensure-dir home-dir) "zico.conf"))
                 (assoc :home-dir home-dir)
-                (update-in [:backup :path] updf)
-                (update-in [:zico-db :subname] updf)
                 (update-in [:tstore :path] updf)
                 (update-in [:log :main :path] updf))
          logs (-> conf :log :main)]
-     (zbu/ensure-dir (-> conf :backup :path))
      (zbu/ensure-dir (-> conf :tstore :path))
      (zbu/ensure-dir (-> conf :log :main :path))
      (taoensso.timbre/merge-config!
@@ -75,13 +62,11 @@
      (taoensso.timbre/set-level! (-> conf :log :level))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
-
 (defn zorka-main-handler [req]
   (check-reload #'reload)
   (if-let [main-handler (:main-handler zorka-app-state)]
     (main-handler req)
     {:status 500, :body "Application not initialized."}))
-
 
 (defn stop-server []
   (when-let [f @stop-f]
@@ -93,7 +78,6 @@
   (when-let [cf @conf-autoreload-f]
     (future-cancel cf)
     (reset! conf-autoreload-f nil)))
-
 
 (defn start-server []
   (stop-server)

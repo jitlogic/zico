@@ -68,8 +68,7 @@
    (s/optional-key :details)     s/Any
    (s/optional-key :dtrace-tid)  (s/maybe s/Str)
    (s/optional-key :dtrace-uuid) (s/maybe s/Str)
-   (s/optional-key :dtrace-out)  s/Bool
-   })
+   (s/optional-key :dtrace-out)  s/Bool})
 
 (s/defschema TraceStackItem
   {:class s/Str
@@ -81,8 +80,7 @@
   {:class                  s/Str
    :msg                    (s/maybe s/Str)
    :stack                  [TraceStackItem]
-   (s/optional-key :cause) (s/recursive #'TraceException)
-   })
+   (s/optional-key :cause) (s/recursive #'TraceException)})
 
 (s/defschema TraceMethod
   {:result s/Str

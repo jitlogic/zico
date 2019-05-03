@@ -1,11 +1,9 @@
 (ns zico.webapi-test
   (:require
-    [zico.server.main :refer [zorka-app-state]]
+    [zico.main :refer [zorka-app-state]]
     [zico.test-util :refer
      [zorka-integ-fixture *root-path* time-travel zorka obj-store trace-store]]
     [clojure.test :refer :all]
-    [zico.backend.objstore :as zobj]
-    [zico.server.trace :as ztrc]
     [clojure.data.json :as json]))
 
 

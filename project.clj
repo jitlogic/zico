@@ -49,7 +49,7 @@
 
   :uberjar-exclusions [#"assets/.*.json" "public/css/zico.css"]
 
-  :main zico.server.main
+  :main zico.main
 
   :clean-targets ^{:protect false}
   [:target-path
@@ -106,7 +106,7 @@
 
   :sass {:src "src/sass/" :dst "resources/public/css/"}
 
-  :profiles {:dev      {:repl-options {:init-ns          zico.server.main
+  :profiles {:dev      {:repl-options {:init-ns          zico.main
                                        :nrepl-middleware [cider.piggieback/wrap-cljs-repl]}
 
                         :dependencies [[figwheel-sidecar "0.5.18"]

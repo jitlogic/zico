@@ -1,4 +1,4 @@
-(ns zico.server.web
+(ns zico.web
   (:require
     [compojure.core :as cc]
     [compojure.route :refer [not-found resources]]
@@ -20,16 +20,35 @@
     [ring.util.request :refer [body-string]]
     [ring.util.response :refer [redirect]]
     [schema.core :as s]
-    [slingshot.slingshot :refer [throw+]]
-    [zico.backend.admin :as zadm]
-    [zico.backend.auth :as zaut :refer [wrap-zico-auth wrap-allow-roles]]
-    [zico.backend.web :as zbw]
-    [zico.schema.api]
-    [zico.schema.db]
     [zico.schema.tdb]
-    [zico.server.trace :as ztrc])
+    [zico.trace :as ztrc]
+    [zico.util :as zbu])
   (:import (com.jitlogic.netkit.util NetkitUtil)))
 
+
+(defn render-loading-page [_]
+  {:status  200,
+   :headers {"Content-Type", "text/html;charset=utf-8"}
+   :body    (zbu/render-page
+              [:div#app
+               [:div.splash-centered
+                [:div.splash-frame "Loading application ..."]]]
+              (include-js "/js/app.js"))})
+
+(defn zico-error-handler [_ {:keys [reason status] :as data} _]
+  (cond
+    (string? data) {:status 500, :headers {}, :body {:reason data}}
+    :else
+    {:status  (or status 500) :headers {} :body    {:reason reason}}))
+
+(defn wrap-cache [f]
+  (fn [{:keys [uri] :as req}]
+    (let [resp (f req)]
+      (if (and (not zbu/DEV-MODE) (or (.endsWith uri ".css") (.endsWith uri ".svg")))
+        (assoc-in resp [:headers "Cache-Control"] "max-age=3600")
+        (-> resp
+            (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
+            (assoc-in [:headers "Pragma"] "no-cache"))))))
 
 (defn trace-detail [app-state tid sid depth]
   (if-let [rslt (ztrc/trace-detail app-state depth tid sid)]
@@ -37,10 +56,10 @@
     (rhr/not-found {:reason "trace not found"})))
 
 
-(defn zico-api-routes [{:keys [obj-store] :as app-state}]
+(defn zico-api-routes [app-state]
   (ca/api
     {:exceptions
-     {:handlers {:zico zbw/zico-error-handler}}
+     {:handlers {:zico zico-error-handler}}
      :swagger
      {:ui   "/docs"
       :spec "/swagger.json"
@@ -54,31 +73,6 @@
                         {:name "test", :description "testing API"}]
              :consumes ["application/json", "application/edn"]
              :produces ["application/json", "application/edn"]}}}
-
-    (zbw/zico-db-resource obj-store :app zico.schema.db/App)
-    (zbw/zico-db-resource obj-store :env zico.schema.db/Env)
-    (zbw/zico-db-resource obj-store :host zico.schema.db/Host)
-    (zbw/zico-db-resource obj-store :ttype zico.schema.db/TType)
-    (zbw/zico-db-resource obj-store :hostreg zico.schema.db/HostReg)
-    (zbw/zico-db-resource obj-store :user zico.schema.db/User)
-
-    (ca/context "/system" []
-      :tags ["system"]
-      (ca/GET "/info" []
-        :summary "system information"
-        :return zico.schema.api/SystemInfo
-        (rhr/ok (zadm/system-info app-state))))
-
-    (ca/context "/user" []
-      :tags ["user"]
-      (ca/GET "/info" req
-        :summary "current user info"
-        :return zico.schema.db/User
-        (rhr/ok (:user (:session req) zaut/ANON-USER)))
-      (ca/POST "/password" {{:keys [user]} :session}
-        :summary "change user password"
-        :body [body zico.schema.api/PasswordChange]
-        (zaut/change-password app-state user body)))
 
     (ca/context "/trace" []
       :tags ["trace"]
@@ -117,24 +111,16 @@
         (NetkitUtil/toByteArray body)))))
 
 
-(defn zorka-web-routes [{{{:keys [auth]} :auth} :conf :as app-state}]
+(defn zorka-web-routes [app-state]
   (let [api-routes (zico-api-routes app-state)
         agent-routes (zico-agent-routes app-state)]
     (cc/routes
       (cc/GET "/" []
         {:status  302, :body "Redirecting...", :headers {"Location" "/view/mon/trace/list"}})
 
-      (cc/context "/api" []
-        (wrap-zico-auth api-routes auth))
-
+      (cc/context "/api" [] api-routes)
       (cc/context "/agent" [] agent-routes)
-
-      (cc/context "/view" []
-        (wrap-zico-auth zbw/render-loading-page auth))
-
-      (cc/GET "/login" req (zaut/handle-login app-state req))
-      (cc/POST "/login" req (zaut/handle-login app-state req))
-      (cc/GET "/logout" req (zaut/handle-logout app-state req))
+      (cc/context "/view" [] render-loading-page)
 
       (resources "/")
       (not-found "Not Found.\n"))))
@@ -155,7 +141,7 @@
       (wrap-content-type-options :nosniff)
       wrap-forwarded-scheme
       wrap-forwarded-remote-addr
-      zbw/wrap-cache))
+      wrap-cache))
 
 
 (defn with-zorka-web-handler [app-state]

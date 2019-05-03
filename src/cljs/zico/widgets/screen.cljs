@@ -5,25 +5,12 @@
     [zico.widgets.popups :as zp]
     [zico.widgets.widgets :as zw]
     [zico.widgets.state :as zs]
-    [zico.widgets.util :as zu]
-    [zico.widgets.io :as io]))
+    [zico.widgets.util :as zu]))
 
 
-(def MENU-INITIAL-STATE
-  {:open? true})
-
+(def MENU-INITIAL-STATE {:open? false})
 
 (zs/dispatch [:once :set [:view :menu] MENU-INITIAL-STATE])
-
-
-(def USER-INFO
-  (zs/subscribe [:get [:user :info]]))
-
-
-(defn has-role [role]
-  (let [roles (:roles @USER-INFO)]
-    (and (set? roles) (roles role))))
-
 
 (defn render-status-bar [{:keys [level message]}]
   (when level
@@ -148,21 +135,12 @@
           add-right]
          ]))))
 
-
-(zs/dispatch [:once :set [:view :menu :open?] true])
-
-
-(defn current-page [user-info on-error]
-  (zs/dispatch
-    [:xhr/get (io/api "/user/info") [:user :info] nil :on-error on-error])
+(defn current-page []
   (fn []
-    (if @user-info
-      (if-let [[view {params :query-params}] (rs/get :current-page)]
-        [:div#top [view params]]
-        [:div.splash-centered
-         [:div.splash-frame "No such view."]])
+    (if-let [[view {params :query-params}] (rs/get :current-page)]
+      [:div#top [view params]]
       [:div.splash-centered
-       [:div.splash-frame "Loading profile, please wait."]])))
+       [:div.splash-frame "No such view."]])))
 
 
 (defn main-routes [& {:as routes}]

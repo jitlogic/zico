@@ -1,4 +1,4 @@
-(ns zico.backend.util
+(ns zico.util
   (:require [taoensso.timbre :as log]
             [aero.core :as aero]
             [hiccup.page :refer [html5 include-css]]
