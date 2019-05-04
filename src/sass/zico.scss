@@ -48,19 +48,12 @@ $c-pct4: #f00;
 @import "common";
 
 @import "widgets/calendar";
-@import "widgets/form";
 @import "widgets/list";
 @import "widgets/menu";
 @import "widgets/popup";
 @import "widgets/toolbar";
 
-@import "views/mon";
-@import "views/cfg";
-@import "views/backup";
-@import "views/about";
 @import "views/trace";
-@import "views/user";
 
-@import "pages/login";
 @import "pages/splash";
 
