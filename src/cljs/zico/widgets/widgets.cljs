@@ -4,12 +4,8 @@
     [cljs-time.core :as ct]
     [cljs-time.format :as ctf]
     [zico.widgets.util :as zu]
-    [zico.widgets.state :as zs])
-  (:require-macros
-    [zico.widgets.macros :refer [svg-compiled-icon-set]]))
+    [zico.widgets.state :as zs]))
 
-
-(def svg-icons (svg-compiled-icon-set "assets/icons" nil))
 
 (defn svg-icon                                              ; TODO zamienić na macro
   ([family glyph color & {:keys [view-box class title] :or {view-box "0 0 1000 1000"}}]

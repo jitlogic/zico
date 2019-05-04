@@ -165,11 +165,11 @@
           {:method   (parse-method-str method)
            :pos      (.getPos tr)
            :errors   (.getErrors tr)
+           :tstart (.getTstart tr)
            :duration (- (.getTstop tr) (.getTstart tr))}
           (when children {:children children})
           (when attrs {:attrs (resolve-attr-obj attrs resolver)})
           (when (not= 0 (.getEid tr)) {:exception (resolve-exception resolver (.getEid tr))})
-          ;(when (not= 0 (.getType tr)) {:ttype (first (zobj/find-obj obj-store {:class :ttype, :id (.getType tr)}))})
           )))))
 
 
