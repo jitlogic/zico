@@ -106,12 +106,14 @@
     (take
       (:limit query 100)
       (for [r (.searchTraces tstore (parse-search-query query))]
-        {:duration    (.getDuration r)
+        {:trace-id    (.getTraceIdHex r)
+         :span-id     (.getSpanIdHex r)
+         :parent-id   (.getParentIdHex r)
+         :duration    (.getDuration r)
          :tst         (.getTstamp r)
          :tstamp      (zu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
          :data-offs   (.getDataOffs r)
          :start-offs  (.getStartOffs r)
-         :flags       #{}                                   ; TODO flagi
          :recs        (.getRecs r)
          :calls       (.getCalls r)
          :errs        (.getErrors r)
@@ -167,7 +169,7 @@
           {:method   (parse-method-str method)
            :pos      (.getPos tr)
            :errors   (.getErrors tr)
-           :tstart (.getTstart tr)
+           :tstart   (.getTstart tr)
            :duration (- (.getTstop tr) (.getTstart tr))}
           (when children {:children children})
           (when attrs {:attrs (resolve-attr-obj attrs resolver)})
@@ -176,6 +178,7 @@
 
 
 (defn trace-detail [{:keys [tstore]} stack-limit tid sid]
+  (println "TID=" tid "SID=" sid)
   (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
         rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter)) (.setStackLimit stack-limit))
         rslt (.retrieve tstore tid1 tid2 sid1 rtr)]

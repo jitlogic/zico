@@ -49,26 +49,20 @@
    (s/optional-key :full-info)    s/Bool})
 
 (s/defschema TraceSearchRecord
-  {(s/optional-key :uuid)        s/Str
-   (s/optional-key :chunk-id)    s/Int
-   (s/optional-key :descr)       s/Str
-   (s/optional-key :duration)    s/Int
-   (s/optional-key :ttype)       s/Int
-   (s/optional-key :app)         s/Int
-   (s/optional-key :env)         s/Int
-   (s/optional-key :host)        s/Int
-   (s/optional-key :tst)         s/Int
-   (s/optional-key :tstamp)      s/Str
-   (s/optional-key :data-offs)   s/Int
-   (s/optional-key :start-offs)  s/Int
-   (s/optional-key :flags)       s/Any
-   (s/optional-key :recs)        s/Int
-   (s/optional-key :calls)       s/Int
-   (s/optional-key :errs)        s/Int
-   (s/optional-key :details)     s/Any
-   (s/optional-key :dtrace-tid)  (s/maybe s/Str)
-   (s/optional-key :dtrace-uuid) (s/maybe s/Str)
-   (s/optional-key :dtrace-out)  s/Bool})
+  {(s/optional-key :trace-id)   s/Str
+   (s/optional-key :span-id)    s/Str
+   (s/optional-key :parent-id)  (s/maybe s/Str)
+   (s/optional-key :chunk-id)   s/Int
+   (s/optional-key :duration)   s/Int
+   (s/optional-key :tst)        s/Int
+   (s/optional-key :tstamp)     s/Str
+   (s/optional-key :data-offs)  s/Int
+   (s/optional-key :start-offs) s/Int
+   (s/optional-key :flags)      s/Any
+   (s/optional-key :recs)       s/Int
+   (s/optional-key :calls)      s/Int
+   (s/optional-key :errs)       s/Int
+   (s/optional-key :details)    s/Any})
 
 (s/defschema TraceStackItem
   {:class s/Str
@@ -94,7 +88,9 @@
    :pos                        s/Int
    :errors                     s/Int
    :duration                   s/Int
-   (s/optional-key :uuid)      s/Str
+   :tstart                     s/Int
+   (s/optional-key :trace-id)  s/Str
+   (s/optional-key :span-id)   s/Str
    (s/optional-key :ttype)     s/Int
    (s/optional-key :type)      s/Str
    (s/optional-key :children)  [(s/recursive #'TraceRecord)]

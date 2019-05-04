@@ -83,17 +83,17 @@
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/TraceSearchRecord]
         (rhr/ok (ztrc/trace-search app-state query)))
+      (ca/GET "/:id/stats" []
+        :summary "return trace method call stats"
+        :path-params [tid :- s/Str, sid :- s/Str]
+        :return [zico.schema.tdb/TraceStats]
+        (rhr/ok (ztrc/trace-stats app-state tid sid)))
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
         :query-params [depth :- s/Int]
         :return zico.schema.tdb/TraceRecord
-        (trace-detail app-state (or depth 1) tid sid))
-      (ca/GET "/:id/stats" []
-        :summary "return trace method call stats"
-        :path-params [tid :- s/Str, sid :- s/Str]
-        :return [zico.schema.tdb/TraceStats]
-        (rhr/ok (ztrc/trace-stats app-state tid sid))))
+        (trace-detail app-state tid sid (or depth 1))))
     ))
 
 

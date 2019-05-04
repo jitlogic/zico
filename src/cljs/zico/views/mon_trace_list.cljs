@@ -131,7 +131,8 @@
 (zs/reg-event-fx
   ::handle-trace-search-result
   (fn [{:keys [db]} [_ clean data]]
-    (let [d0 (if clean {} (get-in db [:data :trace :list] {}))
+    (let [data (for [d data] (assoc d :uuid (str (:trace-id d) "/" (:span-id d "0000000000000000"))))
+          d0 (if clean {} (get-in db [:data :trace :list] {}))
           sel (get-in db [:view :trace :list :selected])
           uuids (into #{} (map :uuid data))
           evt (if (and sel (contains? uuids sel))
