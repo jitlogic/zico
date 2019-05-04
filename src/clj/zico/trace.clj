@@ -4,7 +4,8 @@
     [clj-time.format :as ctf]
     [ring.util.http-response :as rhr]
     [zico.util :as zu]
-    [clojure.tools.logging :as log])
+    [clojure.tools.logging :as log]
+    [clojure.data.json :as json])
   (:import
     (java.io File)
     (io.zorka.tdb.store
@@ -17,8 +18,9 @@
     (io.zorka.tdb.search.ssn TextNode)
     (io.zorka.tdb.search.tsn KeyValSearchNode)
     (io.zorka.tdb.util ZicoMaintThread)
-    (com.jitlogic.zorka.common.util ZorkaUtil)
-    (io.zorka.tdb ZicoException)))
+    (com.jitlogic.zorka.common.util ZorkaUtil Base64)
+    (io.zorka.tdb ZicoException)
+    (com.jitlogic.zorka.cbor HttpConstants)))
 
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
@@ -194,11 +196,19 @@
          :min-duration (.getMaxDuration s),
          :method       (.getMethod s)}))))
 
+(defn dump-trace-req [path uri session-id session-reset trace-id data]
+  (let [headers (merge {"content-type" [HttpConstants/ZORKA_CBOR_CONTENT_TYPE]
+                        HttpConstants/HDR_ZORKA_SESSION_ID [session-id]}
+                       (when session-reset {HttpConstants/HDR_ZORKA_SESSION_RESET [session-reset]})
+                       (when trace-id {HttpConstants/HDR_ZORKA_TRACE_ID [trace-id]}))]
+    (locking path
+      ; TODO use json/write, current implementation is inefficient
+      (spit path (str (json/write-str {:uri uri, :headers headers, :body (Base64/encode data false)}) "\n") :append true))))
 
-(defn submit-agd [{:keys [tstore]} session-id session-renew data]
+(defn submit-agd [{{{:keys [dump dump-path]} :log} :conf :keys [tstore]} session-id session-reset data]
   (try
-    (println "----------> " session-id session-renew)
-    (.handleAgentData tstore session-id (= "true" session-renew) data)
+    (.handleAgentData tstore session-id (= "true" session-reset) data)
+    (when dump (dump-trace-req dump-path "/agent/submit/agd" session-id session-reset nil data))
     (rhr/accepted)
     ; TODO session-renew - handle broken sessions
     ;(catch Exception _ (rhr/bad-request {:reason "Missing session UUID header."}))
@@ -208,18 +218,20 @@
       (rhr/internal-server-error {:reason "internal error"}))))
 
 
-(defn submit-trc [{:keys [tstore]} session-id trace-id data]
+(defn submit-trc [{{{:keys [dump dump-path]} :log} :conf :keys [tstore]} session-id trace-id data]
   (try
     ; TODO weryfikacja argumentów
     (if-let [[tid1 tid2] (parse-hex-tid trace-id)]
-      (.handleTraceData tstore session-id data (ChunkMetadata. tid1 tid2 0 0 0))
+      (do
+        (.handleTraceData tstore session-id data (ChunkMetadata. tid1 tid2 0 0 0))
+        (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data)))
       (rhr/bad-request {:reason "Invalid trace ID header"}))
     (rhr/accepted)
     ; TODO :status 507 jeżeli wystąpił I/O error (brakuje miejsca), agent może zareagować tymczasowo blokujący wysyłki
     (catch ZicoException _
       (rhr/unauthorized {:reason "invalid or missing session ID header"}))
     (catch Exception e
-      (log/error e "Error processing TRC data: " (ZorkaUtil/hex #^byte data))
+      (log/error e "Error processing TRC data: " (Base64/encode data false))
       (rhr/internal-server-error {:reason "internal error"}))))
 
 

@@ -2,7 +2,7 @@
 
 {
 
- :home-dir  #or [#env APP_HOME, #prop app.home, #prop user.dir]
+ :home-dir  #or [#env ZICO_HOME, #prop zico.home, #prop user.dir]
 
  ; HTTP settings
  :http {
@@ -23,6 +23,8 @@
  }
 
  :log {:path #join [#ref [:home-dir] "/log"]
+       :dump false
+       :dump-path #join [#ref [:home-dir] "/log/dump.log"]
        :mode :time-rolling
        :max-history 7
        :max-size 16777216
@@ -40,7 +42,7 @@
 
 
  ; Configuration of main data store
- :tstore { :path #join [#ref [:home-dir] "/data"]
+ :tstore {:path #join [#ref [:home-dir] "/data"]
           :maint-threads 2
           :maint-interval 10
           :session-timeout 120

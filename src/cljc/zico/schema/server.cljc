@@ -24,6 +24,8 @@
 
 (s/defschema LoggerConfig
   {:path s/Str
+   :dump s/Bool
+   :dump-path s/Str
    :mode s/Keyword
    :max-history s/Int
    :max-size s/Int

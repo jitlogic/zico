@@ -74,15 +74,12 @@
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
-   (let [updf #(if (string? %) (.replace % "${zico.home}" home-dir))
-         conf (->
-                (zu/read-config
-                  zico.schema.server/ZicoConf
-                  (io/resource "zico/zico.edn")
-                  (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))
-                (assoc :home-dir home-dir)
-                (update-in [:tstore :path] updf)
-                (update-in [:log :main :path] updf))]
+   (println "Zico home directory:" home-dir)
+   (let [conf (zu/read-config
+                zico.schema.server/ZicoConf
+                (io/resource "zico/zico.edn")
+                (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))]
+     (println "CONFIG: " conf)
      (configure-logger (-> conf :log))
      (zu/ensure-dir (-> conf :tstore :path))
      (zu/ensure-dir (-> conf :log :path))
