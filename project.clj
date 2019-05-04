@@ -25,14 +25,7 @@
 
                  [org.slf4j/slf4j-api "1.7.25"]
                  [ch.qos.logback/logback-classic "1.0.13"]
-                 [org.clojure/tools.logging "0.4.1"]
-
-                 [honeysql "0.9.4"]
-                 [org.clojure/java.jdbc "0.7.7"]
-                 [org.apache.tomcat/dbcp "6.0.53"]
-                 [com.h2database/h2 "1.4.197"]
-                 [mysql/mysql-connector-java "5.1.46"]
-                 [org.flywaydb/flyway-core "5.2.4"]]
+                 [org.clojure/tools.logging "0.4.1"]]
 
   :plugins [[lein-environ "1.1.0"]
             [lein-cljsbuild "1.1.7"]
@@ -46,7 +39,7 @@
 
   :test-paths [ "test/clj" ]
 
-  :uberjar-exclusions [#"assets/.*.json" "public/css/zico.css"]
+  :uberjar-exclusions ["public/css/zico.css"]
 
   :main zico.main
 

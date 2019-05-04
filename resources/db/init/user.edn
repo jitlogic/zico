@@ -1,3 +1,0 @@
-[ ; Default admin user
- {:flags 3, :name "admin", :password "zico", :fullname "Zorka Administrator", :email "admin@mycompany.com", :comment "Default Admin Account"}
- ]

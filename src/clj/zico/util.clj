@@ -8,11 +8,11 @@
     [clojure.tools.logging :as log])
   (:import
     (java.io File)
-    (java.util Properties HashMap)
-    (java.net Socket)
-    (java.util.concurrent Executors Executor ExecutorService TimeUnit)))
+    (java.util Properties)))
+
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
+
 
 (defn cur-time
   ([] (cur-time 0))
@@ -49,6 +49,7 @@
      (= item (first coll)) idx
      :else (recur item (rest coll) (inc idx)))))
 
+
 (defn to-str [v]
   (cond
     (string? v) v
@@ -67,17 +68,6 @@
           [nf])))))
 
 
-(defn scan-file-tstamps [path]
-  (let [files (scan-files (File. ^String path) #".*\.conf")]
-    (into {} (for [f files]
-               {(.getName f) (.lastModified f)}))))
-
-
-(defn is-file? [^String path]
-  (let [f (File. path)]
-    (and (.exists f) (.isFile f))))
-
-
 (defn ensure-dir [^String path]
   (let [f (File. path)]
     (cond
@@ -94,14 +84,6 @@
         (cons
           (take n coll)
           (partition-split n (drop n coll)))))))
-
-
-(defn daemon-thread [name f]
-  (doto
-    (Thread. ^Runnable f)
-    (.setName name)
-    (.setDaemon true)
-    (.start)))
 
 
 (defn conf-to-props
@@ -127,35 +109,11 @@
      :else (lazy-seq (cons obj (filter-unique seq (conj acc obj)))))))
 
 
-(defn java-hash-map [& {:as data}]
-  (let [rslt (HashMap.)]
-    (doseq [[k v] data] (.put rslt k v))
-    rslt))
-
-
-(defn tcp-request [^String host ^Integer port ^String text]
-  (try
-    (with-open [sock (Socket. host port)]
-      (spit (.getOutputStream sock) text)
-      (slurp (.getInputStream sock)))
-    (catch Exception e
-      (log/error e (str "Error performing TCP request to " host ":" port))
-      nil)))
-
-
 (defn recursive-merge [map1 map2]
   "Recursive merge"
   (if (and (map? map1) (map? map2))
     (merge-with recursive-merge map1 map2)
     map2))
-
-
-(defn rekey-map [m]
-  (if (map? m)
-    (into {}
-          (for [[k v] m]
-            {(keyword k) v}))
-    m))
 
 
 (defn read-config [schema & sources]
@@ -173,34 +131,7 @@
     :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
 
 
-
-
-(defn tst [t]
-  "Generates timestamp from (any)."
-  (cond
-    (nil? t) nil
-    (re-matches #"\d\d" t) (ctco/to-date-time (str t ":00:00"))
-    (re-matches #"\d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
-    (re-matches #"\d\d:\d\d:\d\d" t) (ctco/to-date-time t)
-    (re-matches #"\d\d \d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t ":00"))
-    (re-matches #"\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time (str "1971-01-" t))
-    (re-matches #"\d\d\d\d-\d\d-\d\d" t) (ctco/to-date-time (str t " 00:00:00"))
-    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d" t) (ctco/to-date-time (str t ":00"))
-    (re-matches #"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d" t) (ctco/to-date-time t)
-    (re-matches #"\d{8}T\d{6}Z" t) (ctco/to-date-time t)
-    :else (throw (RuntimeException. (str "Invalid date time format '" t "'")))))
-
-
-(defn to-java-time [t]
-  (ctco/to-long (tst t)))
-
-
-(defn to-unix-time [t]
-  (/ (ctco/to-long (tst t)) 1000))
-
-
 (def ALPHA-STR "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-(def SALT-STR (str ALPHA-STR "!@#$%^&*!@#$%%^^&*"))
 
 (defn random-string
   "Generates random string of alphanumeric characters of given length."
@@ -217,29 +148,6 @@
    (ctfo/unparse
      (:date-hour-minute-second-ms ctfo/formatters)
      (ctco/from-long t))))
-
-
-(defn new-executor [nthreads]
-  (if (> nthreads 0)
-    (Executors/newFixedThreadPool nthreads)
-    (reify
-      Executor
-      (execute [_ command]
-        (.run command)))))
-
-(defn simple-executor [new-nthreads old-nthreads ^ExecutorService old-executor]
-  (if (or (nil? old-executor) (not= old-nthreads new-nthreads))
-    (let [new-executor (new-executor new-nthreads)]
-      (when (instance? ExecutorService old-executor)
-        (.execute new-executor
-                  (fn []
-                    (Thread/sleep 12000)
-                    (log/info "Shutting down old indexer thread pool ...")
-                    (.shutdown old-executor)
-                    (log/info "Waiting for old thread pool to finish ...")
-                    (.awaitTermination old-executor 300 TimeUnit/SECONDS))))
-      new-executor)
-    old-executor))
 
 
 (defn render-page [& content]

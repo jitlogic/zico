@@ -12,7 +12,6 @@
     [ring.middleware.multipart-params :refer [wrap-multipart-params]]
     [ring.middleware.params :refer [wrap-params]]
     [ring.middleware.proxy-headers :refer [wrap-forwarded-remote-addr]]
-    [ring.middleware.session :refer [wrap-session]]
     [ring.middleware.ssl :refer [wrap-ssl-redirect wrap-hsts wrap-forwarded-scheme]]
     [ring.middleware.x-headers :refer [wrap-xss-protection wrap-frame-options wrap-content-type-options]]
     [ring.util.http-response :as rhr]
@@ -22,18 +21,19 @@
     [schema.core :as s]
     [zico.schema.tdb]
     [zico.trace :as ztrc]
-    [zico.util :as zbu])
+    [zico.util :as zu])
   (:import (com.jitlogic.netkit.util NetkitUtil)))
 
 
 (defn render-loading-page [_]
   {:status  200,
    :headers {"Content-Type", "text/html;charset=utf-8"}
-   :body    (zbu/render-page
+   :body    (zu/render-page
               [:div#app
                [:div.splash-centered
                 [:div.splash-frame "Loading application ..."]]]
               (include-js "/js/app.js"))})
+
 
 (defn zico-error-handler [_ {:keys [reason status] :as data} _]
   (cond
@@ -41,14 +41,16 @@
     :else
     {:status  (or status 500) :headers {} :body    {:reason reason}}))
 
+
 (defn wrap-cache [f]
   (fn [{:keys [uri] :as req}]
     (let [resp (f req)]
-      (if (and (not zbu/DEV-MODE) (or (.endsWith uri ".css") (.endsWith uri ".svg")))
+      (if (and (not zu/DEV-MODE) (or (.endsWith uri ".css") (.endsWith uri ".svg")))
         (assoc-in resp [:headers "Cache-Control"] "max-age=3600")
         (-> resp
             (assoc-in [:headers "Cache-Control"] "no-cache,no-store,max-age=0,must-revalidate")
             (assoc-in [:headers "Pragma"] "no-cache"))))))
+
 
 (defn trace-detail [app-state tid sid depth]
   (if-let [rslt (ztrc/trace-detail app-state depth tid sid)]
@@ -126,13 +128,12 @@
       (not-found "Not Found.\n"))))
 
 
-(defn wrap-web-middleware [handler {:keys [session-store]}]
+(defn wrap-web-middleware [handler]
   (-> handler
       wrap-keyword-params
       wrap-multipart-params
       wrap-params
       wrap-gzip
-      (wrap-session {:store session-store})
       wrap-cookies
       wrap-content-type
       (wrap-default-charset "utf-8")
@@ -145,8 +146,8 @@
 
 
 (defn with-zorka-web-handler [app-state]
-  (let [main-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))]
+  (let [main-handler (-> app-state zorka-web-routes wrap-web-middleware)]
     (assoc app-state
-      :web-handler (-> app-state zorka-web-routes (wrap-web-middleware app-state))
+      :web-handler (-> app-state zorka-web-routes wrap-web-middleware)
       :main-handler main-handler)))
 

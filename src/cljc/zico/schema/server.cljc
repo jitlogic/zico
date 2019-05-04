@@ -1,4 +1,4 @@
-(ns zico.schema
+(ns zico.schema.server
   "ZICO configuration file schema and access functions."
   (:require [schema.core :as s]))
 

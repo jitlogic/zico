@@ -1,3 +1,0 @@
-[ ; Default host registration
- {:name "ZORKA", :regkey "zorka", :flags 1, :app 1, :env 1, :comment "Default registration (please modify)"}
- ]

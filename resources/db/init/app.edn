@@ -1,4 +1,0 @@
-[ ; Default set of applications
- {:name "APP", :glyph "awe/cube", :comment "Discovered Application"}
- ]
-

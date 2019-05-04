@@ -3,7 +3,7 @@
     [clj-time.coerce :as ctc]
     [clj-time.format :as ctf]
     [ring.util.http-response :as rhr]
-    [zico.util :as zbu :refer [to-int]]
+    [zico.util :as zu]
     [clojure.tools.logging :as log])
   (:import
     (java.io File)
@@ -41,14 +41,14 @@
 
 (defn parse-qmi-node [q]
   (doto (QmiNode.)
-    (.setMinDuration (to-int (:min-duration q 0)))
-    (.setMaxDuration (to-int (:max-duration q Long/MAX_VALUE)))
-    (.setMinCalls (to-int (:min-calls q 0)))
-    (.setMaxCalls (to-int (:max-calls q Long/MAX_VALUE)))
-    (.setMinErrs (to-int (:min-errors q 0)))
-    (.setMaxErrs (to-int (:max-errors q Long/MAX_VALUE)))
-    (.setMinRecs (to-int (:min-recs q 0)))
-    (.setMaxRecs (to-int (:max-recs q Long/MAX_VALUE)))
+    (.setMinDuration (zu/to-int (:min-duration q 0)))
+    (.setMaxDuration (zu/to-int (:max-duration q Long/MAX_VALUE)))
+    (.setMinCalls (zu/to-int (:min-calls q 0)))
+    (.setMaxCalls (zu/to-int (:max-calls q Long/MAX_VALUE)))
+    (.setMinErrs (zu/to-int (:min-errors q 0)))
+    (.setMaxErrs (zu/to-int (:max-errors q Long/MAX_VALUE)))
+    (.setMinRecs (zu/to-int (:min-recs q 0)))
+    (.setMaxRecs (zu/to-int (:max-recs q Long/MAX_VALUE)))
     (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
     (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))))
 
@@ -106,7 +106,7 @@
       (for [r (.searchTraces tstore (parse-search-query query))]
         {:duration    (.getDuration r)
          :tst         (.getTstamp r)
-         :tstamp      (zbu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
+         :tstamp      (zu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
          :data-offs   (.getDataOffs r)
          :start-offs  (.getStartOffs r)
          :flags       #{}                                   ; TODO flagi
@@ -153,7 +153,7 @@
         {:result r, :package p, :class c, :method m, :args a}))))
 
 
-(defn trace-record-filter [obj-store]
+(defn trace-record-filter []
   "Returns trace record filter "
   (reify
     TraceRecordFilter
@@ -173,9 +173,9 @@
           )))))
 
 
-(defn trace-detail [{:keys [tstore obj-store]} stack-limit tid sid]
+(defn trace-detail [{:keys [tstore]} stack-limit tid sid]
   (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
-        rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter obj-store)) (.setStackLimit stack-limit))
+        rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter)) (.setStackLimit stack-limit))
         rslt (.retrieve tstore tid1 tid2 sid1 rtr)]
     (merge {:trace-id tid :span-id sid} rslt)))
 
@@ -225,7 +225,7 @@
 (defn open-tstore [new-conf old-conf old-store]
   (let [old-root (when (:path old-conf) (File. ^String (:path old-conf))),
         idx-cache (if old-store (.getIndexerCache old-store) (HashMap.))
-        new-root (File. ^String (:path new-conf)), new-props (zbu/conf-to-props new-conf "store.")]
+        new-root (File. ^String (:path new-conf)), new-props (zu/conf-to-props new-conf "store.")]
     (when-not (.exists new-root) (.mkdirs new-root))        ; TODO handle errors here, check if directory is writable etc.
     (cond
       (or (nil? old-store) (not (= old-root new-root)))
@@ -243,7 +243,7 @@
       :else old-store)))
 
 
-(defn with-tracer-components [{{new-conf :tstore} :conf obj-store :obj-store :as app-state}
+(defn with-tracer-components [{{new-conf :tstore} :conf :as app-state}
                               {{old-conf :tstore} :conf :keys [tstore maint-threads]}]
   (if (:enabled new-conf true)
     (let [tstore (open-tstore new-conf old-conf tstore)
