@@ -197,6 +197,7 @@
 
 (defn submit-agd [{:keys [tstore]} session-id session-renew data]
   (try
+    (println "----------> " session-id session-renew)
     (.handleAgentData tstore session-id (= "true" session-renew) data)
     (rhr/accepted)
     ; TODO session-renew - handle broken sessions
@@ -218,7 +219,7 @@
     (catch ZicoException _
       (rhr/unauthorized {:reason "invalid or missing session ID header"}))
     (catch Exception e
-      (log/error e "Error processing TRC data: " (ZorkaUtil/hex data))
+      (log/error e "Error processing TRC data: " (ZorkaUtil/hex #^byte data))
       (rhr/internal-server-error {:reason "internal error"}))))
 
 

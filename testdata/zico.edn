@@ -1,6 +1,0 @@
-{
- :trace-store {
-               :path "/tmp/zico-collector-test/data/trace"
-               }
- }
-

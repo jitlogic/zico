@@ -103,7 +103,7 @@
       (ztrc/submit-agd
         app-state
         (get headers "x-zorka-session-id")
-        (get headers "x-zorka-session-renew")
+        (get headers "x-zorka-session-reset")
         (NetkitUtil/toByteArray body)))
     (cc/POST "/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc

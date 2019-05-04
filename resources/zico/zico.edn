@@ -35,7 +35,8 @@
        :log-levels
        {:ROOT :debug
         :org.eclipse :info
-        :io.zorka.tdb :info}}
+        :io.zorka.tdb :info
+        }}
 
 
  ; Configuration of main data store
