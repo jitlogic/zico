@@ -3,8 +3,8 @@
     [clj-time.coerce :as ctc]
     [clj-time.format :as ctf]
     [ring.util.http-response :as rhr]
-    [taoensso.timbre :as log]
-    [zico.util :as zbu :refer [to-int]])
+    [zico.util :as zbu :refer [to-int]]
+    [clojure.tools.logging :as log])
   (:import
     (java.io File)
     (io.zorka.tdb.store

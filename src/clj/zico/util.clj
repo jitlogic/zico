@@ -1,14 +1,16 @@
 (ns zico.util
-  (:require [taoensso.timbre :as log]
-            [aero.core :as aero]
-            [hiccup.page :refer [html5 include-css]]
-            [schema.core :as s]
-            [clj-time.coerce :as ctco]
-            [clj-time.format :as ctfo])
-  (:import (java.io File)
-           (java.util Properties HashMap)
-           (java.net Socket)
-           (java.util.concurrent Executors Executor ExecutorService TimeUnit)))
+  (:require
+    [aero.core :as aero]
+    [hiccup.page :refer [html5 include-css]]
+    [schema.core :as s]
+    [clj-time.coerce :as ctco]
+    [clj-time.format :as ctfo]
+    [clojure.tools.logging :as log])
+  (:import
+    (java.io File)
+    (java.util Properties HashMap)
+    (java.net Socket)
+    (java.util.concurrent Executors Executor ExecutorService TimeUnit)))
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
 
@@ -157,7 +159,8 @@
 
 
 (defn read-config [schema & sources]
-  (let [cfg (reduce recursive-merge (map aero/read-config sources))]
+  (let [parts (for [s sources :when (or (not (string? s)) (.canRead (File. ^String s)))] s)
+        cfg (reduce recursive-merge (map aero/read-config parts))]
     (s/validate schema cfg)
     cfg))
 

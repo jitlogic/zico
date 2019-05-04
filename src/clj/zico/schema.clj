@@ -23,10 +23,17 @@
    :max-form-size                      s/Int})
 
 (s/defschema LoggerConfig
-  {:level s/Keyword                                         ; #{:trace :debug :info :warn :error}
-   :main  {:path     s/Str
-           :backlog  s/Int
-           :max-size s/Int}})
+  {:path s/Str
+   :mode s/Keyword
+   :max-history s/Int
+   :max-size s/Int
+   :current-fname s/Str
+   :history-fname s/Str
+   :console-pattern s/Str
+   :file-pattern s/Str
+   :file-level s/Keyword
+   :console-level s/Keyword
+   :log-levels {s/Keyword s/Keyword}})
 
 (s/defschema TextIndexConfig
   {:base-size s/Int, :max-size s/Int})
@@ -41,6 +48,7 @@
    :meta            TextIndexConfig})
 
 (s/defschema ZicoConf
-  {:http JettyHttpConf
+  {:home-dir s/Str
+   :http JettyHttpConf
    :log  LoggerConfig
    :tstore TraceStoreConfig})

@@ -21,12 +21,11 @@
 
                  [compojure "1.6.1"]
                  [metosin/compojure-api "2.0.0-alpha28"]
-                 ;[buddy/buddy-auth "2.1.0"]
                  [hiccup "1.0.5"]
 
                  [org.slf4j/slf4j-api "1.7.25"]
-                 [com.taoensso/timbre "4.10.0"]
-                 [com.fzakaria/slf4j-timbre "0.3.12"]
+                 [ch.qos.logback/logback-classic "1.0.13"]
+                 [org.clojure/tools.logging "0.4.1"]
 
                  [honeysql "0.9.4"]
                  [org.clojure/java.jdbc "0.7.7"]

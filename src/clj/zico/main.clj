@@ -4,13 +4,17 @@
     [ring.adapter.jetty :refer [run-jetty]]
     [ring.middleware.session.memory]
     [ns-tracker.core :refer [ns-tracker]]
-    [taoensso.timbre.appenders.3rd-party.rotor :refer [rotor-appender]]
-    [taoensso.timbre :as log]
     [zico.util :as zbu]
     [zico.schema :as zcfg]
     [zico.trace :as ztrc]
-    [zico.web :as zweb])
-  (:gen-class))
+    [zico.web :as zweb]
+    [clojure.tools.logging :as log])
+  (:gen-class)
+  (:import (ch.qos.logback.classic Level)
+           (org.slf4j LoggerFactory Logger)
+           (ch.qos.logback.classic.encoder PatternLayoutEncoder)
+           (ch.qos.logback.core ConsoleAppender)
+           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -34,6 +38,34 @@
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
 
+(defonce LOG-STATE (atom {}))
+(def LOG-LEVELS {:trace Level/TRACE, :debug Level/DEBUG, :info Level/INFO, :warn Level/WARN, :error Level/ERROR})
+
+(defn configure-logger [{:keys [path max-history current-fname history-fname
+                                console-pattern file-pattern  log-levels]}]
+  (zbu/ensure-dir path)
+  (let [ctx (LoggerFactory/getILoggerFactory)
+        c-encoder (or (:c-encoder @LOG-STATE) (PatternLayoutEncoder.))
+        c-appender (or (:c-appender @LOG-STATE) (ConsoleAppender.))
+        f-encoder (or (:f-encoder @LOG-STATE) (PatternLayoutEncoder.))
+        f-appender (or (:f-appender @LOG-STATE) (RollingFileAppender.))
+        f-policy (or (:f-policy @LOG-STATE) (TimeBasedRollingPolicy.))
+        logger ^Logger (.getLogger ctx "ROOT")
+        log-file (zbu/to-path path current-fname)]
+    (doto c-encoder (.setContext ctx) (.setPattern console-pattern) (.start))
+    (doto c-appender (.setContext ctx) (.setName "console") (.setEncoder c-encoder) (.start))
+    (doto f-encoder (.setContext ctx) (.setPattern file-pattern) (.start))
+    (doto f-appender (.setContext ctx) (.setName "file") (.setEncoder f-encoder) (.setAppend true)
+                     (.setFile log-file))
+    (doto f-policy (.setContext ctx) (.setParent f-appender) (.setMaxHistory max-history)
+                   (.setFileNamePattern (zbu/to-path path history-fname)) (.start))
+    (doto f-appender (.setRollingPolicy f-policy) (.start))
+    (doto logger (.setAdditive true)
+                 (.detachAppender "console") (.addAppender c-appender)
+                 (.detachAppender "file") (.addAppender f-appender))
+    (doseq [[k v] log-levels :let [l ^Logger (.getLogger ctx (name k))]] (.setLevel l (LOG-LEVELS v)))))
+
+
 (defn  new-app-state [old-state conf]
   (->
     {:conf          conf,
@@ -48,18 +80,14 @@
          conf (->
                 (zbu/read-config
                   zcfg/ZicoConf
-                  (io/resource "zico/zico.conf")
-                  (zbu/to-path (zbu/ensure-dir home-dir) "zico.conf"))
+                  (io/resource "zico/zico.edn")
+                  (zbu/to-path (zbu/ensure-dir home-dir) "zico.edn"))
                 (assoc :home-dir home-dir)
                 (update-in [:tstore :path] updf)
-                (update-in [:log :main :path] updf))
-         logs (-> conf :log :main)]
+                (update-in [:log :main :path] updf))]
+     (configure-logger (-> conf :log))
      (zbu/ensure-dir (-> conf :tstore :path))
-     (zbu/ensure-dir (-> conf :log :main :path))
-     (taoensso.timbre/merge-config!
-       {:appenders {:rotor   (rotor-appender (assoc logs :path (str (:path logs) "/zico.log")))
-                    :println {:enabled? false}}})
-     (taoensso.timbre/set-level! (-> conf :log :level))
+     (zbu/ensure-dir (-> conf :log :path))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
 (defn zorka-main-handler [req]
@@ -85,7 +113,7 @@
   (let [{:keys [http]} (:conf zorka-app-state)]
     (reset!
       conf-autoreload-f
-      (zbu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.conf"))
+      (zbu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.edn"))
     ; Set up Jetty container
     (System/setProperty "org.eclipse.jetty.server.Request.maxFormContentSize" (str (:max-form-size http)))
     (run-jetty zorka-main-handler http)

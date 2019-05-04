@@ -39,7 +39,7 @@
   )
 
 (def DEFAULT-CONF
-  (read-string (slurp (io/resource "zico/zico.conf"))))
+  (read-string (slurp (io/resource "zico/zico.edn"))))
 
 (defn zorka-integ-fixture [f]
   (let [conf (zbu/recursive-merge DEFAULT-CONF (read-string (slurp "testdata/zorka.conf")))

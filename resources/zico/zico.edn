@@ -1,0 +1,66 @@
+; This is default configuration for ZICO collector.
+
+{
+
+ :home-dir  #or [#env APP_HOME, #prop app.home, #prop user.dir]
+
+ ; HTTP settings
+ :http {
+   :port 8640
+   :host "0.0.0.0"
+   :http? true
+   :join? false,
+   :daemon? false
+   :min-threads 2
+   :max-threads 32
+   :max-queued-requests 256
+   :max-form-size 67108864                                       ; 64MB for big traces
+   ;:tls-ciphers [
+   ;   "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+   ;   "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384", "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+   ;   "TLS_RSA_WITH_AES_128_CBC_SHA256", "TLS_RSA_WITH_AES_128_CBC_SHA",
+   ;   "TLS_RSA_WITH_AES_256_CBC_SHA256", "TLS_RSA_WITH_AES_256_CBC_SHA"]
+ }
+
+ :log {:path #join [#ref [:home-dir] "/log"]
+       :mode :time-rolling
+       :max-history 7
+       :max-size 16777216
+       :current-fname "zico.log"
+       :history-fname "zico-%d{yyyy-M-dd-HH-mm}-%i.log.gz"
+       :console-pattern "%-12date{YYYY-MM-dd HH:mm:ss.SSS} %-5level - %msg%n"
+       :file-pattern "%-12date{YYYY-MM-dd HH:mm:ss.SSS} %-5level - %msg%n"
+       :file-level :debug
+       :console-level :debug
+       :log-levels
+       {:ROOT :debug
+        :org.eclipse :info
+        :io.zorka.tdb :info}}
+
+
+ ; Configuration of main data store
+ :tstore { :path #join [#ref [:home-dir] "/data"]
+          :maint-threads 2
+          :maint-interval 10
+          :session-timeout 120
+
+          ; Sizes and
+          :rotate {
+                   :max-size 8192   ; 16GB * 8 -> 128GB
+                   :max-num  16
+                   }
+
+          ; Text index parameters
+          :text
+          {:base-size 4096
+           :max-size  262144
+           }
+
+          ; Metadata index parameters
+          :meta {
+                 :base-size 4096
+                 :max-size  262144
+                 }
+          }
+ }
+
