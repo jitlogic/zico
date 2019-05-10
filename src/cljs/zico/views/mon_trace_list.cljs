@@ -27,49 +27,15 @@
 
 
 (defn make-filter [db offset]
-  (let [vroot (-> db :view :trace :list)
-        text (-> vroot :search :text)
-        qmi (into
-              {:type :qmi}
-              (for [k [:ttype :app :env :min-duration :host]
-                    :let [v (-> vroot :filter k :selected)]
-                    :when v]
-                {k v}))
-        qmi (merge
-              qmi
-              (when-let [tstamp (-> vroot :filter :time :selected)]
-                {:tstart (ctf/unparse PARAM-FORMATTER tstamp)
-                 :tstop (ctf/unparse PARAM-FORMATTER (zw/day-next tstamp))}))
-        tft (if-not (empty? text) {:type :text, :text text})
-        all (for [[k v] (:filter-attrs vroot) :when (string? k)] {:type :kv, :key k, :val v})
-        all (for [f (into [tft] all) :when (some? f)] f)
-        q (cond
-            (> (count all) 1) {:type :and, :args (vec all)}
-            (= (count all) 1) (first all)
-            :else nil)
-        deep-search (= true (-> db :view :trace :list :deep-search))]
-    (merge {:limit 50, :offset offset, :deep-search deep-search, :node q, :qmi qmi})))
+  (let [vroot (-> db :view :trace :list)]
+    (merge {:limit 50, :offset offset, :fetch-attrs true})))
 
 
 (defn parse-filter-query [db [_ q]]
   (if q
-    (let [f (read-string (js/LZString.decompressFromBase64 q)),
-          {{:keys [env app ttype min-duration tstart host]} :qmi :keys [deep-search node]} f,
-          fltr {:env   {:selected env}, :app {:selected app}, :host {:selected host},
-                :ttype {:selected ttype}, :min-duration {:selected min-duration}
-                :time  {:selected (if tstart (ctf/parse PARAM-FORMATTER tstart))}}
-          nodes (if (= :and (:type node)) (:args node) [node])
-          text (first (for [n nodes :when (= :text (:type n))] (:text n)))
-          attrs (into {} (for [n nodes :when (= :kv (:type n))] {(:key n), (:val n)}))]
-      (assoc-in
-        db [:view :trace :list]
-        (->
-          (get-in db [:view :trace :list])
-          (assoc-in [:filter] fltr)
-          (assoc-in [:deep-search] deep-search)
-          (assoc-in [:search :text] text)
-          (assoc-in [:filter-attrs] attrs)
-          )))
+    (let [_ (read-string (js/LZString.decompressFromBase64 q))]
+      ; TBD
+      db)
     db))
 
 

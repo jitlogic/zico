@@ -71,19 +71,22 @@
     (seq? o) (filter some? o)
     :else o))
 
+(defn ns-to-str [t ms?]
+  (cond
+    (< t 0) "N/A"
+    (= t 0) "0ms"
+    (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
+    (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
+    (or ms? (< t 1000000000)) (pp/cl-format nil "~dms" (int (/ t 1000000)))
+    (< t 10000000000) (pp/cl-format nil "~4fs" (/ t 1000000000))
+    (< t 100000000000) (pp/cl-format nil "~3fs" (/ t 1000000000))
+    :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))
+
 (defn ticks-to-str
   ([ticks] (ticks-to-str ticks false))
-  ([ticks ms]
+  ([ticks ms?]
    (let [t (* ticks 65536)]
-     (cond
-       (< t 0) "N/A"
-       (= t 0) "0ms"
-       (< t 1000000) (pp/cl-format nil "~dus" (int (/ t 1000)))
-       (< t 100000000) (pp/cl-format nil "~4fms" (/ t 1000000))
-       (or ms (< t 1000000000)) (pp/cl-format nil "~dms" (int (/ t 1000000)))
-       (< t 10000000000) (pp/cl-format nil "~4fs" (/ t 1000000000))
-       (< t 100000000000) (pp/cl-format nil "~3fs" (/ t 1000000000))
-       :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))))
+     (ns-to-str t ms?))))
 
 (defn secs-to-str
   ([t]

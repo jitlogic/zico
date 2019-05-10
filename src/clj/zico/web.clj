@@ -81,7 +81,7 @@
       (ca/POST "/" []
         :summary "search traces according to posted query"
         :body [query zico.schema.tdb/TraceSearchQuery]
-        :return [zico.schema.tdb/TraceSearchRecord]
+        :return [zico.schema.tdb/ChunkMetadata]
         (rhr/ok (ztrc/trace-search app-state query)))
       (ca/GET "/:id/stats" []
         :summary "return trace method call stats"

@@ -23,11 +23,18 @@
   (if (.startsWith path "/") path (str home-dir "/" path)))
 
 
+(defn sleep [interval]
+  (try
+    (Thread/sleep interval)
+    (catch InterruptedException _
+      (log/warn "InterruptedException in store maintenance thread."))))
+
+
 (defn conf-reload-task [reload-fn home & files]
   (log/info "Starting automatic configuration reload task ..." reload-fn)
   (future
     (loop [tst1 (vec (for [f files] (.lastModified (File. ^String home ^String f))))]
-      (Thread/sleep 5000)
+      (sleep 5000)
       (let [tst2 (vec (for [f files] (.lastModified (File. ^String home ^String f))))]
         (try
           (when-not (= tst1 tst2)

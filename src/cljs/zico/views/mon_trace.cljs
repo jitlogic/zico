@@ -23,11 +23,6 @@
   :data/trace-type-list
   (data-list-sfn :trace :type :name))
 
-
-(def CFG-TTYPES (zs/subscribe [:get [:data :TODO :ttype]]))
-(def CFG-HOSTS (zs/subscribe [:get [:data :TODO :host]]))
-(def CFG-ENVS (zs/subscribe [:get [:data :TODO :env]]))
-(def CFG-APPS (zs/subscribe [:get [:data :TODO :app]]))
 (def CFG-TRACES (zs/subscribe [:get [:data :trace :list]]))
 
 (defn trace-list-click-handler-fn [sect sub]
@@ -36,10 +31,7 @@
       (.-target e) "data-trace-uuid" "zorka-traces"
       :btn-details #(zs/dispatch [:to-screen "mon/trace/tree" {:uuid %}])
       :btn-dtrace #(zs/dispatch [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [% :dtrace-uuid])}])
-      :itm #(zs/dispatch [:do [:toggle [:view sect sub :selected] %]
-                          [:xhr/get (io/api "/trace/" % "?depth=1")
-                           [:data sect sub % :detail] nil
-                           :on-error zv/DEFAULT-SERVER-ERROR]])
+      :itm #(zs/dispatch [:toggle [:view sect sub :selected] %])
       :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))
 
 
@@ -60,9 +52,9 @@
   "Renders method call attributes (if any)"
   (let [filter-attrs @FILTER-ATTRS]
     [:div.trace-attrs
-     (for [[n l k v] (map cons (range) (zu/map-to-seq attrs))]
+     (for [[n k v] (map cons (range) attrs)]
        ^{:key n}
-       [:div.a {:style {:margin-left (str l "em")}}
+       [:div.a
         (when ttype
           (if (contains? filter-attrs k)
             [:div.i
@@ -107,108 +99,61 @@
                  [:div.c (str class "." method)]
                  [:div.f (str "(" file ":" line ")")]])]])
 
-(defn ttype-get [ttype]
-  (let [{:keys [glyph name id]} (get @CFG-TTYPES ttype {:glyph "awe/paw#text", :name "<unknown>"})
-             [_ f g c] (re-matches #"(.+)/([^#]+)#?(.*)?" glyph)]
-    {:family (keyword f), :glyph (keyword g), :name name, :id id, :color (keyword c)}))
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
-  (fn [{:keys [uuid dtrace-uuid tstamp descr duration recs calls errs host ttype app env]
+  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration recs calls errs attrs error children]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
-    ^{:key uuid}
-    [:div.det
-     {:data-trace-uuid uuid}
-     [:div.flex-on-medium-or-more
-      [:div tstamp]
-      (let [{:keys [family glyph color name id]} (ttype-get ttype)]
-        [:div.flex
-         [:div.i.lpad.rpad
-          (if (and enable-filters (some? id))
-            (zw/svg-button
-              family glyph color (str "Show only " name " traces.")
-              [:do [:set [:view :trace :list :filter :ttype :selected] id]
-               [:zico.views.mon-trace-list/refresh-list true]])
-            (zw/svg-icon family glyph color :opaque false))]
-         [:div.ellipsis name]])
-      (let [{:keys [name id]} (get @CFG-APPS app {:name "<unknown>"})]
-        [:div.flex
-         [:div.i.lpad.rpad
-          (if (and enable-filters id)
-            (zw/svg-button
-              :awe :cubes :yellow (str "Show only " name " application.")
-              [:do [:set [:view :trace :list :filter :app :selected] id]
-               [:zico.views.mon-trace-list/refresh-list true]])
-            (zw/svg-icon :awe :cubes :yellow :opaque false))]
-         [:div.ellipsis name]])
-      (let [{:keys [name id]} (get @CFG-ENVS env {:name "<unknown>"})]
-        [:div.flex
-         [:div.i.lpad.rpad
-          (if (and enable-filters id)
-            (zw/svg-button
-              :awe :sitemap :green (str "Show only " name " environment.")
-              [:do [:set [:view :trace :list :filter :env :selected] id]
-               [:zico.views.mon-trace-list/refresh-list true]])
-            (zw/svg-icon :awe :sitemap :green :opaque false))]
-         [:div.ellipsis name]])]
-     (let [{:keys [name id]} (get @CFG-HOSTS host {:name "<unknown host>"})]
-       [:div.flex
-        [:div.lpad.rpad
-         (if (and enable-filters id)
-           (zw/svg-button
-             :awe :desktop :blue (str "Show only " name " host.")
-             [:do [:set [:view :trace :list :filter :host :selected] id]
-              [:zico.views.mon-trace-list/refresh-list true]])
-           (zw/svg-icon :awe :desktop :text))]
-        [:div.ellipsis (str name "   (" id ")")]])
-     [:div.c-light.bold.wrapping descr]
-     [:div.c-darker.ellipsis result]
-     [:div.c-light.ellipsis (str method args)]
-     [:div.c-darker.ellipsis.text-rtl package "." class]
-     (cond
-       (nil? detail) [:div.wait "Wait..."]
-       (nil? (:attrs detail)) [:div.wait "No attributes here."]
-       :else (render-attrs (:attrs detail) enable-filters))
-     (when (:exception detail)
-       (render-exception (:exception detail) true))
-     [:div.btns
-      (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
-      (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
-      (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
-      (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/secs-to-str duration)]
-      [:div.flexible.flex]                                  ; TODO display trace type
-      (zw/svg-button
-        :awe :chart-bar :text "Method call stats"
-        [:to-screen "mon/trace/stats" {:uuid uuid}])
-      (when (and dtrace-links dtrace-uuid)           ; TODO use explicit flag, not dtrace-level check
+    (let [id (str trace-id span-id chunk-num)
+          desc (get "call.method" attrs)]
+      ^{:key id}
+      [:div.det
+       {:data-trace-uuid id}
+       [:div.flex-on-medium-or-more [:div tstamp]]
+       [:div.c-light.bold.wrapping desc]
+       [:div.c-darker.ellipsis result]
+       [:div.c-light.ellipsis (str method args)]
+       [:div.c-darker.ellipsis.text-rtl package "." class]
+       (render-attrs attrs enable-filters)
+       (when (:exception detail)
+         (render-exception (:exception detail) true))
+       [:div.btns
+        (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
+        (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
+        (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
+        (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/ns-to-str duration false)]
+        [:div.flexible.flex]                                ; TODO display trace type
         (zw/svg-button
-          :ent :flow-cascade :blue "Distributed trace"
-          [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [uuid :dtrace-uuid])}]))
-      (zw/svg-button
-        :awe :right-big :blue "View trace details"
-        [:to-screen "mon/trace/tree" {:uuid uuid}]
-        )]]))
+          :awe :chart-bar :text "Method call stats"
+          [:to-screen "mon/trace/stats" {:uuid uuid}])
+        (when (and dtrace-links (nil? parent-id))           ; TODO use explicit flag, not dtrace-level check
+          (zw/svg-button
+            :ent :flow-cascade :blue "Distributed trace"
+            [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [uuid :dtrace-uuid])}]))
+        (zw/svg-button
+          :awe :right-big :blue "View trace details"
+          [:to-screen "mon/trace/tree" {:uuid uuid}]
+          )]])))
 
 
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [uuid ttype tstamp descr dtrace-uuid dtrace-level duration recs calls errs flags] :as t}]
-    (let [[_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
-      ^{:key uuid}
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id duration recs calls errs error] :as t}]
+    (let [id (str trace-id span-id chunk-num), desc (get attrs "call.method" "?")
+          [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
+      ^{:key id}
       [:div.itm
-       {:data-trace-uuid uuid}
+       {:data-trace-uuid id}
        [:div.seg
         [:div.ct t]
         [:div.flexible]
-        [:div.seg
-         (let [{:keys [family glyph color]} (ttype-get ttype)]
-           (zw/svg-icon family glyph color))]
+        [:div.seg (zw/svg-icon "awe" "paw" "text")]
         [:div.svg-icon.btn-details.small-or-less.clickable " "]]
        [:div.seg.flexible
-        {:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
-        [(if (:err flags) :div.c2.c-red :div.c2.c-text) descr]]
+        ;{:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
+        [(if error :div.c2.c-red :div.c2.c-text) desc]]
        [:div.seg
-        (zw/svg-icon :awe :clock :blue) (zu/secs-to-str duration)
+        (zw/svg-icon :awe :clock :blue) (zu/ns-to-str duration false)
         (when-not @SUPPRESS-DETAILS
           [:div.flex
            (zw/svg-icon :awe :flash :yellow) (str calls)
@@ -218,7 +163,7 @@
           (not dtrace-links)
           (zw/svg-icon
             :ent :flow-cascade  :none)
-          (some? dtrace-uuid)
+          (nil? parent-id)
           (zw/svg-icon
             :ent :flow-cascade :blue,
             :class " clickable btn-dtrace",

@@ -13,7 +13,8 @@
            (org.slf4j LoggerFactory Logger)
            (ch.qos.logback.classic.encoder PatternLayoutEncoder)
            (ch.qos.logback.core ConsoleAppender)
-           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)))
+           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
+           (io.zorka.tdb.store RotatingTraceStore)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -36,6 +37,7 @@
 (defonce ^:dynamic stop-f (atom nil))
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
+(defonce ^:dynamic maint-thread-f (atom nil))
 
 (defonce LOG-STATE (atom {}))
 (def LOG-LEVELS {:trace Level/TRACE, :debug Level/DEBUG, :info Level/INFO, :warn Level/WARN, :error Level/ERROR})
@@ -71,6 +73,17 @@
     (ztrc/with-tracer-components old-state)
     zweb/with-zorka-web-handler))
 
+
+(defn maint-thread [interval]
+  (future
+    (loop []
+      (zu/sleep interval)
+      (loop [rslt (when (:tstore zorka-app-state) (.runMaintenance ^RotatingTraceStore (:tstore zorka-app-state)))]
+        (when rslt (recur (.runMaintenance (:tstore zorka-app-state)))))
+      (zu/sleep interval)
+      (recur))))
+
+
 (defn reload
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
@@ -79,7 +92,6 @@
                 zico.schema.server/ZicoConf
                 (io/resource "zico/zico.edn")
                 (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))]
-     (println "CONFIG: " conf)
      (configure-logger (-> conf :log))
      (zu/ensure-dir (-> conf :tstore :path))
      (zu/ensure-dir (-> conf :log :path))
@@ -100,7 +112,10 @@
     (reset! jetty-server nil))
   (when-let [cf @conf-autoreload-f]
     (future-cancel cf)
-    (reset! conf-autoreload-f nil)))
+    (reset! conf-autoreload-f nil))
+  (when-let [mt @maint-thread-f]
+    (future-cancel mt)
+    (reset! maint-thread-f nil)))
 
 (defn start-server []
   (stop-server)
@@ -109,6 +124,7 @@
     (reset!
       conf-autoreload-f
       (zu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.edn"))
+    (reset! maint-thread-f (maint-thread 10000))
     ; Set up Jetty container
     (System/setProperty "org.eclipse.jetty.server.Request.maxFormContentSize" (str (:max-form-size http)))
     (run-jetty zorka-main-handler http)

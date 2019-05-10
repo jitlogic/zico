@@ -2,67 +2,6 @@
   (:require
     [schema.core :as s :include-macros true]))
 
-(s/defschema QmiNode
-  {(s/optional-key :type)         s/Keyword
-   (s/optional-key :app)          s/Int
-   (s/optional-key :env)          s/Int
-   (s/optional-key :host)         s/Int
-   (s/optional-key :ttype)        s/Int
-   (s/optional-key :min-duration) s/Int
-   (s/optional-key :max-duration) s/Int
-   (s/optional-key :min-calls)    s/Int
-   (s/optional-key :max-calls)    s/Int
-   (s/optional-key :min-errors)   s/Int
-   (s/optional-key :max-errors)   s/Int
-   (s/optional-key :min-recs)     s/Int
-   (s/optional-key :max-recs)     s/Int
-   (s/optional-key :tstart)       s/Str
-   (s/optional-key :tstop)        s/Str
-   (s/optional-key :dtrace-uuid)  s/Str
-   (s/optional-key :dtrace-tid)   s/Str})
-
-(s/defschema SearchNode
-  (s/conditional
-    #(#{:and :or} (:type %))
-    {:type s/Keyword
-     :args [(s/recursive #'SearchNode)]
-     }
-    #(#{:text :xtext} (:type %))
-    {:type s/Keyword
-     :text s/Str
-     (s/optional-key :match-start) s/Bool
-     (s/optional-key :match-end) s/Bool}
-    #(= :kv (:type %))
-    {:type s/Keyword
-     :key s/Str
-     :val s/Str}))
-
-(s/defschema TraceSearchQuery
-  {(s/optional-key :node)         (s/maybe SearchNode)
-   (s/optional-key :qmi)          (s/maybe QmiNode)
-   (s/optional-key :limit)        s/Int
-   (s/optional-key :offset)       s/Int
-   (s/optional-key :after)        s/Int
-   (s/optional-key :sort-order)   (s/pred #{:none :duration :calls :recs :errors})
-   (s/optional-key :sort-reverse) s/Bool
-   (s/optional-key :deep-search)  s/Bool
-   (s/optional-key :full-info)    s/Bool})
-
-(s/defschema TraceSearchRecord
-  {(s/optional-key :trace-id)   s/Str
-   (s/optional-key :span-id)    s/Str
-   (s/optional-key :parent-id)  (s/maybe s/Str)
-   (s/optional-key :chunk-id)   s/Int
-   (s/optional-key :duration)   s/Int
-   (s/optional-key :tst)        s/Int
-   (s/optional-key :tstamp)     s/Str
-   (s/optional-key :data-offs)  s/Int
-   (s/optional-key :start-offs) s/Int
-   (s/optional-key :flags)      s/Any
-   (s/optional-key :recs)       s/Int
-   (s/optional-key :calls)      s/Int
-   (s/optional-key :errs)       s/Int
-   (s/optional-key :details)    s/Any})
 
 (s/defschema TraceStackItem
   {:class s/Str
@@ -70,11 +9,13 @@
    :file s/Str
    :line s/Int})
 
+
 (s/defschema TraceException
   {:class                  s/Str
    :msg                    (s/maybe s/Str)
    :stack                  [TraceStackItem]
    (s/optional-key :cause) (s/recursive #'TraceException)})
+
 
 (s/defschema TraceMethod
   {:result s/Str
@@ -82,6 +23,7 @@
    :class s/Str
    :method s/Str
    :args s/Str})
+
 
 (s/defschema TraceRecord
   {:method                     TraceMethod
@@ -91,11 +33,10 @@
    :tstart                     s/Int
    (s/optional-key :trace-id)  s/Str
    (s/optional-key :span-id)   s/Str
-   (s/optional-key :ttype)     s/Int
-   (s/optional-key :type)      s/Str
    (s/optional-key :children)  [(s/recursive #'TraceRecord)]
    (s/optional-key :attrs)     {s/Str s/Str}
    (s/optional-key :exception) TraceException})
+
 
 (s/defschema TraceStats
   {:mid s/Int
@@ -105,4 +46,34 @@
    :max-duration s/Int
    :min-duration s/Int
    :method s/Str})
+
+
+(s/defschema TraceSearchQuery
+  {(s/optional-key :limit)        s/Int
+   (s/optional-key :offset)       s/Int
+   (s/optional-key :fetch-attrs)  s/Bool
+   (s/optional-key :errors-only)  s/Bool
+   (s/optional-key :spans-only)   s/Bool
+   (s/optional-key :min-tstamp)   s/Str                     ; ?? Date
+   (s/optional-key :max-tstamp)   s/Str                     ; ?? Date
+   (s/optional-key :min-duration) s/Int
+   (s/optional-key :attr-matches) {s/Str s/Str}
+   })
+
+
+(s/defschema ChunkMetadata
+  {:trace-id                    s/Str
+   :span-id                     s/Str
+   :chunk-num                   s/Int
+   (s/optional-key :parent-id)  (s/maybe s/Str)
+   (s/optional-key :error)      s/Bool
+   (s/optional-key :tst)        s/Int                       ; Timestamp in milliseconds since Epoch
+   (s/optional-key :tstamp)     s/Str                       ; Timestamp
+   (s/optional-key :duration)   s/Int
+   (s/optional-key :recs)       s/Int
+   (s/optional-key :calls)      s/Int
+   (s/optional-key :errs)       s/Int
+   (s/optional-key :attrs)      {s/Str s/Any}
+   (s/optional-key :children)   [(s/recursive #'ChunkMetadata)]
+   })
 

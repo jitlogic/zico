@@ -10,27 +10,16 @@
     (java.io File)
     (io.zorka.tdb.store
       RotatingTraceStore TraceRecordFilter
-      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceStatsRecordFilter TraceStatsResultItem TraceStore)
+      TraceRecord RecursiveTraceDataRetriever ObjectRef StackData TraceStatsRecordFilter TraceStatsResultItem TraceStore TraceSearchQuery ChunkMetadata Tid)
     (java.util HashMap Map List ArrayList)
-    (io.zorka.tdb.meta ChunkMetadata StructuredTextIndex)
-    (io.zorka.tdb.search TraceSearchQuery SortOrder QmiNode)
-    (io.zorka.tdb.search.lsn AndExprNode OrExprNode)
-    (io.zorka.tdb.search.ssn TextNode)
-    (io.zorka.tdb.search.tsn KeyValSearchNode)
-    (io.zorka.tdb.util ZicoMaintThread)
+
     (com.jitlogic.zorka.common.util ZorkaUtil Base64)
     (io.zorka.tdb ZicoException)
-    (com.jitlogic.zorka.cbor HttpConstants)))
+    (com.jitlogic.zorka.cbor HttpConstants)
+    (io.zorka.tdb.text StructuredTextIndex)))
 
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
-
-
-(defn lmap [f coll]
-  (let [lst (ArrayList.)]
-    (doseq [n (map f coll)]
-      (.add lst n))
-    lst))
 
 (defn parse-hex-tid [^String s]
   "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."
@@ -41,83 +30,46 @@
                                        (.longValue (BigInteger. (.substring s 16 32) 16))]
     :else nil))
 
-(defn parse-qmi-node [q]
-  (doto (QmiNode.)
-    (.setMinDuration (zu/to-int (:min-duration q 0)))
-    (.setMaxDuration (zu/to-int (:max-duration q Long/MAX_VALUE)))
-    (.setMinCalls (zu/to-int (:min-calls q 0)))
-    (.setMaxCalls (zu/to-int (:max-calls q Long/MAX_VALUE)))
-    (.setMinErrs (zu/to-int (:min-errors q 0)))
-    (.setMaxErrs (zu/to-int (:max-errors q Long/MAX_VALUE)))
-    (.setMinRecs (zu/to-int (:min-recs q 0)))
-    (.setMaxRecs (zu/to-int (:max-recs q Long/MAX_VALUE)))
-    (.setTstart (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstart q "20100101T000000Z"))))
-    (.setTstop (ctc/to-long (ctf/parse PARAM-FORMATTER (:tstop q "20300101T000000Z"))))))
 
+(defn parse-search-query [{:keys [fetch-attrs errors-only spans-only
+                                  min-tstamp max-tstamp min-duration
+                                  attr-matches]}]
+  (let [q (TraceSearchQuery.)]
+    (when fetch-attrs (.withFetchAttrs q))
+    (when errors-only (.withErrorsOnly q))
+    (when spans-only (.withSpansOnly q))
+    (when min-tstamp (.setMinTstamp q (ctc/to-long (ctf/parse PARAM-FORMATTER min-tstamp))))
+    (when max-tstamp (.setMaxTstamp q (ctc/to-long (ctf/parse PARAM-FORMATTER max-tstamp))))
+    (when min-duration (.setMinDuration q min-duration))
+    (when attr-matches
+      (doseq [[k v] attr-matches]
+        (.withAttrMatch q (str k) (str v))))
+    q))
 
-(def TYPES {"or" :or, "text" :text, "xtext" :xtext, "kv" :kv})
-
-
-; TODO this is kludge, get rid of this function.
-(defn prep-search-node [q]
-  (let [t (get q "type")]
-    (cond
-      (contains? q :type) q
-      (nil? t) {}
-      (= "kv" t) (assoc q :type :kv)
-      :else
-      (let [q (into {} (for [[k v] q] {(keyword k) v}))]
-        (assoc q :type t)))))
-
-
-(defn parse-search-node [q]
-  (if (string? q)
-    (TextNode. ^String q true true)
-    (let [q (prep-search-node q)]
-      (case (TYPES (:type q) (:type q))
-        :and (AndExprNode. (lmap parse-search-node (:args q)))
-        :or (OrExprNode. (lmap parse-search-node (:args q)))
-        :text (TextNode. ^String (:text q) ^Boolean (:match-start q false) ^Boolean (:match-end q false))
-        :xtext (TextNode. ^String (:text q) ^Boolean (:match-start q true) ^Boolean (:match-end q true))
-        :kv (KeyValSearchNode. (:key q) (parse-search-node (:val q)))
-        nil))))
-
-
-(defn parse-search-query [q]
-  (let [qmi (if (:qmi q) (parse-qmi-node (:qmi q)) (QmiNode.))
-        node (if (:node q) (parse-search-node (:node q)))]
-    (doto (TraceSearchQuery. qmi node)
-      (.setLimit (:limit q 50))
-      (.setOffset (:offset q 0))
-      (.setAfter (:after q 0))
-      (.setSortOrder (case (:sort-order q :none)
-                       :none SortOrder/NONE,
-                       :duration SortOrder/DURATION,
-                       :calls SortOrder/CALLS,
-                       :recs SortOrder/RECS,
-                       :errors SortOrder/ERRORS))
-      (.setSortReverse (:sort-reverse q false))
-      (.setDeepSearch (:deep-search q true))
-      (.setFullInfo (:full-info q false)))))
+(defn from-chunk-metadata [c]
+  (merge
+    {:trace-id  (.getTraceIdHex c)
+     :span-id   (.getSpanIdHex c)
+     :parent-id (.getParentIdHex c)
+     :chunk-num (.getChunkNum c)
+     :tst       (.getTstamp c)
+     :tstamp    (zu/str-time-yymmdd-hhmmss-sss (.getTstamp c))
+     :duration  (.getDuration c)
+     :recs      (.getRecs c)
+     :calls     (.getCalls c)
+     ;:errors    (.getErrors c)
+     }
+    (when (.hasError c) {:error true})
+    (when-let [attrs (.getAttributes c)]
+      {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))})
+    (when-let [children (.getChildren c)]
+      {:children (vec (map from-chunk-metadata children))})))
 
 
 (defn trace-search [{:keys [tstore]} query]
   (vec
-    (take
-      (:limit query 100)
-      (for [r (.searchTraces tstore (parse-search-query query))]
-        {:trace-id    (.getTraceIdHex r)
-         :span-id     (.getSpanIdHex r)
-         :parent-id   (.getParentIdHex r)
-         :duration    (.getDuration r)
-         :tst         (.getTstamp r)
-         :tstamp      (zu/str-time-yymmdd-hhmmss-sss (* 1000 (.getTstamp r)))
-         :data-offs   (.getDataOffs r)
-         :start-offs  (.getStartOffs r)
-         :recs        (.getRecs r)
-         :calls       (.getCalls r)
-         :errs        (.getErrors r)
-         }))))
+    (for [c (.search tstore (parse-search-query query) (:limit query 50) (:offset query 0))]
+      (from-chunk-metadata c))))
 
 
 (defn resolve-attr-obj [obj resolver]
@@ -151,6 +103,7 @@
 (def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
 
 (defn parse-method-str [s]
+  ; TODO dedicated StructuredTextIndex method that returns method description already parsed
   (when s
     (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
       (let [cs (.split c "\\." 0), cl (alength cs)]
@@ -178,17 +131,16 @@
 
 
 (defn trace-detail [{:keys [tstore]} stack-limit tid sid]
-  (println "TID=" tid "SID=" sid)
   (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
         rtr (doto (RecursiveTraceDataRetriever. (trace-record-filter)) (.setStackLimit stack-limit))
-        rslt (.retrieve tstore tid1 tid2 sid1 rtr)]
+        rslt (.retrieve tstore (Tid/s tid1 tid2 sid1) rtr)]
     (merge {:trace-id tid :span-id sid} rslt)))
 
 
 (defn trace-stats [{:keys [tstore]} tid sid]
   (let [[tid1 tid2] (parse-hex-tid tid), [sid1 _] (parse-hex-tid sid),
         f (TraceStatsRecordFilter.), rtr (RecursiveTraceDataRetriever. f)]
-    (.retrieve tstore tid1 tid2 sid1 rtr)
+    (.retrieve tstore (Tid/s tid1 tid2 sid1) rtr)
     (vec
       (for [^TraceStatsResultItem s (.getStats f)]
         {:mid          (.getMid s),
@@ -253,22 +205,14 @@
             (.close old-store)
             (log/info "Old store closed.")))
         store)
-      (not= old-conf new-conf)
-      (doto old-store
-        (.configure new-props))
+      (not= old-conf new-conf) old-store                    ; TODO
       :else old-store)))
 
-
 (defn with-tracer-components [{{new-conf :tstore} :conf :as app-state}
-                              {{old-conf :tstore} :conf :keys [tstore maint-threads]}]
+                              {{old-conf :tstore} :conf :keys [tstore]}]
   (if (:enabled new-conf true)
-    (let [tstore (open-tstore new-conf old-conf tstore)
-          nmt (doall (for [n (range (:maint-threads new-conf 2))]
-                       (ZicoMaintThread. (str n) (* 1000 (:maint-interval new-conf 10)) tstore)))]
-      (doseq [t maint-threads]
-        (.stop t))
+    (let [tstore (open-tstore new-conf old-conf tstore)]
       (assoc app-state
-        :maint-threads nmt
         :tstore tstore))
     app-state))
 
