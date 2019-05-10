@@ -28,9 +28,9 @@
 (defn trace-list-click-handler-fn [sect sub]
   (fn [e]
     (zs/traverse-and-handle
-      (.-target e) "data-trace-uuid" "zorka-traces"
-      :btn-details #(zs/dispatch [:to-screen "mon/trace/tree" {:uuid %}])
-      :btn-dtrace #(zs/dispatch [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [% :dtrace-uuid])}])
+      (.-target e) "data-zico-tid" "zorka-traces"
+      :btn-details #(zs/dispatch [:to-screen "mon/trace/tree" {:tid %}])
+      :btn-dtrace #(zs/dispatch [:to-screen "mon/trace/dtree" {:tid %}])
       :itm #(zs/dispatch [:toggle [:view sect sub :selected] %])
       :det #(zs/dispatch [:toggle [:view sect sub :selected] %]))))
 
@@ -74,6 +74,7 @@
            :awe :paste :text "Copy attribute to clipboard"
            [:write-to-clipboard v])]])]))
 
+
 (defn exception-to-string [{:keys [class msg stack]}]
   (str
     class ": " msg
@@ -82,6 +83,7 @@
       (for [{:keys [class method file line]} stack]
         (str " at " class "." method "(" file ":" line ")")))
     "\n"))
+
 
 (defn render-exception [exception full]
   [:div.trace-record-exception
@@ -103,11 +105,10 @@
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
   (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration recs calls errs attrs error children]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
-    (let [id (str trace-id span-id chunk-num)
-          desc (get "call.method" attrs)]
-      ^{:key id}
+    (let [tid (zu/to-tid t), desc (get "call.method" attrs)]
+      ^{:key tid}
       [:div.det
-       {:data-trace-uuid id}
+       {:data-zico-tid tid}
        [:div.flex-on-medium-or-more [:div tstamp]]
        [:div.c-light.bold.wrapping desc]
        [:div.c-darker.ellipsis result]
@@ -124,26 +125,26 @@
         [:div.flexible.flex]                                ; TODO display trace type
         (zw/svg-button
           :awe :chart-bar :text "Method call stats"
-          [:to-screen "mon/trace/stats" {:uuid uuid}])
-        (when (and dtrace-links (nil? parent-id))           ; TODO use explicit flag, not dtrace-level check
+          [:to-screen "mon/trace/stats" {:tid tid}])
+        (when (and dtrace-links (seq children))
           (zw/svg-button
             :ent :flow-cascade :blue "Distributed trace"
-            [:to-screen "mon/trace/dtree" {:dtrace-uuid (get-in @CFG-TRACES [uuid :dtrace-uuid])}]))
+            [:to-screen "mon/trace/dtree" {:tid tid}]))
         (zw/svg-button
           :awe :right-big :blue "View trace details"
-          [:to-screen "mon/trace/tree" {:uuid uuid}]
+          [:to-screen "mon/trace/tree" {:tid tid}]
           )]])))
 
 
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id duration recs calls errs error] :as t}]
-    (let [id (str trace-id span-id chunk-num), desc (get attrs "call.method" "?")
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id duration recs calls errs error children] :as t}]
+    (let [tid (zu/to-tid t), desc (get attrs "call.method" "?")
           [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
-      ^{:key id}
+      ^{:key tid}
       [:div.itm
-       {:data-trace-uuid id}
+       {:data-zico-tid tid}
        [:div.seg
         [:div.ct t]
         [:div.flexible]
@@ -163,7 +164,7 @@
           (not dtrace-links)
           (zw/svg-icon
             :ent :flow-cascade  :none)
-          (nil? parent-id)
+          (seq children)
           (zw/svg-icon
             :ent :flow-cascade :blue,
             :class " clickable btn-dtrace",

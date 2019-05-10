@@ -97,16 +97,10 @@
 (zs/reg-event-fx
   ::handle-trace-search-result
   (fn [{:keys [db]} [_ clean data]]
-    (let [data (for [d data] (assoc d :uuid (str (:trace-id d) "/" (:span-id d "0000000000000000"))))
-          d0 (if clean {} (get-in db [:data :trace :list] {}))
-          sel (get-in db [:view :trace :list :selected])
-          uuids (into #{} (map :uuid data))
-          evt (if (and sel (contains? uuids sel))
-                [:xhr/get (io/api "/trace/" sel "?depth=1") [:data :trace :list sel :detail] nil
-                 :on-error zv/DEFAULT-SERVER-ERROR]
-                [:nop])]
-      {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:uuid d) d})))
-       :dispatch [:do evt [::extend-list-notification data]]})))
+    (let [data (for [d data] (assoc d :tid (zu/to-tid d)))
+          d0 (if clean {} (get-in db [:data :trace :list] {}))]
+      {:db       (assoc-in db [:data :trace :list] (into d0 (for [d data] {(:tid d) d})))
+       :dispatch [::extend-list-notification data]})))
 
 
 (def DURATIONS
@@ -174,16 +168,14 @@
         fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
     (ra/reaction
       (let [filter @filter, search @search, fattrs @fattrs,
-            f1 (for [[k lbl ic] [[:app "App: " :cubes] [:env "Env: " :sitemap] [:ttype "Type: " :list-alt]
-                                 [:host "Host: " :sitemap] [:time "Time: " :calendar]]
-                     :let [id (get-in filter [k :selected])] :when id]
-                 {:key      (str k), :text (str lbl (or (get-in @cfg [k id :name]) id)), :icon [:awe ic :red],
+            f1 (for [[k v] filter :when (:selected v), :let [kk (str k)]]
+                 {:key kk, :text kk, :icon [:awe :filter :red],
                   :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list true]]})
             f2 (when-not (empty? (:text search))
-                 [{:key      ":text", :text (str "Search: " (zu/ellipsis (:text search) 32)), :icon [:awe :search :red],
+                 [{:key      ":text", :text (str \" (zu/ellipsis (:text search) 32) \"), :icon [:awe :search :red],
                    :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list true]]}])
             f3 (for [[k _] fattrs :when (string? k)]
-                 {:key      (str "ATTR-" k), :text (zu/ellipsis (str "Attr: " k) 32), :icon [:awe :filter :red],
+                 {:key      (str "ATTR-" k), :text (zu/ellipsis (str k) 32), :icon [:awe :filter :blue],
                   :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list true]]})]
         (doall
           (concat
@@ -253,7 +245,6 @@
   "Trace seach/listing panel: [:view :trace :list]"
   (zs/dispatch [::parse-filter-query (:q params)])
   (zs/dispatch [::refresh-list])
-
   (zws/render-screen
     :main-menu zv/main-menu
     :user-menu zv/USER-MENU
@@ -272,8 +263,11 @@
               :render-item (zvmt/render-trace-list-item-fn :dtrace-links true, :attr-links false)
               :render-details (zvmt/render-trace-list-detail-fn true true)
               :id "zorka-traces",
-              :id-attr :uuid,
+              :id-attr :tid,
               :class "trace-list-list",
               :on-scroll [::scroll-list],
               :on-click (zvmt/trace-list-click-handler-fn :trace :list)]))
+
+
+(zws/defscreen "mon/trace/list" trace-list)
 

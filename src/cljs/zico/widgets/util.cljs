@@ -125,3 +125,13 @@
     (for [[k v] params]
       (str (js/encodeURIComponent (to-string k)) "=" (js/encodeURIComponent (to-string v))))))
 
+(defn to-tid [{:keys [trace-id span-id chunk-num]}]
+  (str trace-id ":" span-id ":" chunk-num))
+
+(def RE-TID #"([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9]+)")
+
+(defn parse-tid [tid]
+  (when (string? tid)
+    (when-let [[_ trace-id span-id chnum] (re-matches RE-TID tid)]
+      {:trace-id trace-id, :span-id span-id :chnum chnum})))
+

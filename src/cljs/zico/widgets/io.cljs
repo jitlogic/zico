@@ -2,11 +2,12 @@
   "All stateful event handlers and code is located here."
   (:require
     [re-frame.core :as rfc]
-    [secretary.core :as sc]
     [cljs.reader :refer [read-string]]
     [goog.events :as ge]
     [zico.widgets.util :as zutl]
-    [clojure.string :as cs])
+    [clojure.string :as cs]
+    [cemerick.url :as curl]
+    [reagent.ratom :as ra])
   (:import
     goog.net.XhrIo
     goog.net.EventType
@@ -35,17 +36,34 @@
   (println "DEBUG: " (str v))
   db)
 
+(defonce VIEW-ROOT (ra/atom "/view"))
 
 (defn view-path [name params]
-  (let [path (str "/view/" name)]
+  (let [path @VIEW-ROOT]
     (if (and params (not (empty? params)))
-      (str path "?" (zutl/url-encode params))
-      path)))
+      (str path "?" (zutl/url-encode params) "#" name)
+      (str path "#" name))))
 
+(def RE-VIEW-FILTER #".*/view/(.*)")
+
+(defn current-page []
+  (let [href (curl/url (-> js/window .-location .-href))
+        [_ v0] (re-matches RE-VIEW-FILTER (:path href))]
+    (assoc href
+      :anchor (:anchor href (second v0))
+      :query (into {} (for [[k v] (:query href)] {(keyword k) v}))
+      :href href)))
+
+(defonce CURRENT-PAGE (ra/atom (current-page)))
+
+(ge/removeAll js/window goog.events.EventType.POPSTATE)
+
+(ge/listen js/window goog.events.EventType.POPSTATE
+           (fn [_] (reset! CURRENT-PAGE (current-page))))
 
 (defn to-screen-handler [db [_ name params]]
   (let [path (view-path name params)]
-    (sc/dispatch! path)
+    (swap! CURRENT-PAGE assoc :anchor name, :query params)
     (.pushState js/history nil nil path))
   (if (small-screen?) (assoc-in db [:view :menu :open?] false) db))
 
@@ -56,6 +74,11 @@
 (defn history-replace-handler [db [_ name params]]
   (.replaceState js/history nil nil (view-path name params))
   db)
+
+(defn history-back-handler [db _]
+  (.back js/history)
+  db)
+
 
 (defn xhr-handler [db [_ method url & {:keys [data on-success on-error content-type]}]]
   "Event handler performs XHR request. Currently only EDN calls are supported.

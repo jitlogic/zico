@@ -83,7 +83,7 @@
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/ChunkMetadata]
         (rhr/ok (ztrc/trace-search app-state query)))
-      (ca/GET "/:id/stats" []
+      (ca/GET "/:tid/:sid/stats" []
         :summary "return trace method call stats"
         :path-params [tid :- s/Str, sid :- s/Str]
         :return [zico.schema.tdb/TraceStats]

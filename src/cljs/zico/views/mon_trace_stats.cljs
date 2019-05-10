@@ -6,7 +6,8 @@
     [zico.widgets.widgets :as zw]
     [zico.views.mon-trace :as zvmt]
     [zico.widgets.io :as io]
-    [zico.widgets.screen :as zws]))
+    [zico.widgets.screen :as zws]
+    [zico.widgets.util :as zu]))
 
 
 (defn trace-stats-list-ra [_ [_]]
@@ -52,14 +53,15 @@
       )))
 
 
-(defn trace-stats [{:keys [uuid]}]
+(defn trace-stats [{{:keys [tid]} :params}]
   "Trace call stats panel [:view :trace :stats]"
-  (zs/dispatch-sync
-    [:set [:data :trace :stats] nil])
-  (zs/dispatch
-    [:xhr/get (io/api "/trace/" uuid "/stats")
-     [:data :trace :stats] nil
-     :on-error zv/DEFAULT-SERVER-ERROR])
+  (when-let [{:keys [trace-id span-id]} (zu/parse-tid tid)]
+    (zs/dispatch-sync
+      [:set [:data :trace :stats] nil])
+    (zs/dispatch
+      [:xhr/get (io/api "/trace/" trace-id "/" span-id "/stats")
+       [:data :trace :stats] nil
+       :on-error zv/DEFAULT-SERVER-ERROR]))
   (zws/render-screen
     :main-menu zv/main-menu
     :user-menu zv/USER-MENU
@@ -77,3 +79,5 @@
               :id-attr :mid,
               :class "trace-stats-list",
               :id "zorka-method-stats"]))
+
+(zws/defscreen "mon/trace/stats" trace-stats)

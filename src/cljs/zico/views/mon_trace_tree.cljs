@@ -140,15 +140,15 @@
     :det #(zs/dispatch [:toggle [:view :trace :tree :selected] (js/parseInt %)])))
 
 
-(defn trace-tree [{:keys [uuid]}]
+(defn trace-tree [{{:keys [tid]} :params}]
   "Trace call tree display panel [:view :trace :tree]"
-  (when uuid
+  (when-let [{:keys [trace-id span-id]} (zu/parse-tid tid)]
     (zs/dispatch-sync
       [:do
-       [:set [:view :trace :tree] {:uuid uuid, :collapsed {}}]
+       [:set [:view :trace :tree] {:tid tid, :collapsed {}}]
        [:set [:data :trace :tree] nil]])
     (zs/dispatch
-      [:xhr/get (io/api "/trace/" uuid "?depth=9999") nil nil,
+      [:xhr/get (io/api "/trace/" trace-id "/" span-id "?depth=9999") nil nil,
        :on-success [::handle-xhr-result nil]
        :on-error zv/DEFAULT-SERVER-ERROR]))
   (zws/render-screen
@@ -169,3 +169,7 @@
               :id "zorka-methods",
               :class "trace-tree-list",
               :on-click trace-tree-click-handler]))
+
+
+(zws/defscreen "mon/trace/tree" trace-tree)
+

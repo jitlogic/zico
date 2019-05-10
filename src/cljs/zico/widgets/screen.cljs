@@ -1,11 +1,11 @@
 (ns zico.widgets.screen
   (:require
     [reagent.session :as rs]
-    [secretary.core :as sc :include-macros true]
     [zico.widgets.popups :as zp]
     [zico.widgets.widgets :as zw]
     [zico.widgets.state :as zs]
-    [zico.widgets.util :as zu]))
+    [zico.widgets.util :as zu]
+    [zico.widgets.io :as io]))
 
 
 (def MENU-INITIAL-STATE {:open? false})
@@ -135,19 +135,22 @@
           add-right]
          ]))))
 
-(defn current-page []
+
+(defonce SCREENS
+  (atom {:default [:div.splash-centered [:div.splash-frame "No such view."]]}))
+
+
+(defn current-screen [user-info on-error]
+  ;(zs/dispatch [:xhr/get (io/api "/user/info") [:user :info] nil :on-error on-error])
   (fn []
-    (if-let [[view {params :query-params}] (rs/get :current-page)]
-      [:div#top [view params]]
-      [:div.splash-centered
-       [:div.splash-frame "No such view."]])))
+    (let [{:keys [query anchor]} @io/CURRENT-PAGE,
+          view (get @SCREENS anchor (get @SCREENS :default))]
+      (cond
+        ;(nil? @user-info) [:div.splash-centered [:div.splash-frame "Loading profile, please wait."]]
+        ;(nil? view) NO-VIEW
+        :else [:div#top [view {:params query}]]))))
 
 
-(defn main-routes [& {:as routes}]
-  (doseq [[path page] routes]
-    (sc/defroute
-      (str "/view/" path) {:as p}
-      (rs/put! :current-page [page p path]))))
-
-
+(defn defscreen [path view]
+  (swap! SCREENS assoc path view))
 

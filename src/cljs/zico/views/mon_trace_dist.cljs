@@ -90,3 +90,6 @@
               :on-click (zvmt/trace-list-click-handler-fn :dtrace :tree)]
     ))
 
+
+(zws/defscreen "mon/trace/dtree" dtrace-tree)
+
