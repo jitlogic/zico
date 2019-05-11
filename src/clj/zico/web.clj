@@ -22,7 +22,8 @@
     [zico.schema.tdb]
     [zico.trace :as ztrc]
     [zico.util :as zu])
-  (:import (com.jitlogic.netkit.util NetkitUtil)))
+  (:import (com.jitlogic.netkit.util NetkitUtil)
+           (io.zorka.tdb.store RotatingTraceStore)))
 
 
 (defn render-loading-page [_]
@@ -80,6 +81,13 @@
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/ChunkMetadata]
         (rhr/ok (ztrc/trace-search app-state query)))
+      (ca/GET "/attr/:id" []
+        :summary "return all values of given attribute"
+        :query-params [{limit :- s/Int 100}]
+        :path-params [id :- s/Str]
+        :return [s/Str]
+        (rhr/ok
+          (vec (sort (seq (.getAttributeValues ^RotatingTraceStore (:tstore app-state) id limit))))))
       (ca/GET "/:tid/:sid/stats" []
         :summary "return trace method call stats"
         :path-params [tid :- s/Str, sid :- s/Str]

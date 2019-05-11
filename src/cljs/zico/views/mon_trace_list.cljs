@@ -13,6 +13,22 @@
     [zico.widgets.screen :as zws]))
 
 
+(zs/reg-event-fx ::handle-filter-config
+  (fn [{:keys [db]} [_ filters]]
+    {:db (assoc-in db [:config :filters] filters)
+     :dispatch-n (for [{:keys [attr]} filters]
+                   [:xhr/get (io/api "/trace/attr/" attr)
+                    [:data :filters attr] nil])}))
+
+
+(zs/reg-event-fx ::refresh-filters
+  (fn [{:keys [db]} _]
+    {:db db
+     :dispatch
+         [:xhr/get (io/api "/config/filters") nil nil
+                :on-success [::handle-filter-config]]}))
+
+
 (zs/register-sub
   :data/trace-list-list
   (fn [db _]
@@ -27,8 +43,21 @@
 
 
 (defn make-filter [db offset]
-  (let [vroot (-> db :view :trace :list)]
-    (merge {:limit 50, :offset offset, :fetch-attrs true})))
+  (let [vroot (-> db :view :trace :list),
+        min-duration (get-in vroot [:filter :min-duration :selected])
+        time (get-in vroot [:filter :time :selected])
+        errors-only (get-in vroot [:filter :errors-only :selected])
+        attrs (into {} (for [k (keys (-> vroot :filter))
+                             :let [v (get-in vroot [:filter k :selected])]
+                             :when (and (string? k) (string? v))] {k v}))]
+    (merge
+      {:limit 50, :offset offset, :fetch-attrs true}
+      (when-not (empty? attrs) {:attr-matches attrs})
+      (when min-duration {:min-duration (* min-duration 1000000000)})
+      (when time {:min-tstamp (ctf/unparse PARAM-FORMATTER time)
+                  :max-tstamp (ctf/unparse PARAM-FORMATTER (zw/day-next time))})
+      (when errors-only {:errors-only errors-only})
+      )))
 
 
 (defn parse-filter-query [db [_ q]]
@@ -121,71 +150,33 @@
     {:key k, :text l, :icon [:awe (if t :clock :cancel) (if t c :red)],
      :on-click [::filter-list [:view :trace :list :filter :min-duration :selected] t]}))
 
-
-(defn filtered-items [path data icon & {:keys [filter-fn]}]
-  (let [icon-fn (cond (vector? icon) (constantly icon), (fn? icon) icon, :else (constantly [:awe :paw :text]))
-        selected (zs/subscribe [:get path])]
-    (ra/reaction
-      (doall
-        (cons
-          {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
-           :on-click [:do [:set path nil] [::refresh-list true]]}
-          (for [{:keys [id name] :as r} (sort-by :name (vals (zu/deref? data)))
-                :when ((or filter-fn identity) r)]
-            {:key      id, :text name, :icon (icon-fn r),
-             :on-click [:do [:set path id] [::refresh-list true]]
-             :state    (if (= id @selected) :selected :normal)
-             }))))))
-
-
-(def TRACE-TYPE-ITEMS
-  (filtered-items
-    [:view :trace :list :filter :ttype :selected]
-    (zs/subscribe [:get [:data :TODO :ttype]])
-    #(zu/glyph-parse (:glyph %) "awe/list-alt#text")
-    :filter-fn #(= 0x08 (bit-and (:flags %) 0x08))))
-
-
-(def APP-ITEMS
-  (filtered-items
-    [:view :trace :list :filter :app :selected]
-    (zs/subscribe [:get [:data :TODO :app]])
-    [:awe :cubes :text]))
-
-
-(def ENV-ITEMS
-  (filtered-items
-    [:view :trace :list :filter :env :selected]
-    (zs/subscribe [:get [:data :TODO :env]])
-    [:awe :sitemap :text]))
-
+(def TIME-F (ctf/formatter "yyyy-MM-dd"))
 
 ; TODO this is too complicated; filters need to have its own unified data structure working on single loop
 (defn clear-filter-items []
-  (let [cfg (zs/subscribe [:get [:data :TODO]])
-        filter (zs/subscribe [:get [:view :trace :list :filter]])
-        search (zs/subscribe [:get [:view :trace :list :search]])
-        fattrs (zs/subscribe [:get [:view :trace :list :filter-attrs]])]
+  (let [filter (zs/subscribe [:get [:view :trace :list :filter]])
+        search (zs/subscribe [:get [:view :trace :list :search]])]
     (ra/reaction
-      (let [filter @filter, search @search, fattrs @fattrs,
-            f1 (for [[k v] filter :when (:selected v), :let [kk (str k)]]
-                 {:key kk, :text kk, :icon [:awe :filter :red],
+      (let [filter @filter, search @search
+            ff (for [[k v] filter :when (:selected v), :let [kk (str k)]
+                     :let [txt (case k :time (ctf/unparse TIME-F (:selected v)),
+                                       :errors-only "(errors only)"
+                                       :min-duration (str "> " (:selected v) " sec"), kk)]
+                     :let [glyph (case k :time :calendar, :min-duration :clock,
+                                         :errors-only :attention-circled, :filter)]]
+                 {:key      kk, :text txt, :icon [:awe glyph :red],
                   :on-click [:do [:set [:view :trace :list :filter k] {}] [::refresh-list true]]})
-            f2 (when-not (empty? (:text search))
+            fs (when-not (empty? (:text search))
                  [{:key      ":text", :text (str \" (zu/ellipsis (:text search) 32) \"), :icon [:awe :search :red],
-                   :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list true]]}])
-            f3 (for [[k _] fattrs :when (string? k)]
-                 {:key      (str "ATTR-" k), :text (zu/ellipsis (str k) 32), :icon [:awe :filter :blue],
-                  :on-click [:do [:dissoc [:view :trace :list :filter-attrs] k] [::refresh-list true]]})]
+                   :on-click [:do [:set [:view :trace :list :search] {}] [::refresh-list true]]}])]
         (doall
           (concat
             [{:key "all", :text "clear filters", :icon [:awe :cancel :red]
               :on-click [:do
                          [:set [:view :trace :list :filter] {}]
-                         [:set [:view :trace :list :filter-attrs] {}]
                          [:set [:view :trace :list :search] {}]
                          [::refresh-list true]]}]
-            f1 f2 f3)))
+            ff fs)))
       )))
 
 
@@ -193,32 +184,43 @@
 
 
 (defn toolbar-right []
-  (let [view-state (zs/subscribe [:get [:view :trace :list]])]
+  (let [view-state (zs/subscribe [:get [:view :trace :list]])
+        filter-defs (zs/subscribe [:get [:config :filters]])
+        filter-vals (zs/subscribe [:get [:data :filters]])]
     (fn []
       (let [view-state @view-state]
         [:div.flexible.flex
+         (zw/svg-button :awe :attention-circled :red "Errors only"
+           [:do [:toggle [:view :trace :list :filter :errors-only :selected]] [::refresh-list]]
+           :opaque (get-in view-state [:filter :errors-only :selected]))
          (zw/svg-button :awe :calendar :light "Select timespan"
-                        [:popup/open :calendar, :position :top-right, :on-click-kw ::filter-list,
-                         :path [:view :trace :list :filter :time]]
-                        :opaque (get-in view-state [:filter :time :selected]))
-         (zw/svg-button
-           :awe :clock :light "Minimum duration"
+           [:popup/open :calendar, :position :top-right, :on-click-kw ::filter-list,
+            :path [:view :trace :list :filter :time]]
+           :opaque (get-in view-state [:filter :time :selected]))
+         (zw/svg-button :awe :clock :light "Minimum duration"
            [:popup/open :menu, :position :top-right, :items DURATION-FILTER-ITEMS
             :path [:view :trace :list :filter :min-duration :selected]]
            :opaque (get-in view-state [:filter :min-duration :selected]))
-         (zw/svg-button :awe :list-alt :light "Trace type"
-                        [:popup/open :menu, :position :top-right, :items TRACE-TYPE-ITEMS]
-                        :opaque (get-in view-state [:filter :ttype :selected]))
-         (zw/svg-button :awe :cubes :light "Application"
-                        [:popup/open :menu, :position :top-right, :items APP-ITEMS]
-                        :opaque (get-in view-state [:filter :app :selected]))
-         ; TODO dodac nagłówki do filter popupów i zobaczyć jak się zachowają i czy będzie działać scrolling;
-         (zw/svg-button :awe :sitemap :light "Environment"
-                        [:popup/open :menu, :position :top-right, :items ENV-ITEMS]
-                        :opaque (get-in view-state [:filter :env :selected]))
+         (doall
+           (for [{:keys [attr description icon]} @filter-defs
+                 :let [[f g c] (zu/glyph-parse icon "awe/filter#light")]
+                 :let [path [:view :trace :list :filter attr :selected]]]
+             ^{:key attr}
+             [:div
+              (zw/svg-button
+                f g c description
+                [:popup/open :menu :position :top-right,
+                 :items (doall
+                          (cons
+                            {:key "nil", :text "clear filter", :icon [:awe :cancel :red],
+                             :on-click [:do [:set path nil] [::refresh-list true]]}
+                            (for [name (get @filter-vals attr)]
+                              {:key      name, :text name, :icon [f g c]
+                               :on-click [:do [:set path name] [::refresh-list true]]})))]
+                :opaque (some? (get-in view-state [:filter attr :selected])))]))
          (zw/svg-button :awe :cancel :red "Clear filters."
-                        [:popup/open :menu :position :top-right :items CLEAR-FILTER-ITEMS]
-                        :opaque (> (count @CLEAR-FILTER-ITEMS) 1))
+           [:popup/open :menu :position :top-right :items CLEAR-FILTER-ITEMS]
+           :opaque (> (count @CLEAR-FILTER-ITEMS) 1))
          ]))))
 
 
@@ -255,7 +257,7 @@
               :add-left [toolbar-left],
               :add-right [toolbar-right]
               :sort-ctls {},
-              :search-box true,
+              :search-box false,
               :on-refresh [::refresh-list true]]
     :central [zws/list-interior
               :vpath [:view :trace :list]

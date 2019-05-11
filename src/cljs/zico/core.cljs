@@ -7,10 +7,12 @@
     [zico.views.mon-trace-dist]
     [zico.views.mon-trace-tree]
     [zico.views.mon-trace-stats]
-    ))
+    [zico.widgets.state :as zs]))
 
 
 ;; Load basic dictionary data and initialize UI state
+
+(defonce _ (zs/dispatch [:zico.views.mon-trace-list/refresh-filters]))
 
 (defn mount-root []
   (rc/render [zws/current-screen nil zv/DEFAULT-SERVER-ERROR]

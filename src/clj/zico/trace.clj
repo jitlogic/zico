@@ -38,8 +38,8 @@
     (when fetch-attrs (.withFetchAttrs q))
     (when errors-only (.withErrorsOnly q))
     (when spans-only (.withSpansOnly q))
-    (when min-tstamp (.setMinTstamp q (ctc/to-long (ctf/parse PARAM-FORMATTER min-tstamp))))
-    (when max-tstamp (.setMaxTstamp q (ctc/to-long (ctf/parse PARAM-FORMATTER max-tstamp))))
+    (when min-tstamp (.setMinTstamp q (* 1000000 (ctc/to-long (ctf/parse PARAM-FORMATTER min-tstamp)))))
+    (when max-tstamp (.setMaxTstamp q (* 1000000 (ctc/to-long (ctf/parse PARAM-FORMATTER max-tstamp)))))
     (when min-duration (.setMinDuration q min-duration))
     (when attr-matches
       (doseq [[k v] attr-matches]
@@ -216,7 +216,6 @@
   (let [dfn (into {} (for [tt (vals trace-types)] {(:component tt) #(or (get-in % [:attrs (name (:render tt))]) (trace-desc-default %))}))]
     (fn [t]
       (let [c (get-in t [:attrs "component"])]
-        (println "component=" c ":" (keys dfn))
         (cond
           (nil? c) (trace-desc-default t)
           (contains? dfn c) ((dfn c) t)
