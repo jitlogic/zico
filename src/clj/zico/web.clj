@@ -68,11 +68,8 @@
       :data {:basePath "/api"
              :info     {:version "1.90.6", :title "ZICO", :description "ZICO 2.x Collector API"
                         :contact {:name "Zorka.io project", :url "http://zorka.io"}}
-             :tags     [{:name "cfg", :description "configuration objects"}
-                        {:name "system", :description "system information"}
-                        {:name "trace", :description "trace data search & browsing"}
-                        {:name "user", :description "current user information"}
-                        {:name "test", :description "testing API"}]
+             :tags     [{:name "config", :description "configuration objects"}
+                        {:name "trace", :description "trace data search & browsing"}]
              :consumes ["application/json", "application/edn"]
              :produces ["application/json", "application/edn"]}}}
 
@@ -94,6 +91,17 @@
         :query-params [depth :- s/Int]
         :return zico.schema.tdb/TraceRecord
         (trace-detail app-state tid sid (or depth 1))))
+
+    (ca/context "/config" []
+      :tags ["config"]
+      (ca/GET "/filters" []
+        :summary "get filter definitions"
+        :return [zico.schema.server/FilterDef]
+        (rhr/ok (-> app-state :conf :filter-defs)))
+      (ca/GET "/ttypes" []
+        :summary "trace types"
+        :return [(dissoc zico.schema.server/TraceType :render)]
+        (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))
     ))
 
 

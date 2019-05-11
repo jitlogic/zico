@@ -65,6 +65,7 @@
   {:trace-id                    s/Str
    :span-id                     s/Str
    :chunk-num                   s/Int
+   :desc                        s/Str
    (s/optional-key :parent-id)  (s/maybe s/Str)
    (s/optional-key :error)      s/Bool
    (s/optional-key :tst)        s/Int                       ; Timestamp in milliseconds since Epoch

@@ -103,17 +103,14 @@
 
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
-  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration recs calls errs attrs error children]
+  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration desc recs calls errs attrs error children]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
-    (let [tid (zu/to-tid t), desc (get "call.method" attrs)]
+    (let [tid (zu/to-tid t)]
       ^{:key tid}
       [:div.det
        {:data-zico-tid tid}
        [:div.flex-on-medium-or-more [:div tstamp]]
        [:div.c-light.bold.wrapping desc]
-       [:div.c-darker.ellipsis result]
-       [:div.c-light.ellipsis (str method args)]
-       [:div.c-darker.ellipsis.text-rtl package "." class]
        (render-attrs attrs enable-filters)
        (when (:exception detail)
          (render-exception (:exception detail) true))
@@ -139,9 +136,8 @@
 (def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id duration recs calls errs error children] :as t}]
-    (let [tid (zu/to-tid t), desc (get attrs "call.method" "?")
-          [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id desc duration recs calls errs error children] :as t}]
+    (let [tid (zu/to-tid t), [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
       ^{:key tid}
       [:div.itm
        {:data-zico-tid tid}

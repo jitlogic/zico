@@ -53,7 +53,7 @@
      :parent-id (.getParentIdHex c)
      :chunk-num (.getChunkNum c)
      :tst       (.getTstamp c)
-     :tstamp    (zu/str-time-yymmdd-hhmmss-sss (.getTstamp c))
+     :tstamp    (zu/str-time-yymmdd-hhmmss-sss (/ (.getTstamp c) 1000000))
      :duration  (.getDuration c)
      :recs      (.getRecs c)
      :calls     (.getCalls c)
@@ -65,11 +65,10 @@
     (when-let [children (.getChildren c)]
       {:children (vec (map from-chunk-metadata children))})))
 
-
-(defn trace-search [{:keys [tstore]} query]
+(defn trace-search [{:keys [tstore trace-desc]} query]
   (vec
     (for [c (.search tstore (parse-search-query query) (:limit query 50) (:offset query 0))]
-      (from-chunk-metadata c))))
+      (trace-desc (from-chunk-metadata c)))))
 
 
 (defn resolve-attr-obj [obj resolver]
@@ -208,11 +207,28 @@
       (not= old-conf new-conf) old-store                    ; TODO
       :else old-store)))
 
+(defn trace-desc-default [t]
+  (or
+    (get-in t [:attrs "call.method"])
+    (str "TRACE@(" (:tstamp t) ")")))
+
+(defn trace-desc-fn [{:keys [trace-types]}]
+  (let [dfn (into {} (for [tt (vals trace-types)] {(:component tt) #(or (get-in % [:attrs (name (:render tt))]) (trace-desc-default %))}))]
+    (fn [t]
+      (let [c (get-in t [:attrs "component"])]
+        (println "component=" c ":" (keys dfn))
+        (cond
+          (nil? c) (trace-desc-default t)
+          (contains? dfn c) ((dfn c) t)
+          :else (trace-desc-default t)
+          )))))
+
 (defn with-tracer-components [{{new-conf :tstore} :conf :as app-state}
                               {{old-conf :tstore} :conf :keys [tstore]}]
-  (if (:enabled new-conf true)
-    (let [tstore (open-tstore new-conf old-conf tstore)]
-      (assoc app-state
-        :tstore tstore))
-    app-state))
+  (let [new-state
+        (if (:enabled new-conf true)
+          (assoc app-state :tstore (open-tstore new-conf old-conf tstore))
+          app-state)
+        tfn (trace-desc-fn (:conf app-state))]
+    (assoc new-state :trace-desc #(assoc % :desc (tfn %)))))
 

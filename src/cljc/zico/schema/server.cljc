@@ -49,8 +49,21 @@
    :text            TextIndexConfig
    :meta            TextIndexConfig})
 
+(s/defschema TraceType
+  {:component             s/Str
+   :render                s/Any
+   :icon                  s/Str})
+
+(s/defschema FilterDef
+  {:attr s/Str
+   :description s/Str
+   :icon s/Str})
+
 (s/defschema ZicoConf
-  {:home-dir s/Str
-   :http JettyHttpConf
-   :log  LoggerConfig
-   :tstore TraceStoreConfig})
+  {:home-dir    s/Str
+   :http        JettyHttpConf
+   :log         LoggerConfig
+   :tstore      TraceStoreConfig
+   :filter-defs [FilterDef]
+   :trace-types {s/Keyword TraceType}
+   })
