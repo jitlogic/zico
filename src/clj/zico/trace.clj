@@ -46,29 +46,31 @@
         (.withAttrMatch q (str k) (str v))))
     q))
 
-(defn from-chunk-metadata [c]
-  (merge
-    {:trace-id  (.getTraceIdHex c)
-     :span-id   (.getSpanIdHex c)
-     :parent-id (.getParentIdHex c)
-     :chunk-num (.getChunkNum c)
-     :tst       (.getTstamp c)
-     :tstamp    (zu/str-time-yymmdd-hhmmss-sss (/ (.getTstamp c) 1000000))
-     :duration  (.getDuration c)
-     :recs      (.getRecs c)
-     :calls     (.getCalls c)
-     ;:errors    (.getErrors c)
-     }
-    (when (.hasError c) {:error true})
-    (when-let [attrs (.getAttributes c)]
-      {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))})
-    (when-let [children (.getChildren c)]
-      {:children (vec (map from-chunk-metadata children))})))
+(defn from-chunk-metadata [tfn c]
+  (->
+    (merge
+      {:trace-id  (.getTraceIdHex c)
+       :span-id   (.getSpanIdHex c)
+       :parent-id (.getParentIdHex c)
+       :chunk-num (.getChunkNum c)
+       :tst       (.getTstamp c)
+       :tstamp    (zu/str-time-yymmdd-hhmmss-sss (long (/ (.getTstamp c) 1000000)))
+       :duration  (.getDuration c)
+       :recs      (.getRecs c)
+       :calls     (.getCalls c)
+       ;:errors    (.getErrors c)
+       }
+      (when (.hasError c) {:error true})
+      (when-let [attrs (.getAttributes c)]
+        {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))})
+      (when (> (.size (.getChildren c)) 0)
+        (let [children (doall (for [c (.getChildren c)] (from-chunk-metadata tfn c)))]
+          (when children {:children children}))))
+    tfn))
 
 (defn trace-search [{:keys [tstore trace-desc]} query]
-  (vec
-    (for [c (.search tstore (parse-search-query query) (:limit query 50) (:offset query 0))]
-      (trace-desc (from-chunk-metadata c)))))
+  (for [c (.search tstore (parse-search-query query) (:limit query 50) (:offset query 0))]
+    (from-chunk-metadata trace-desc c)))
 
 
 (defn resolve-attr-obj [obj resolver]
