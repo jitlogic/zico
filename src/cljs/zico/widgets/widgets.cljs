@@ -16,6 +16,22 @@
        [:use {:xlink-href uri} " "]]])))
 
 
+(defn svg-icon-2
+  ([[f1 g1 c1] [f2 g2 c2] & {:keys [view-box class title style]
+                   :or {view-box "0 0 1000 1000"}}]
+   (let [u1 (str "/img/" (zu/to-string f1) ".svg#" (zu/to-string g1))
+         u2 (str "/img/" (zu/to-string f2) ".svg#" (zu/to-string g2))
+         cl1 (str "svg-icon-2 c-" (zu/to-string c1) class),
+         cl2 (str "sub c-" (zu/to-string c2) class)]
+     [:div (merge {:title title} {:class cl1})
+      [:svg.icn {:viewBox view-box}
+       [:use {:xlink-href u1} " "]]
+      [:div {:class cl2}
+       [:svg {:viewBox view-box}
+        [:use {:xlink-href u2} " "]]]
+      ])))
+
+
 (defn svg-button [family glyph color title event & {:keys [opaque enabled?] :or {enabled? true}}]
   [(cond (zu/deref? opaque) :div (zu/deref? enabled?) :div.clickable :else :div.disabled)
    (merge {:title title} (when (and event (zu/deref? enabled?)) {:on-click (zs/to-handler event :sink true)}))

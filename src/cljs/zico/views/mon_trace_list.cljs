@@ -238,7 +238,7 @@
            [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list true]]
            :opaque deep-search)
          (zw/svg-button
-           :awe :eye-off :light "Suppress details"
+           :awe :eye :light "Show details"
            [:toggle [:view :trace :list :suppress]]
            :opaque suppress)]))))
 
@@ -272,4 +272,55 @@
 
 
 (zws/defscreen "mon/trace/list" trace-list)
+
+
+(defn dtrace-toolbar-left []
+  [:div.flexible.flex
+   (zw/svg-button
+     :awe :eye :light "Suppress details"
+     [:toggle [:view :trace :list :suppress]]
+     :opaque zvmt/SHOW-DETAILS)])
+
+
+(defn chunks-to-list [{:keys [children] :as t} depth]
+  (let [t (assoc t :tid (zu/to-tid t) :depth depth)]
+    (apply concat [t] (for [c children] (chunks-to-list c (inc depth))))))
+
+
+(zs/reg-event-db
+  ::handle-dtrace-result
+  (fn [db [_ trace]]
+    (assoc-in db [:data :dtrace :tree] (chunks-to-list trace 0))))
+
+
+(defn dtrace-tree [{{:keys [tid]} :params}]
+  "Displays distributed trace panel [:view :trace :dtrace]"
+  (zs/dispatch-sync
+    [:set [:data :dtrace :tree] []])
+  (zs/dispatch
+    [:xhr/get (io/api "/trace/" (:trace-id (zu/parse-tid tid))) nil nil
+     :on-success [::handle-dtrace-result],
+     :on-error zv/DEFAULT-SERVER-ERROR])
+  (zws/render-screen
+    :main-menu zv/main-menu
+    :user-menu zv/USER-MENU
+    :hide-menu-btn true
+    :toolbar [zws/list-screen-toolbar
+              :vpath [:view :dtrace :tree]
+              :title     "Distributed tracing",
+              :sort-ctls {}
+              :add-left  [dtrace-toolbar-left]]
+    :central [zws/list-interior
+              :vpath [:view :dtrace :tree]
+              :data [:get [:data :dtrace :tree]]
+              :render-item (zvmt/render-trace-list-item-fn :dtrace-links false)
+              :render-details (zvmt/render-trace-list-detail-fn false false)
+              :id-attr :tid,
+              :id "zorka-dist",
+              :class "trace-list-list",
+              :on-click (zvmt/trace-list-click-handler-fn :dtrace :tree)]
+    ))
+
+
+(zws/defscreen "mon/trace/dtree" dtrace-tree)
 

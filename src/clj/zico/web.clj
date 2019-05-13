@@ -86,28 +86,32 @@
         :query-params [{limit :- s/Int 100}]
         :path-params [id :- s/Str]
         :return [s/Str]
-        (rhr/ok
-          (vec (sort (seq (.getAttributeValues ^RotatingTraceStore (:tstore app-state) id limit))))))
-      (ca/GET "/:tid/:sid/stats" []
-        :summary "return trace method call stats"
-        :path-params [tid :- s/Str, sid :- s/Str]
-        :return [zico.schema.tdb/TraceStats]
-        (rhr/ok (ztrc/trace-stats app-state tid sid)))
+        (rhr/ok (sort (seq (.getAttributeValues ^RotatingTraceStore (:tstore app-state) id limit)))))
+      (ca/GET "/:tid" []
+        :summary "return all spans of a distributed trace"
+        :path-params [tid :- s/Str]
+        :return zico.schema.tdb/ChunkMetadata
+        (rhr/ok (ztrc/trace-get app-state tid)))
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
         :query-params [depth :- s/Int]
         :return zico.schema.tdb/TraceRecord
-        (trace-detail app-state tid sid (or depth 1))))
+        (trace-detail app-state tid sid (or depth 1)))
+      (ca/GET "/:tid/:sid/stats" []
+        :summary "return trace method call stats"
+        :path-params [tid :- s/Str, sid :- s/Str]
+        :return [zico.schema.tdb/TraceStats]
+        (rhr/ok (ztrc/trace-stats app-state tid sid))))
 
     (ca/context "/config" []
       :tags ["config"]
       (ca/GET "/filters" []
-        :summary "get filter definitions"
+        :summary "returns configured trace filter definitions"
         :return [zico.schema.server/FilterDef]
         (rhr/ok (-> app-state :conf :filter-defs)))
       (ca/GET "/ttypes" []
-        :summary "trace types"
+        :summary "returns configured trace types"
         :return [(dissoc zico.schema.server/TraceType :render)]
         (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))
     ))

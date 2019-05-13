@@ -68,6 +68,10 @@
           (when children {:children children}))))
     tfn))
 
+(defn trace-get [{:keys [tstore trace-desc]} tid]
+  (let [[t1 t2] (parse-hex-tid tid)]
+    (from-chunk-metadata trace-desc (.getTrace tstore (Tid/t t1 t2) true))))
+
 (defn trace-search [{:keys [tstore trace-desc]} query]
   (for [c (.search tstore (parse-search-query query) (:limit query 50) (:offset query 0))]
     (from-chunk-metadata trace-desc c)))

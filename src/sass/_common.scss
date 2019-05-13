@@ -5,6 +5,22 @@
   height: 1em;
 }
 
+.svg-icon-2 {
+  display: flex;
+  width: 1em;
+  height: 1em;
+  .icn {
+    width: 1em;
+    height: 1em;
+    transform: scale(2.5);
+  }
+  .sub {
+    width: 1em;
+    height: 1em;
+    transform: translate(0.125em,-0.125em) scale(2.5);
+  }
+}
+
 .pad-l05 {
   padding-left: 0.5em;
 }

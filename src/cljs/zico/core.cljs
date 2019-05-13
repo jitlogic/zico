@@ -4,7 +4,6 @@
     [zico.views.common :as zv]
     [zico.widgets.screen :as zws]
     [zico.views.mon-trace-list]
-    [zico.views.mon-trace-dist]
     [zico.views.mon-trace-tree]
     [zico.views.mon-trace-stats]
     [zico.widgets.state :as zs]))
@@ -22,3 +21,4 @@
 (defn init! []
   (mount-root))
 
+(def x 1)

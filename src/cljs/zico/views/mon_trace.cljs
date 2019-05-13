@@ -18,12 +18,12 @@
           (rfn (sort-by sort-attr (vals @data)))))
       )))
 
+
 ; Register all needed subscriptions
 (zs/register-sub
   :data/trace-type-list
   (data-list-sfn :trace :type :name))
 
-(def CFG-TRACES (zs/subscribe [:get [:data :trace :list]]))
 
 (defn trace-list-click-handler-fn [sect sub]
   (fn [e]
@@ -52,7 +52,7 @@
   "Renders method call attributes (if any)"
   (let [filter-attrs @FILTER-ATTRS]
     [:div.trace-attrs
-     (for [[n k v] (map cons (range) attrs)]
+     (for [[n k v] (map cons (range) (sort-by first attrs))]
        ^{:key n}
        [:div.a
         (when ttype
@@ -133,10 +133,10 @@
           )]])))
 
 
-(def SUPPRESS-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
+(def SHOW-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id desc duration recs calls errs error children] :as t}]
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errs error children] :as t}]
     (let [tid (zu/to-tid t), [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
       ^{:key tid}
       [:div.itm
@@ -144,14 +144,17 @@
        [:div.seg
         [:div.ct t]
         [:div.flexible]
-        [:div.seg (zw/svg-icon "awe" "paw" "text")]
-        [:div.svg-icon.btn-details.small-or-less.clickable " "]]
+        [:div.seg
+         {:style {:padding-left (str (* 16 (or depth 0)) "px")}}
+         (zw/svg-icon-2 [:awe :paw :text] [:awe :right-dir :green])]
+        ;[:div.svg-icon.btn-details.small-or-less.clickable " "]
+        ]
        [:div.seg.flexible
-        ;{:style {:padding-left (str (* 16 (or dtrace-level 0)) "px")}}
+
         [(if error :div.c2.c-red :div.c2.c-text) desc]]
        [:div.seg
         (zw/svg-icon :awe :clock :blue) (zu/ns-to-str duration false)
-        (when-not @SUPPRESS-DETAILS
+        (when @SHOW-DETAILS
           [:div.flex
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)
