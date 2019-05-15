@@ -13,22 +13,6 @@
     [zico.widgets.screen :as zws]))
 
 
-(zs/reg-event-fx ::handle-filter-config
-  (fn [{:keys [db]} [_ filters]]
-    {:db (assoc-in db [:config :filters] filters)
-     :dispatch-n (for [{:keys [attr]} filters]
-                   [:xhr/get (io/api "/trace/attr/" attr)
-                    [:data :filters attr] nil])}))
-
-
-(zs/reg-event-fx ::refresh-filters
-  (fn [{:keys [db]} _]
-    {:db db
-     :dispatch
-         [:xhr/get (io/api "/config/filters") nil nil
-                :on-success [::handle-filter-config]]}))
-
-
 (zs/register-sub
   :data/trace-list-list
   (fn [db _]

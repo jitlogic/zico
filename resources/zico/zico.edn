@@ -39,6 +39,10 @@
                               :io.zorka.tdb :info
                               }}
 
+ :auth {:type :http-basic
+        :users {"admin" "zico"}}
+
+
 
  ; Configuration of main data store
  :tstore   {:path            #join [#ref [:home-dir] "/data"]
@@ -70,7 +74,14 @@
             {:attr "local.service", :description "Service", :icon "awe/cubes#light"}]
 
  :trace-types
-           {:SQL  {:component "db", :render :db.statement, :icon "awe/database#darkgreen"}
-            :HTTP {:component "http", :render :http.url, :icon "awe/globe#steelblue"}}
+           {:db  {:component "db", :render :db.statement, :icon "awe/database#darkgreen"}
+            :http {:component "http", :render :http.url, :icon "awe/globe#steelblue"}
+            :amqp {:component "amqp", :render :call.method, :icon "awe/paper-plane-empty#darkred"}
+            :spring {:component "spring", :render :method, :icon "awe/leaf#darkgreen"}
+            :breaker {:component "breaker", :render :call.method, :icon "awe/flash#darkkhaki"}
+            :job {:component "job", :render :call.method, :icon "awe/clock#darkred"}
+            :jms {:component "jms", :render :call.method, :icon "awe/paper-plane-empty#darkkhaki"}
+            :ejb {:component "ejb", :render :call.method, :icon "awe/cube#steelblue"}
+            }
  }
 

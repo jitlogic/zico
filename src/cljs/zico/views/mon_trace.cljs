@@ -25,6 +25,7 @@
   (data-list-sfn :trace :type :name))
 
 
+
 (defn trace-list-click-handler-fn [sect sub]
   (fn [e]
     (zs/traverse-and-handle
@@ -44,6 +45,32 @@
       {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
        :dispatch [:zico.views.mon-trace-list/refresh-list true]})))
 
+
+
+(zs/reg-event-fx ::handle-filter-config
+  (fn [{:keys [db]} [_ filters]]
+    {:db (assoc-in db [:config :filters] filters)
+     :dispatch-n (for [{:keys [attr]} filters]
+                   [:xhr/get (io/api "/trace/attr/" attr)
+                    [:data :filters attr] nil])}))
+
+(zs/reg-event-fx ::refresh-filters
+  (fn [{:keys [db]} _]
+    {:db db
+     :dispatch
+         [:xhr/get (io/api "/config/filters") nil nil
+          :on-success [::handle-filter-config]]}))
+
+(zs/reg-event-db ::handle-ttypes-config
+  (fn [db [_ ttypes]]
+    (assoc-in db [:config :ttypes]
+      (into {}
+        (for [{:keys [component] :as t} ttypes] {component t})))))
+
+(def TRACE-TYPES (zs/subscribe [:get [:config :ttypes]]))
+
+(zs/dispatch
+  [:xhr/get (io/api "/config/ttypes") nil nil :on-success [::handle-ttypes-config]])
 
 (def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
 
@@ -135,6 +162,21 @@
 
 (def SHOW-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
 
+(def TRACE-KIND-ICONS
+  {"SERVER" [:awe :left-dir :green]
+   "CLIENT" [:awe :right-dir :red]
+   "CONSUMER" [:awe :left-dir :blue]
+   "PRODUCER" [:awe :right-dir :yellow]
+   "BOOT" [:awe :flash :blue]
+   "JOB" [:awe :flash :yellow]})
+
+(def TRACE-KIND-DEFAULT (get TRACE-KIND-ICONS "SERVER"))
+
+(defn trace-icon [component]
+  (if-let [{:keys [icon] :as f} (get @TRACE-TYPES component)]
+    (zu/glyph-parse icon "awe/paw#text")
+    [:awe :paw :text]))
+
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
   (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errs error children] :as t}]
     (let [tid (zu/to-tid t), [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
@@ -146,11 +188,11 @@
         [:div.flexible]
         [:div.seg
          {:style {:padding-left (str (* 16 (or depth 0)) "px")}}
-         (zw/svg-icon-2 [:awe :paw :text] [:awe :right-dir :green])]
-        ;[:div.svg-icon.btn-details.small-or-less.clickable " "]
-        ]
+         (zw/svg-icon-2
+           (trace-icon (get attrs "component"))
+           (get TRACE-KIND-ICONS (get attrs "span.kind") TRACE-KIND-DEFAULT)
+           [:awe :left :green])]]
        [:div.seg.flexible
-
         [(if error :div.c2.c-red :div.c2.c-text) desc]]
        [:div.seg
         (zw/svg-icon :awe :clock :blue) (zu/ns-to-str duration false)
@@ -159,19 +201,10 @@
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)
            (zw/svg-icon :awe :bug :red) (str errs)])
-        (cond
-          (not dtrace-links)
-          (zw/svg-icon
-            :ent :flow-cascade  :none)
-          (seq children)
-          (zw/svg-icon
-            :ent :flow-cascade :blue,
-            :class " clickable btn-dtrace",
-            :title "View distributed trace")
-          :else
-          (zw/svg-icon
-            :ent :flow-cascade  :dark
-            :title "This is single trace"))
+        (when dtrace-links
+          (if (seq children)
+            (zw/svg-icon :ent :flow-cascade :blue, :class " clickable btn-dtrace", :title "View distributed trace")
+            (zw/svg-icon :ent :flow-cascade :dark :title "This is single trace")))
         (zw/svg-icon
           :awe :right-big :blue,
           :class " clickable btn-details",

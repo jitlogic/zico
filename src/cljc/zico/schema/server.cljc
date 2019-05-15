@@ -37,6 +37,10 @@
    :console-level s/Keyword
    :log-levels {s/Keyword s/Keyword}})
 
+(s/defschema AuthConfig
+  {:type s/Keyword
+   :users {s/Str s/Str}})
+
 (s/defschema TextIndexConfig
   {:base-size s/Int, :max-size s/Int})
 
@@ -63,6 +67,7 @@
   {:home-dir    s/Str
    :http        JettyHttpConf
    :log         LoggerConfig
+   :auth        AuthConfig
    :tstore      TraceStoreConfig
    :filter-defs [FilterDef]
    :trace-types {s/Keyword TraceType}

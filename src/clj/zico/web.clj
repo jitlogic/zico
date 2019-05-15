@@ -23,7 +23,8 @@
     [zico.trace :as ztrc]
     [zico.util :as zu])
   (:import (com.jitlogic.netkit.util NetkitUtil)
-           (io.zorka.tdb.store RotatingTraceStore)))
+           (io.zorka.tdb.store RotatingTraceStore)
+           (com.jitlogic.zorka.common.util Base64)))
 
 
 (defn render-loading-page [_]
@@ -113,8 +114,7 @@
       (ca/GET "/ttypes" []
         :summary "returns configured trace types"
         :return [(dissoc zico.schema.server/TraceType :render)]
-        (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))
-    ))
+        (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))))
 
 
 (defn zico-agent-routes [app-state]
@@ -147,6 +147,32 @@
       (resources "/")
       (not-found "Not Found.\n"))))
 
+(def RE-AUTH-HDR #"\s*(\w+)\s+(\S+)\s*")
+(def RE-AUTH-VAL #"(\w+):(\S+)")
+
+(def WWW-AUTHZ {:status 401, :body "Authentication required.",
+                :headers {"WWW-Authenticate", "Basic realm=\"ZICO\", charset=\"UTF-8\""}})
+
+(defn http-basic-filter [f users pwcheck]
+  (fn [{:keys [headers] :as req}]
+    (let [auth (get headers "authorization" "")
+          [_ auths authv] (re-matches RE-AUTH-HDR auth)]
+      (cond
+        (empty? auth) WWW-AUTHZ
+        (not (.equalsIgnoreCase "Basic" auths)) WWW-AUTHZ
+        :else
+        (let [[_ login passwd] (re-matches RE-AUTH-VAL (String. (Base64/decode authv)))]
+          (cond
+            (empty? login) WWW-AUTHZ
+            (empty? passwd) WWW-AUTHZ
+            (nil? (get users login)) WWW-AUTHZ
+            (pwcheck (get users login) passwd) (f req)
+            :else WWW-AUTHZ)))
+      )))
+
+(defn password-check [pwhash passwd]
+  ; TODO implement some password hashing
+  (= pwhash passwd))
 
 (defn wrap-web-middleware [handler]
   (-> handler
@@ -165,9 +191,11 @@
       wrap-cache))
 
 
-(defn with-zorka-web-handler [app-state]
+(defn with-zorka-web-handler [{{{:keys [type users]} :auth} :conf :as app-state}]
   (let [main-handler (-> app-state zorka-web-routes wrap-web-middleware)]
     (assoc app-state
-      :web-handler (-> app-state zorka-web-routes wrap-web-middleware)
-      :main-handler main-handler)))
+      :main-handler
+      (case type
+        :http-basic (http-basic-filter main-handler users password-check)
+        main-handler))))
 
