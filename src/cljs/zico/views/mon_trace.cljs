@@ -38,13 +38,11 @@
 
 (zs/reg-event-fx
   ::filter-by-attr
-  (fn [{:keys [db]} [_ k v ttype]]
-    (let [fattrs (-> db :view :trace :list :filter-attrs)
-          fattrs (if (= ttype (:ttype fattrs)) fattrs {:ttype ttype})
-          fattrs (if (contains? fattrs k) (dissoc fattrs k) (assoc fattrs k v))]
-      {:db       (assoc-in db [:view :trace :list :filter-attrs] fattrs),
+  (fn [{:keys [db]} [_ k v]]
+    (let [fattrs (-> db :view :trace :list :filter)]
+      {:db       (assoc-in db [:view :trace :list :filter]
+                   (if (contains? fattrs k) (dissoc fattrs k) (assoc fattrs k {:selected v}))),
        :dispatch [:zico.views.mon-trace-list/refresh-list true]})))
-
 
 
 (zs/reg-event-fx ::handle-filter-config
@@ -72,7 +70,7 @@
 (zs/dispatch
   [:xhr/get (io/api "/config/ttypes") nil nil :on-success [::handle-ttypes-config]])
 
-(def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter-attrs]]))
+(def FILTER-ATTRS (zs/subscribe [:get [:view :trace :list :filter]]))
 
 
 (defn render-attrs [attrs ttype]
@@ -83,12 +81,12 @@
        ^{:key n}
        [:div.a
         (when ttype
-          (if (contains? filter-attrs k)
+          (if (:selected (get filter-attrs k))
             [:div.i
              (zw/svg-button
                :awe :cancel :red "Clear filter ..."
                [:do
-                [:dissoc [:view :trace :list :filter-attrs] k]
+                [:dissoc [:view :trace :list :filter] k]
                 [:zico.views.mon-trace-list/refresh-list true]])]
             [:div.i
              (zw/svg-button
