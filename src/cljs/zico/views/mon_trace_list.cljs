@@ -35,7 +35,7 @@
                              :let [v (get-in vroot [:filter k :selected])]
                              :when (and (string? k) (string? v))] {k v}))]
     (merge
-      {:limit 50, :offset offset, :fetch-attrs true}
+      {:limit 50, :offset offset, :fetch-attrs true, :spans-only (not (:deep-search vroot))}
       (when-not (empty? attrs) {:attr-matches attrs})
       (when min-duration {:min-duration (* min-duration 1000000000)})
       (when time {:min-tstamp (ctf/unparse PARAM-FORMATTER time)
@@ -218,7 +218,7 @@
            [::filter-list [:view :trace :list :sort :dur] (not (:dur sort))]
            :opaque (:dur sort))
          (zw/svg-button
-           :awe :binoculars :light "Deep search"
+           :awe :object-group :light "Group Spans"
            [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list true]]
            :opaque deep-search)
          (zw/svg-button
