@@ -152,8 +152,6 @@
        :on-success [::handle-xhr-result nil]
        :on-error zv/DEFAULT-SERVER-ERROR]))
   (zws/render-screen
-    :main-menu zv/main-menu
-    :user-menu zv/USER-MENU
     :hide-menu-btn true
     :toolbar [zws/list-screen-toolbar
               :vpath [:view :trace :tree],

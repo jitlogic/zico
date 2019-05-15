@@ -21,24 +21,19 @@
        [:set [:view :status-bar] nil])]))
 
 
-(defn render-screen [& {:keys [toolbar caption central hide-menu-btn main-menu user-menu]}]
+(defn render-screen [& {:keys [toolbar caption central user-menu]}]
   "Renders whole screen that consists of main panel, toolbar and menu bar."
-  (let [menu-state (zs/subscribe [:get [:view :menu]])
-        status-bar (zs/subscribe [:get [:view :status-bar]])]
+  (let [status-bar (zs/subscribe [:get [:view :status-bar]])]
     (fn []
-      (let [{:keys [open?]} @menu-state]
-        [:div.top-container
-         (when main-menu [main-menu])
-         [:div.main
-          [:div.toolbar
-           [(if (or open? hide-menu-btn) :div.itm.display-none :div.itm)
-            (zw/svg-button :awe :menu :light "Open menu" [:toggle [:view :menu :open?]])]
-           (or toolbar [:div.flexible.flex [:div.cpt caption]])
-           (when user-menu) user-menu]
-          [:div.central-panel central]
-          (render-status-bar @status-bar)]
-         [zp/render-popup-stack]
-         ]))))
+      [:div.top-container
+       [:div.main
+        [:div.toolbar
+         (or toolbar [:div.flexible.flex [:div.cpt caption]])
+         (when user-menu) user-menu]
+        [:div.central-panel central]
+        (render-status-bar @status-bar)]
+       [zp/render-popup-stack]
+       ])))
 
 
 (defn on-scroll-fn [on-scroll]
