@@ -58,6 +58,9 @@
    (s/optional-key :max-tstamp)   s/Str                     ; ?? Date
    (s/optional-key :min-duration) s/Int
    (s/optional-key :attr-matches) {s/Str s/Str}
+   (s/optional-key :text)         s/Str
+   (s/optional-key :match-start)  s/Bool
+   (s/optional-key :match-end)    s/Bool
    })
 
 

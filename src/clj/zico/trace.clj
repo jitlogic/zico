@@ -33,11 +33,14 @@
 
 (defn parse-search-query [{:keys [fetch-attrs errors-only spans-only
                                   min-tstamp max-tstamp min-duration
-                                  attr-matches]}]
+                                  attr-matches text match-start match-end]}]
   (let [q (TraceSearchQuery.)]
     (when fetch-attrs (.withFetchAttrs q))
     (when errors-only (.withErrorsOnly q))
     (when spans-only (.withSpansOnly q))
+    (when-not (empty? text) (.setText q text))
+    (when match-start (.withMatchStart q))
+    (when match-end (.withMatchEnd q))
     (when min-tstamp (.setMinTstamp q (* 1000000 (ctc/to-long (ctf/parse PARAM-FORMATTER min-tstamp)))))
     (when max-tstamp (.setMaxTstamp q (* 1000000 (ctc/to-long (ctf/parse PARAM-FORMATTER max-tstamp)))))
     (when min-duration (.setMinDuration q min-duration))

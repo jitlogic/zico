@@ -28,6 +28,7 @@
 
 (defn make-filter [db offset]
   (let [vroot (-> db :view :trace :list),
+        text (-> vroot :search :text)
         min-duration (get-in vroot [:filter :min-duration :selected])
         time (get-in vroot [:filter :time :selected])
         errors-only (get-in vroot [:filter :errors-only :selected])
@@ -41,6 +42,7 @@
       (when time {:min-tstamp (ctf/unparse PARAM-FORMATTER time)
                   :max-tstamp (ctf/unparse PARAM-FORMATTER (zw/day-next time))})
       (when errors-only {:errors-only errors-only})
+      (when text {:text text})
       )))
 
 
@@ -238,7 +240,7 @@
               :add-left [toolbar-left],
               :add-right [toolbar-right]
               :sort-ctls {},
-              :search-box false,
+              :search-box true,
               :on-refresh [::refresh-list true]]
     :central [zws/list-interior
               :vpath [:view :trace :list]
