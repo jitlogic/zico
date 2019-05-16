@@ -128,7 +128,7 @@
 
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
-  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration desc recs calls errs attrs error children]
+  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration desc recs calls errs attrs error has-children]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
     (let [tid (zu/to-tid t)]
       ^{:key tid}
@@ -148,7 +148,7 @@
         (zw/svg-button
           :awe :chart-bar :text "Method call stats"
           [:to-screen "mon/trace/stats" {:tid tid}])
-        (when (and dtrace-links (seq children))
+        (when (and dtrace-links has-children)
           (zw/svg-button
             :ent :flow-cascade :blue "Distributed trace"
             [:to-screen "mon/trace/dtree" {:tid tid}]))
@@ -159,6 +159,8 @@
 
 
 (def SHOW-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
+(def GROUP-SPANS (zs/subscribe [:get [:view :trace :list :deep-search]]))
+
 
 (def TRACE-KIND-ICONS
   {"SERVER" [:awe :left-dir :green]
@@ -176,7 +178,7 @@
     [:awe :paw :text]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errs error children] :as t}]
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errs error has-children] :as t}]
     (let [tid (zu/to-tid t), [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
       ^{:key tid}
       [:div.itm
@@ -199,8 +201,8 @@
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)
            (zw/svg-icon :awe :bug :red) (str errs)])
-        (when dtrace-links
-          (if (seq children)
+        (when (and dtrace-links @GROUP-SPANS)
+          (if has-children
             (zw/svg-icon :ent :flow-cascade :blue, :class " clickable btn-dtrace", :title "View distributed trace")
             (zw/svg-icon :ent :flow-cascade :dark :title "This is single trace")))
         (zw/svg-icon

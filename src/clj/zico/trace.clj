@@ -52,16 +52,17 @@
 (defn from-chunk-metadata [tfn c]
   (->
     (merge
-      {:trace-id  (.getTraceIdHex c)
-       :span-id   (.getSpanIdHex c)
-       :parent-id (.getParentIdHex c)
-       :chunk-num (.getChunkNum c)
-       :tst       (.getTstamp c)
-       :tstamp    (zu/str-time-yymmdd-hhmmss-sss (long (/ (.getTstamp c) 1000000)))
-       :duration  (.getDuration c)
-       :recs      (.getRecs c)
-       :calls     (.getCalls c)
-       ;:errors    (.getErrors c)
+      {:trace-id     (.getTraceIdHex c)
+       :span-id      (.getSpanIdHex c)
+       :parent-id    (.getParentIdHex c)
+       :chunk-num    (.getChunkNum c)
+       :tst          (.getTstamp c)
+       :tstamp       (zu/str-time-yymmdd-hhmmss-sss (long (/ (.getTstamp c) 1000000)))
+       :duration     (.getDuration c)
+       :recs         (.getRecs c)
+       :calls        (.getCalls c)
+       :has-children (.isHasChildren c)
+       :errors       (.getErrors c)
        }
       (when (.hasError c) {:error true})
       (when-let [attrs (.getAttributes c)]

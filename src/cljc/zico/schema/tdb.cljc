@@ -69,6 +69,7 @@
    :span-id                     s/Str
    :chunk-num                   s/Int
    :desc                        s/Str
+   :has-children                s/Bool
    (s/optional-key :parent-id)  (s/maybe s/Str)
    (s/optional-key :error)      s/Bool
    (s/optional-key :tst)        s/Int                       ; Timestamp in milliseconds since Epoch
@@ -76,7 +77,7 @@
    (s/optional-key :duration)   s/Int
    (s/optional-key :recs)       s/Int
    (s/optional-key :calls)      s/Int
-   (s/optional-key :errs)       s/Int
+   (s/optional-key :errors)     s/Int
    (s/optional-key :attrs)      {s/Str s/Any}
    (s/optional-key :children)   [(s/recursive #'ChunkMetadata)]
    })
