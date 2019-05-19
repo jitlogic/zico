@@ -213,20 +213,26 @@
 (defn toolbar-left []
   (let [view-state (zs/subscribe [:get [:view :trace :list]])]
     (fn []
-      (let [{:keys [sort suppress deep-search]} @view-state]
+      (let [{:keys [sort show-stats deep-search show-hosts]} @view-state]
         [:div.flexible.flex
          (zw/svg-button
            :awe :sort-alt-down :light "Sort by duration"
            [::filter-list [:view :trace :list :sort :dur] (not (:dur sort))]
            :opaque (:dur sort))
          (zw/svg-button
+           :awe :chart-bar :light "Show stats"
+           [:toggle [:view :trace :list :show-stats]]
+           :opaque show-stats)
+         (zw/svg-button
+           :awe :cubes :light "Show origin hosts"
+           [:toggle [:view :trace :list :show-hosts]]
+           :opaque show-hosts)
+         (zw/svg-button
            :awe :object-group :light "Group Spans"
            [:do [:toggle [:view :trace :list :deep-search]] [::refresh-list true]]
            :opaque deep-search)
-         (zw/svg-button
-           :awe :eye :light "Show details"
-           [:toggle [:view :trace :list :suppress]]
-           :opaque suppress)]))))
+         ])
+      )))
 
 
 (defn trace-list [params]
@@ -260,9 +266,13 @@
 (defn dtrace-toolbar-left []
   [:div.flexible.flex
    (zw/svg-button
-     :awe :eye :light "Suppress details"
-     [:toggle [:view :trace :list :suppress]]
-     :opaque zvmt/SHOW-DETAILS)])
+     :awe :chart-bar :light "Show stats"
+     [:toggle [:view :trace :list :show-stats]]
+     :opaque zvmt/SHOW-STATS)
+   (zw/svg-button
+     :awe :cubes :light "Show origin hosts"
+     [:toggle [:view :trace :list :show-hosts]]
+     :opaque zvmt/SHOW-HOSTS)])
 
 
 (defn chunks-to-list [{:keys [children] :as t} depth]

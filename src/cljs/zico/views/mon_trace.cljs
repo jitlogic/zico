@@ -158,7 +158,8 @@
           )]])))
 
 
-(def SHOW-DETAILS (zs/subscribe [:get [:view :trace :list :suppress]]))
+(def SHOW-STATS (zs/subscribe [:get [:view :trace :list :show-stats]]))
+(def SHOW-HOSTS (zs/subscribe [:get [:view :trace :list :show-hosts]]))
 (def GROUP-SPANS (zs/subscribe [:get [:view :trace :list :deep-search]]))
 
 
@@ -186,6 +187,9 @@
        [:div.seg
         [:div.ct t]
         [:div.flexible]
+        (when @SHOW-HOSTS
+          (println (str attrs))
+          [:div.ch (get attrs "local.service")])
         [:div.seg
          {:style {:padding-left (str (* 16 (or depth 0)) "px")}}
          (zw/svg-icon-2
@@ -196,7 +200,7 @@
         [(if error :div.c2.c-red :div.c2.c-text) desc]]
        [:div.seg
         (zw/svg-icon :awe :clock :blue) (zu/ns-to-str duration false)
-        (when @SHOW-DETAILS
+        (when @SHOW-STATS
           [:div.flex
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)

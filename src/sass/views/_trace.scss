@@ -15,6 +15,16 @@
       flex: 0 0 4em;
       text-align: center;
     }
+    .ch {
+      width: 5em;
+      margin-left: 0.25em;
+      margin-right: 0.25em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+      color: cadetblue;
+    }
     .c2 {
       flex: 4 4 80%;
       margin-right: 0.5em;
