@@ -154,10 +154,11 @@
                 :headers {"WWW-Authenticate", "Basic realm=\"ZICO\", charset=\"UTF-8\""}})
 
 (defn http-basic-filter [f users pwcheck]
-  (fn [{:keys [headers] :as req}]
+  (fn [{:keys [headers uri] :as req}]
     (let [auth (get headers "authorization" "")
           [_ auths authv] (re-matches RE-AUTH-HDR auth)]
       (cond
+        (.startsWith uri "/agent") (f req)
         (empty? auth) WWW-AUTHZ
         (not (.equalsIgnoreCase "Basic" auths)) WWW-AUTHZ
         :else
