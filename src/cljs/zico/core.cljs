@@ -21,4 +21,3 @@
 (defn init! []
   (mount-root))
 
-(def x 1)

@@ -7,8 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/tools.reader "1.3.2"]
 
-                 [io.zorka/zorka-tdb "1.90.7-SNAPSHOT" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
-                 [com.jitlogic.zorka/zorka-netkit "1.90.7-SNAPSHOT"]
+                 [com.jitlogic.zorka/zorka-common "1.90.7-SNAPSHOT" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
                  [prismatic/schema "1.1.9"]
                  [slingshot "0.12.2"]
                  [aero "1.1.3"]
@@ -23,6 +22,7 @@
                  [metosin/compojure-api "2.0.0-alpha28"]
                  [hiccup "1.0.5"]
 
+                 [clj-http "3.10.0"]
                  [org.slf4j/slf4j-api "1.7.25"]
                  [ch.qos.logback/logback-classic "1.0.13"]
                  [org.clojure/tools.logging "0.4.1"]]

@@ -20,11 +20,10 @@
     [ring.util.response :refer [redirect]]
     [schema.core :as s]
     [zico.schema.tdb]
+    [zico.schema.server]
     [zico.trace :as ztrc]
     [zico.util :as zu])
-  (:import (com.jitlogic.netkit.util NetkitUtil)
-           (io.zorka.tdb.store RotatingTraceStore)
-           (com.jitlogic.zorka.common.util Base64)))
+  (:import (com.jitlogic.zorka.common.util Base64)))
 
 
 (defn render-loading-page [_]
@@ -87,7 +86,7 @@
         :query-params [{limit :- s/Int 100}]
         :path-params [id :- s/Str]
         :return [s/Str]
-        (rhr/ok (sort (seq (.getAttributeValues ^RotatingTraceStore (:tstore app-state) id limit)))))
+        (rhr/ok "NIECZYNNE"))
       (ca/GET "/:tid" []
         :summary "return all spans of a distributed trace"
         :path-params [tid :- s/Str]
@@ -124,13 +123,13 @@
         app-state
         (get headers "x-zorka-session-id")
         (get headers "x-zorka-session-reset")
-        (NetkitUtil/toByteArray body)))
+        body))
     (cc/POST "/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc
         app-state
         (get headers "x-zorka-session-id")
         (get headers "x-zorka-trace-id")
-        (NetkitUtil/toByteArray body)))))
+        body))))
 
 
 (defn zorka-web-routes [app-state]
@@ -138,7 +137,7 @@
         agent-routes (zico-agent-routes app-state)]
     (cc/routes
       (cc/GET "/" []
-        {:status  302, :body "Redirecting...", :headers {"Location" "/view/mon/trace/list"}})
+        {:status  302, :body "Redirecting...", :headers {"Location" "/view#mon/trace/list"}})
 
       (cc/context "/api" [] api-routes)
       (cc/context "/agent" [] agent-routes)

@@ -41,17 +41,6 @@
   {:type s/Keyword
    :users {s/Str s/Str}})
 
-(s/defschema TextIndexConfig
-  {:base-size s/Int, :max-size s/Int})
-
-(s/defschema TraceStoreConfig
-  {:path            s/Str
-   :maint-threads   s/Int
-   :maint-interval  s/Int
-   :session-timeout s/Int
-   :rotate          {:max-size s/Int, :max-num  s/Int}
-   :text            TextIndexConfig
-   :meta            TextIndexConfig})
 
 (s/defschema TraceType
   {:component             s/Str
@@ -63,12 +52,27 @@
    :description s/Str
    :icon s/Str})
 
+(s/defschema ElasticConfig
+  {:url                       s/Str
+   (s/optional-key :username) s/Str
+   (s/optional-key :password) s/Str})
+
+(s/defschema ElasticIndexConfig
+  {:url                       s/Str
+   (s/optional-key :username) s/Str
+   (s/optional-key :password) s/Str
+   :name                      s/Str
+   :max-size                  s/Num
+   :num-shards                s/Num
+   :num-replicas              s/Num})
+
 (s/defschema ZicoConf
   {:home-dir    s/Str
+   :elastic     ElasticConfig
+   :tstore ElasticIndexConfig
    :http        JettyHttpConf
    :log         LoggerConfig
    :auth        AuthConfig
-   :tstore      TraceStoreConfig
    :filter-defs [FilterDef]
    :trace-types {s/Keyword TraceType}
    })

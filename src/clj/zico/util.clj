@@ -8,7 +8,7 @@
     [clojure.tools.logging :as log])
   (:import
     (java.io File)
-    (java.util Properties)))
+    (java.util Properties HashMap Base64)))
 
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
@@ -166,3 +166,36 @@
      (include-css (str "/css/zico" (if (System/getProperty "zico.dev.mode") ".css" ".min.css")))]
     [:body {:class "body-container"}
      content]))
+
+(defn keywordize
+  ([m]
+   (cond
+     (map? m)
+     (into {}
+       (for [[k v] m :let [k (keyword k)]]
+         {(keyword k) (keywordize v)}))
+     :else m)))
+
+(defn java-map [m]
+  (let [rslt (HashMap.)]
+    (doseq [[k v] m] (.put rslt k v))
+    rslt))
+
+
+(defn without-nil-vals [m]
+  (into {} (for [[k v] m :when (some? v)] {k v})))
+
+(defn b64enc [b]
+  (.encodeToString (Base64/getEncoder) b))
+
+(defn b64dec [^String s]
+  (.decode (Base64/getDecoder) s))
+
+(defn parse-hex-tid [^String s]
+  "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."
+  (cond
+    (nil? s) nil
+    (re-matches #"[0-9a-fA-F]{16}" s) [(.longValue (BigInteger. s 16)) 0]
+    (re-matches #"[0-9a-fA-F]{32}" s) [(.longValue (BigInteger. (.substring s 0 16) 16))
+                                       (.longValue (BigInteger. (.substring s 16 32) 16))]
+    :else nil))

@@ -43,31 +43,16 @@
         :users {"admin" "zico"}}
 
 
+ :elastic {:url "http://127.0.0.1:9200"}
 
  ; Configuration of main data store
- :tstore   {:path            #join [#ref [:home-dir] "/data"]
-            :maint-threads   2
-            :maint-interval  10
-            :session-timeout 120
-
-            ; Sizes and
-            :rotate          {
-                              :max-size 8192   ; 16GB * 8 -> 128GB
-                              :max-num  16
-                              }
-
-            ; Text index parameters
-            :text
-                             {:base-size 4096
-                              :max-size  262144
-                              }
-
-            ; Metadata index parameters
-            :meta            {
-                              :base-size 4096
-                              :max-size  262144
-                              }
-            }
+ :tstore {:url          #ref [:elastic :url]
+          :username     #join [#ref [:elastic :username] nil]
+          :password     #join [#ref [:elastic :password] nil]
+          :name         "ztrace"
+          :max-size     4096
+          :num-shards   1
+          :num-replicas 0}
 
  :filter-defs
            [{:attr "component", :description "Component", :icon "awe/puzzle#light"}
