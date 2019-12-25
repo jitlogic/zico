@@ -23,7 +23,7 @@
     [zico.schema.server]
     [zico.trace :as ztrc]
     [zico.util :as zu])
-  (:import (com.jitlogic.zorka.common.util Base64)))
+  (:import (com.jitlogic.zorka.common.util Base64 ZorkaUtil)))
 
 
 (defn render-loading-page [_]
@@ -122,14 +122,15 @@
       (ztrc/submit-agd
         app-state
         (get headers "x-zorka-session-id")
-        (get headers "x-zorka-session-reset")
-        body))
+        (.equalsIgnoreCase "true" (get headers "x-zorka-session-reset" "false"))
+        (ZorkaUtil/slurp body)))
     (cc/POST "/submit/trc" {:keys [headers body]}
       (ztrc/submit-trc
         app-state
         (get headers "x-zorka-session-id")
         (get headers "x-zorka-trace-id")
-        body))))
+        0
+        (ZorkaUtil/slurp body)))))
 
 
 (defn zorka-web-routes [app-state]
@@ -173,6 +174,7 @@
 (defn password-check [pwhash passwd]
   ; TODO implement some password hashing
   (= pwhash passwd))
+
 
 (defn wrap-web-middleware [handler]
   (-> handler

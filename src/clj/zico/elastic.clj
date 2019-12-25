@@ -5,7 +5,8 @@
     [clojure.string :refer [join]]
     [clojure.data.json :as json]
     [clj-http.client :as http]
-    [clojure.set :as cs])
+    [clojure.set :as cs]
+    [clojure.tools.logging :as log])
   (:import
     (java.util HashMap Set Map)
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector)
@@ -62,15 +63,24 @@
 (defn- index-headers [db tsnum]
   {:accept "application/json", :content-type "application/json"})
 
+(defn checked-req [req resp]
+  (when-not (<= 200 (:status resp) 299)
+    (log/error "Error occured in elastic request: req:" req "resp: " resp)
+    (throw (ex-info (str "Error calling elastic: " (:status resp) ": " (:body resp)) {:req req :resp resp})))
+  resp)
+
 (defn- elastic [http-method db tsnum & {:keys [path body]}]
-  (-> (http-method
-        (apply str (format "%s/%s_%06x" (:url db) (:name db) tsnum) path)
-        (merge
-          {:headers (index-headers db tsnum)}
-          (when (map? body) {:body (json/write-str body)})
-          (when (string? body) {:body body})))
+  (let [req (merge
+              {:headers (index-headers db tsnum)
+               :unexceptional-status (constantly true)}
+              (when (map? body) {:body (json/write-str body)})
+              (when (string? body) {:body body}))
+        url (apply str (format "%s/%s_%06x" (:url db) (:name db) tsnum) path)]
+    (->>
+      (http-method url req)
+      (checked-req req)
       parse-response
-      zu/keywordize))
+      zu/keywordize)))
 
 (defn index-create [db tsnum]
   (elastic
@@ -94,36 +104,42 @@
     (range id0 (+ id0 block-sz))))
 
 (defn syms-add [db tsnum syms]
-  (let [idx (format "%s_%06x" (:name db) tsnum)
-        rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms)))
-        data (for [[s i] rslt]
-               [{:index {:_index idx, :_id (str "SYM." i)}}
-                {:doc-type TYPE-SYMBOL, :symbol s}])
-        body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-    (elastic
-      http/post db tsnum
-      :path ["/_bulk"]
-      :body body)                                           ; TODO sprawdzic czy poprawnie sie dodaly
-    rslt))
+  (if (empty? syms)
+    {}
+    (let [idx (format "%s_%06x" (:name db) tsnum)
+          rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms)))
+          data (for [[s i] rslt]
+                 [{:index {:_index idx, :_id (str "SYM." i)}}
+                  {:doc-type TYPE-SYMBOL, :symbol s}])
+          body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
+      (elastic
+        http/post db tsnum
+        :path ["/_bulk"]
+        :body body)                                         ; TODO sprawdzic czy poprawnie sie dodaly
+      rslt)))
 
 (defn syms-resolve [db tsnum sids]
-  (let [docs (elastic http/get db tsnum :path ["/_mget"]
-                      :body {:docs (for [s sids] {:_id (str "SYM." s)})})]
-    (into {}
-      (for [d (:docs docs)]
-        {(Long/parseLong (.substring ^String (get d "_id") 4))
-         (get-in d ["_source" "symbol"])}))))
+  (if (empty? sids)
+    {}
+    (let [docs (elastic http/get db tsnum :path ["/_mget"]
+                        :body {:docs (for [s sids] {:_id (str "SYM." s)})})]
+      (into {}
+        (for [d (:docs docs)]
+          {(Long/parseLong (.substring ^String (get d "_id") 4))
+           (get-in d ["_source" "symbol"])})))))
 
 (defn syms-search [db tsnum syms]
-  (let [idx (format "%s_%06x" (:name db) tsnum)
-        data (for [s syms]
-               [{:index idx}
-                {:query {:term {:symbol {:value s}}}}])
-        body (str (join "\n" (map json/write-str (apply concat data))) "\n")
-        rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
-    (into {}
-      (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
-        {(get-in h ["_source" "symbol"]) (Long/parseLong (.substring ^String (get h "_id") 4))}))))
+  (if (empty? syms)
+    {}
+    (let [idx (format "%s_%06x" (:name db) tsnum)
+          data (for [s syms]
+                 [{:index idx}
+                  {:query {:term {:symbol {:value s}}}}])
+          body (str (join "\n" (map json/write-str (apply concat data))) "\n")
+          rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
+      (into {}
+        (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
+          {(get-in h ["_source" "symbol"]) (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
 (defn syms-map [db tsnum m]
   "Given agent-side symbol map (aid -> name), produce agent-collector mapping (aid -> rid)"
@@ -136,42 +152,48 @@
         {aid rid}))))
 
 (defn mids-add [db tsnum mdescs]
-  (let [idx (format "%s_%06x" (:name db) tsnum),
-        rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs)))
-        data (for [[[c m s] i] rslt]
-               [{:index {:_index idx, :_id (str "MID." i)}}
-                {:doc-type TYPE-METHOD, :mdesc (str c "," m "," s)}])
-        body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-    (elastic
-      http/post db tsnum :path ["/_bulk"], :body body)
-    rslt))
+  (if (empty? mdescs)
+    {}
+    (let [idx (format "%s_%06x" (:name db) tsnum),
+          rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs)))
+          data (for [[[c m s] i] rslt]
+                 [{:index {:_index idx, :_id (str "MID." i)}}
+                  {:doc-type TYPE-METHOD, :mdesc (str c "," m "," s)}])
+          body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
+      (elastic
+        http/post db tsnum :path ["/_bulk"], :body body)
+      rslt)))
 
 (defn mids-resolve [db tsnum mids]
-  (let [docs (elastic http/get db tsnum :path ["/_mget"]
-                      :body {:docs (for [m mids] {:_id (str "MID." m)})})]
-    (into {}
-      (for [d (:docs docs) :let [mdesc (get-in d ["_source" "mdesc"])]]
-        {(Long/parseLong (.substring ^String (get d "_id") 4))
-         (vec (for [i (.split mdesc ",")] (Long/parseLong i)))}))))
+  (if (empty? mids)
+    {}
+    (let [docs (elastic http/get db tsnum :path ["/_mget"]
+                        :body {:docs (for [m mids] {:_id (str "MID." m)})})]
+      (into {}
+        (for [d (:docs docs) :let [mdesc (get-in d ["_source" "mdesc"])]]
+          {(Long/parseLong (.substring ^String (get d "_id") 4))
+           (vec (for [i (.split mdesc ",")] (Long/parseLong i)))})))))
 
 (defn mids-search [db tsnum mdescs]
-  (let [idx (format "%s_%06x" (:name db) tsnum),
-        data (for [[c m s] mdescs]
-               [{:index idx}
-                {:query {:term {:mdesc {:value (str c "," m "," s)}}}}])
-        body (str (join "\n" (map json/write-str (apply concat data))) "\n")
-        rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
-    (into {}
-      (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
-        {(vec (for [i (.split (get-in h ["_source" "mdesc"]) ",")] (Long/parseLong i)))
-         (Long/parseLong (.substring ^String (get h "_id") 4))}))))
+  (if (empty? mdescs)
+    {}
+    (let [idx (format "%s_%06x" (:name db) tsnum),
+          data (for [[c m s] mdescs]
+                 [{:index idx}
+                  {:query {:term {:mdesc {:value (str c "," m "," s)}}}}])
+          body (str (join "\n" (map json/write-str (apply concat data))) "\n")
+          rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
+      (into {}
+        (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
+          {(vec (for [i (.split (get-in h ["_source" "mdesc"]) ",")] (Long/parseLong i)))
+           (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
 (defn mids-map [db tsnum m]
   "Given agent-side mid map (aid -> [c,m,s]), produce agent-collector mapping (aid -> rid)"
   (let [mdefs (set (vals m)),
         rsmap (mids-search db tsnum mdefs),
         amids (cs/difference mdefs (keys rsmap)),
-        asmap (syms-add db tsnum amids)]
+        asmap (mids-add db tsnum amids)]
     (into {}
       (for [[aid mdef] m :let [rid (or (rsmap mdef) (asmap mdef))] :when rid]
         {aid rid}))))
@@ -184,7 +206,7 @@
            (let [rslt (HashMap.)]
              (doseq [[sid sym] (syms-resolve db tsnum (seq sids))]
                (.put rslt (.intValue sid) sym))
-             ^Map rslt))
+             rslt))
     (^Map resolveMethods [_ ^Set mids]
       (let [rslt (HashMap.),
             mdss (mids-resolve db tsnum (seq mids))
@@ -209,7 +231,8 @@
     (^Map newSymbols [_ ^Map m]
       (let [rslt (HashMap.)]
         (doseq [[aid rid] (syms-map db tsnum (into {} m))]
-          (.put rslt (.intValue aid) (.intValue rid)))))
+          (.put rslt (.intValue aid) (.intValue rid)))
+        rslt))
     (^Map newMethods [_ ^Map m]
       (let [rslt (HashMap.),
             mdefs (into {} (for [[k v] m] {k, (mdef->vec v)}))
@@ -272,14 +295,16 @@
       (doseq [tcd tcds]
         (chunk-add db tsnum (tcd->doc tcd))))))
 
-(defn elastic-trace-store [{:keys [tstore] :as new-conf} old-conf old-store]
+(defn elastic-trace-store [tstore old-conf old-store]
   (let [state (or old-store (atom {:tsnum 1}))]
+    ;(println "tstore=" new-conf)
     (locking state
       (let [indexes (list-indexes tstore)
             tsnum (if (empty? indexes) 1 (apply max (map :tsnum indexes)))
             mapper (symbol-mapper tstore tsnum),
             store (chunk-store tstore tsnum)
             collector (Collector. tsnum mapper store false)]
+        (when (empty? indexes) (index-create tstore tsnum))
         (swap! state assoc :tsnum tsnum, :mapper mapper, :store store, :collector collector)))
     state))
 

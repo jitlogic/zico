@@ -81,7 +81,6 @@
                 (io/resource "zico/zico.edn")
                 (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))]
      (configure-logger (-> conf :log))
-     (zu/ensure-dir (-> conf :tstore :path))
      (zu/ensure-dir (-> conf :log :path))
      (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
