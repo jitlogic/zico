@@ -39,7 +39,8 @@
                               :io.zorka.tdb :info
                               }}
 
- :auth {:type :http-basic
+ :auth {:type :none
+        ;:type :http-basic
         :users {"admin" "zico"}}
 
 

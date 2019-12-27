@@ -26,7 +26,7 @@
 
 
 (s/defschema TraceRecord
-  {:method                     TraceMethod
+  {:method                     s/Str
    :pos                        s/Int
    :errors                     s/Int
    :duration                   s/Int
@@ -49,8 +49,12 @@
 
 
 (s/defschema TraceSearchQuery
-  {(s/optional-key :limit)        s/Int
+  {(s/optional-key :traceid)      s/Str                     ; Look for exact trace ID
+   (s/optional-key :spanid)       s/Str                     ; Look for exact span ID
+   (s/optional-key :limit)        s/Int
    (s/optional-key :offset)       s/Int
+   (s/optional-key :order-by)     (s/enum :tst :duration :calls :recs :errors)
+   (s/optional-key :order-dir)    (s/enum :asc :desc)
    (s/optional-key :fetch-attrs)  s/Bool
    (s/optional-key :errors-only)  s/Bool
    (s/optional-key :spans-only)   s/Bool
@@ -65,20 +69,23 @@
 
 
 (s/defschema ChunkMetadata
-  {:trace-id                    s/Str
-   :span-id                     s/Str
-   :chunk-num                   s/Int
-   :desc                        s/Str
-   :has-children                s/Bool
-   (s/optional-key :parent-id)  (s/maybe s/Str)
-   (s/optional-key :error)      s/Bool
-   (s/optional-key :tst)        s/Int                       ; Timestamp in milliseconds since Epoch
-   (s/optional-key :tstamp)     s/Str                       ; Timestamp
-   (s/optional-key :duration)   s/Int
-   (s/optional-key :recs)       s/Int
-   (s/optional-key :calls)      s/Int
-   (s/optional-key :errors)     s/Int
-   (s/optional-key :attrs)      {s/Str s/Any}
-   (s/optional-key :children)   [(s/recursive #'ChunkMetadata)]
+  {:traceid                   s/Str
+   :spanid                    s/Str
+   (s/optional-key :parentid) (s/maybe s/Str)
+   (s/optional-key :chnum)    s/Int
+   (s/optional-key :tst)      s/Int                       ; Timestamp in milliseconds since Epoch
+   (s/optional-key :tstamp)   s/Str                       ; Timestamp
+   (s/optional-key :desc)     s/Str
+   (s/optional-key :error)    s/Bool
+   (s/optional-key :duration) s/Int
+   (s/optional-key :klass)    s/Str
+   (s/optional-key :method)   s/Str
+   (s/optional-key :ttype)    s/Str
+   (s/optional-key :recs)     s/Int
+   (s/optional-key :calls)    s/Int
+   (s/optional-key :errors)   s/Int
+   (s/optional-key :tdata)    (s/maybe s/Str)
+   (s/optional-key :attrs)    {s/Str s/Any}
+   (s/optional-key :children) [(s/recursive #'ChunkMetadata)]
    })
 

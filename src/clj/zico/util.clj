@@ -186,10 +186,10 @@
   (into {} (for [[k v] m :when (some? v)] {k v})))
 
 (defn b64enc [b]
-  (.encodeToString (Base64/getEncoder) b))
+  (when b (.encodeToString (Base64/getEncoder) b)))
 
 (defn b64dec [^String s]
-  (.decode (Base64/getDecoder) s))
+  (when s (.decode (Base64/getDecoder) s)))
 
 (defn parse-hex-tid [^String s]
   "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."

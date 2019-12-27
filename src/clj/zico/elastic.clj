@@ -11,31 +11,35 @@
     (java.util HashMap Set Map)
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector)
     (com.jitlogic.zorka.common.tracedata SymbolicMethod)
-    (java.util.regex Pattern)))
+    (java.util.regex Pattern)
+    (com.jitlogic.zorka.common.cbor TraceRecordFlags)
+    (java.time LocalDateTime ZoneOffset)))
 
 (def TYPE-SYMBOL 1)
 (def TYPE-METHOD 2)
 (def TYPE-CHUNK 3)
 (def TYPE-SEQ 4)
 
-(def DOC-MAPPINGS
+(def DOC-MAPPING-PROPS                                      ; TODO wyrównac ten schemat z zico.schema.tdb/ChunkMetadata
   {:doctype {:type :long}
-   :tid {:type :text}
-   :sid {:type :text}
-   :pid {:type :text}
+   :traceid {:type :keyword}
+   :spanid {:type :keyword}
+   :parentid {:type :keyword}
    :chnum {:type :long}
+   :tst {:type :long}
    :tstamp {:type :date}
+   ; :desc is not saved in elasticsearch
+   :error {:type :boolean}
    :duration {:type :long}
-   :method {:type :text}
+   :klass {:type :keyword}
+   :method {:type :keyword}
+   :recs {:type :long}
    :calls {:type :long}
    :errors {:type :long}
-   :recs {:type :long}
+   :ttype {:type :keyword}
+
    :tdata {:type :binary, :index false}
-   :tstart {:type :date}
-   :tstop {:type :date}
-   :ttype {:type :text, :analyzer :keyword}
-   :attr {:type :text}
-   :term {:type :text}
+   :terms {:type :text}
    :mids {:type :long}
 
    ; symbol registries and sequence generators
@@ -44,21 +48,19 @@
    :seq {:type :long}
    })
 
+(def DOC-MAPPING-TEMPLATES
+  [{:attrs_as_strings
+    {:match   "attrs.*"
+     :mapping {:type :text}}}])
+
+(def DOC-MAPPINGS
+  {:properties DOC-MAPPING-PROPS
+   :dynamic_templates DOC-MAPPING-TEMPLATES
+   })
+
 (defn parse-response [resp]
   (when (string? (:body resp))
     (json/read-str (:body resp))))
-
-(defn list-indexes [db]
-  "List indexes matching `mask` in database `db`"
-  (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
-    (for [ix (-> (http/get (str (:url db) "/_cat/indices")
-                           {:headers {:accept "application/json"}})
-                 parse-response)
-          :let [ix (zu/keywordize ix), xname (:index ix),
-                status (keyword (:status ix)), health (keyword (:health ix))
-                m (when (string? xname) (re-matches mask xname))]
-          :when m]
-      (assoc ix :status status :health health, :tsnum (Long/parseLong (second m) 16)))))
 
 (defn- index-headers [db tsnum]
   {:accept "application/json", :content-type "application/json"})
@@ -82,13 +84,25 @@
       parse-response
       zu/keywordize)))
 
+(defn list-indexes [db]
+  "List indexes matching `mask` in database `db`"
+  (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
+    (for [ix (-> (http/get (str (:url db) "/_cat/indices")
+                           {:headers {:accept "application/json"}})
+                 parse-response)
+          :let [ix (zu/keywordize ix), xname (:index ix),
+                status (keyword (:status ix)), health (keyword (:health ix))
+                m (when (string? xname) (re-matches mask xname))]
+          :when m]
+      (assoc ix :status status :health health, :tsnum (Long/parseLong (second m) 16)))))
+
 (defn index-create [db tsnum]
   (elastic
     http/put db tsnum
     :body {:settings
                      {:number_of_shards   (:num-shards db 1)
                       :number_of_replicas (:num-replicas db 0)}
-           :mappings {:properties DOC-MAPPINGS}}))
+           :mappings DOC-MAPPINGS}))
 
 (defn index-delete [db tsnum]
   (elastic http/delete db tsnum))
@@ -110,7 +124,7 @@
           rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms)))
           data (for [[s i] rslt]
                  [{:index {:_index idx, :_id (str "SYM." i)}}
-                  {:doc-type TYPE-SYMBOL, :symbol s}])
+                  {:doctype TYPE-SYMBOL, :symbol s}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
       (elastic
         http/post db tsnum
@@ -158,7 +172,7 @@
           rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs)))
           data (for [[[c m s] i] rslt]
                  [{:index {:_index idx, :_id (str "MID." i)}}
-                  {:doc-type TYPE-METHOD, :mdesc (str c "," m "," s)}])
+                  {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
       (elastic
         http/post db tsnum :path ["/_bulk"], :body body)
@@ -244,46 +258,66 @@
 (defn millis->date [l]
   l)
 
+(defn str->field [s]
+  (let [rslt
+        (str "attrs."
+             (-> s
+                 (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
+                 (.replaceAll "^[_\\.]" "")
+                 .toLowerCase))]
+    (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
+
 (defn tcd->doc [^TraceChunkData tcd]
   (zu/without-nil-vals
-    {:type     TYPE-CHUNK
-     :tid      (.getTraceIdHex tcd)
-     :sid      (.getSpanIdHex tcd)
-     :pid      (.getParentIdHex tcd)
-     :chnum    (.getChunkNum tcd)
-     :tstamp   (millis->date (.getTstamp tcd))
-     :duration (- (.getTstop tcd) (.getTstart tcd))
-     :method   (.getMethod tcd)
-     :calls    (.getCalls tcd)
-     :errors   (.getErrors tcd)
-     :recs     (.getRecs tcd)
-     :tdata    (zu/b64enc (.getTraceData tcd))
-     :ttype    (.getAttr tcd "component")
-     :attr     (when (.getAttrs tcd) (for [[k v] (.getAttrs tcd)] (str k "=" v)))
-     :term     (seq (.getTerms tcd))
-     :mids     (seq (.getMethods tcd))}))
+    (merge
+      {:doctype  TYPE-CHUNK
+       :traceid  (.getTraceIdHex tcd)
+       :spanid   (.getSpanIdHex tcd)
+       :parentid (.getParentIdHex tcd)
+       :chnum    (.getChunkNum tcd)
+       :tst      (.getTstamp tcd)
+       :tstamp   (millis->date (.getTstamp tcd))
+       :error    (.hasFlag tcd TraceRecordFlags/TF_ERROR_MARK)
+       :duration (- (.getTstop tcd) (.getTstart tcd))
+       :klass    (.getKlass tcd)
+       :method   (.getMethod tcd)
+       :recs     (.getRecs tcd)
+       :calls    (.getCalls tcd)
+       :errors   (.getErrors tcd)
+       :ttype    (.getTtype tcd)
+       :tdata    (zu/b64enc (.getTraceData tcd))
+       :terms     (seq (.getTerms tcd))
+       :mids     (seq (.getMethods tcd))}
+      (into {}
+        (for [[k v] (.getAttrs tcd) :let [f (str->field k) ]]
+          {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
 
-(def RE-ATTR #"([^=])=(.*)")
+(def RE-ATTR #"([^\t]*)\t(.*)")
 
-(defn doc->tcd [{:keys [tid sid pid chnum tstamp duration method calls errors recs tdata ttype attr term mids]}]
-  (let [[tid1 tid2] (zu/parse-hex-tid tid)
-        [sid _] (zu/parse-hex-tid sid)
-        [pid _] (zu/parse-hex-tid pid)
-        rslt (TraceChunkData. tid1 tid2 sid (or pid 0) chnum)]
-    (when tstamp (.setTstamp rslt tstamp))
+(defn doc->tcd [{:keys [traceid spanid parentid chnum tst duration klass method calls errors recs tdata ttype term mids] :as doc}]
+  (let [[tid1 tid2] (zu/parse-hex-tid traceid)
+        [spanid _] (zu/parse-hex-tid spanid)
+        [pid _] (zu/parse-hex-tid parentid)
+        rslt (TraceChunkData. tid1 tid2 spanid (or pid 0) chnum)]
+    (when tst (.setTstamp rslt tst))
+    (when duration (.setDuration rslt duration))
+    (when class (.setKlass rslt klass))
     (when method (.setMethod rslt method))
     (when calls (.setCalls rslt calls))
     (when errors (.setErrors rslt errors))
     (when recs (.setRecs rslt recs))
     (when tdata (.setTraceData rslt (zu/b64dec tdata)))
-    (doseq [a attr :let [[_ k v] (re-matches RE-ATTR a)]] (.setAttr rslt k v))
+    (when ttype (.setTtype rslt ttype))
+    ; TODO (doseq [a attr :let [[_ v k] (re-matches RE-ATTR a)]] (.setAttr rslt k v))
     (doseq [t term] (.addTerm rslt t))
     (doseq [m mids] (.addMethod rslt (.intValue m)))
     rslt))
 
-(defn chunk-add [db tsnum {:keys [tid sid pid chnum] :as doc}]
-  (let [id (str "TRC." tid "." sid "." (or pid "00000000") "." chnum)]
-    (elastic http/post db tsnum :path ["/_doc/" id] :body doc)))
+(def RE-TRC-CHUNK-ID #"TRC\.([0-9a-fA-F]{8,16})\.([0-9a-fA-F]{8})\.([0-9a-zA-Z]{8})\.([0-9a-zA-Z]+)")
+
+(defn chunk-add [db tsnum {:keys [traceid spanid parentid chnum] :as doc}]
+  (let [id (str "TRC." traceid "." spanid "." (or parentid "00000000") "." chnum)]
+    (elastic http/post db tsnum :path ["/_doc"] :body doc)))
 
 (defn chunk-store [db tsnum]
   "Returns trace chunk store with Elastic Search backend."
@@ -297,7 +331,6 @@
 
 (defn elastic-trace-store [tstore old-conf old-store]
   (let [state (or old-store (atom {:tsnum 1}))]
-    ;(println "tstore=" new-conf)
     (locking state
       (let [indexes (list-indexes tstore)
             tsnum (if (empty? indexes) 1 (apply max (map :tsnum indexes)))
@@ -308,7 +341,56 @@
         (swap! state assoc :tsnum tsnum, :mapper mapper, :store store, :collector collector)))
     state))
 
-(defn req->query [{:keys [fetch-attrs errors-only spans-only
-                                  min-tstamp max-tstamp min-duration
-                                  attr-matches text match-start match-end]}]
-  )
+(defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
+                    min-tstamp max-tstamp min-duration limit offset
+                    attr-matches text match-start match-end]}]
+  {:sort
+   (if order-by
+     {order-by {:order (or order-dir :desc)}}
+     {:tstamp {:order :desc}})
+   :query
+   {:bool
+    {:must
+     (filter
+       some?
+       [{:term {:doctype TYPE-CHUNK}}
+        (when traceid {:term {:traceid traceid}})
+        (when spanid {:term {:spanid spanid}})
+        (when min-duration {:range {:duration {:gte min-duration}}})
+        (when (or min-tstamp max-tstamp)
+          {:range {:tstamp (into {}
+                             (when min-tstamp {:gte min-tstamp})
+                             (when max-tstamp {:lte max-tstamp}))}})
+
+        ])}}})
+
+
+(def RSLT-FIELDS [:traceid :spanid :parentid :ttype :tstamp :duration :calls :errors :recs
+                  :klass :method])
+
+(def RE-ATTRF #"attrs\.(.*)")
+(def RE-ATTRV #"(.*)\t(.*)")
+
+(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks?]}]
+  (merge
+    (assoc
+      (select-keys doc RSLT-FIELDS)
+      :tstamp (.toString (LocalDateTime/ofEpochSecond (/ tstamp 1000), 0, (ZoneOffset/ofHours 0)))
+      :tst tstamp
+      :attrs (into {}
+               (for [[k v] doc :when (re-matches RE-ATTRF (name k))
+                     :let [[_ s a] (re-matches RE-ATTRV v)]
+                     :when (and (string? s) (string? a))]
+                 {a s})))
+    (when chunks? {:tdata (:tdata doc)})))
+
+
+(defn trace-search [db query & {:keys [chunks?]}]
+  (let [body (q->e query)
+        _source (clojure.string/join "," (map name RSLT-FIELDS))
+        rslt (elastic http/get db 1
+                      :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
+                      :body body)]
+    (for [doc (-> rslt :hits :hits) :let [doc (:_source (zu/keywordize doc))]]
+      (doc->rest doc :chunks? chunks?))))
+
