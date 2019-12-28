@@ -78,9 +78,6 @@
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
         url (apply str (format "%s/%s_%06x" (:url db) (:name db) tsnum) path)]
-    (println "CLAZZ" (string? body) )
-    (println "REQ=" req)
-    (println "URL=" url)
     (->>
       (http-method url req)
       (checked-req req)
@@ -113,30 +110,41 @@
 (defn index-delete [db tsnum]
   (elastic http/delete db tsnum))
 
-(defn seq-next [db tsnum seq-name block-sz]
-  (let [id0 (->
-              (elastic
-                http/post db tsnum
-                :path ["/_update/SEQ." (name seq-name) "?_source=true"]
-                :body {:script (format "ctx._source.seq += %d" block-sz)
-                       :upsert {:seq 1, :type TYPE-SEQ}})
-              :get :_source :seq)]
-    (range id0 (+ id0 block-sz))))
+(defn index-refresh [db tsnum]
+  (elastic http/get db tsnum :path ["/_refresh"]))
+
+(defn seq-next [db tsnum seq-name block-sz seq-quant]
+  (let [idx (format "%s_%06x" (:name db) tsnum)
+        data (for [_ (range 0 block-sz seq-quant)]
+               [{:update {:_index idx, :_id (str "SEQ." (name seq-name)), :retry_on_conflict 8}}
+                {:script {:source (format "ctx._source.seq += %d" seq-quant)}
+                 :upsert {:seq 1, :type TYPE-SEQ}}])
+        body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
+    (take
+      block-sz
+      (apply concat
+        (for [r (:items (elastic http/post db tsnum :path ["/_bulk?refresh=true&_source=true"] :body body))
+              :let [n (get-in r ["update" "get" "_source" "seq"])]]
+          (range n (+ n seq-quant)))))))
+
+(def SYMS-ADD-LOCK (Object.))
 
 (defn syms-add [db tsnum syms]
   (if (empty? syms)
     {}
-    (let [idx (format "%s_%06x" (:name db) tsnum)
-          rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms)))
-          data (for [[s i] rslt]
-                 [{:index {:_index idx, :_id (str "SYM." i)}}
-                  {:doctype TYPE-SYMBOL, :symbol s}])
-          body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-      (elastic
-        http/post db tsnum
-        :path ["/_bulk?refresh=true"]
-        :body body)                                         ; TODO sprawdzic czy poprawnie sie dodaly
-      rslt)))
+    (locking SYMS-ADD-LOCK
+      ; TODO dual locking here (check if symbols were added before lock)
+      (let [idx (format "%s_%06x" (:name db) tsnum)
+            rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms) 4))
+            data (for [[s i] rslt]
+                   [{:index {:_index idx, :_id (str "SYM." i)}}
+                    {:doctype TYPE-SYMBOL, :symbol s}])
+            body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
+        (elastic
+          http/post db tsnum
+          :path ["/_bulk?refresh=true"]
+          :body body)                                       ; TODO sprawdzic czy poprawnie sie dodaly
+        rslt))))
 
 (defn syms-resolve [db tsnum sids]
   (if (empty? sids)
@@ -175,13 +183,13 @@
   (if (empty? mdescs)
     {}
     (let [idx (format "%s_%06x" (:name db) tsnum),
-          rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs)))
+          rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs) 2))
           data (for [[[c m s] i] rslt]
                  [{:index {:_index idx, :_id (str "MID." i)}}
                   {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
       (elastic
-        http/post db tsnum :path ["/_bulk"], :body body)
+        http/post db tsnum :path ["/_bulk?refresh=true"], :body body)
       rslt)))
 
 (defn mids-resolve [db tsnum mids]
@@ -190,7 +198,7 @@
     (let [docs (elastic http/get db tsnum :path ["/_mget"]
                         :body {:docs (for [m mids] {:_id (str "MID." m)})})]
       (into {}
-        (for [d (:docs docs) :let [mdesc (get-in d ["_source" "mdesc"])]]
+        (for [d (:docs docs) :let [mdesc (get-in d ["_source" "mdesc"])] :when mdesc]
           {(Long/parseLong (.substring ^String (get d "_id") 4))
            (vec (for [i (.split mdesc ",")] (Long/parseLong i)))})))))
 
@@ -198,14 +206,14 @@
   (if (empty? mdescs)
     {}
     (let [idx (format "%s_%06x" (:name db) tsnum),
-          data (for [[c m s] mdescs]
-                 [{:index idx}
-                  {:query {:term {:mdesc {:value (str c "," m "," s)}}}}])
+          data (for [[c m s] mdescs :let [md (str c "," m "," s)]]
+                 [{:index idx} {:query {:term {:mdesc md}}}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")
           rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
       (into {}
         (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
-          {(vec (for [i (.split (get-in h ["_source" "mdesc"]) ",")] (Long/parseLong i)))
+          {(vec (for [i (.split (get-in h ["_source" "mdesc"]) ",")]
+                  (if (re-matches #"\d+" i) (Long/parseLong i) 0)))
            (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
 (defn mids-map [db tsnum m]
@@ -218,22 +226,27 @@
       (for [[aid mdef] m :let [rid (or (rsmap mdef) (asmap mdef))] :when rid]
         {aid rid}))))
 
+(defn methods-resolve [db tsnum mids]
+  (let [mdss (mids-resolve db tsnum mids)
+        sids (into #{} (flatten (vals mdss)))
+        syms (syms-resolve db tsnum sids)]
+    (into {}
+      (for [[i [c m s]] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
+        {i (str cs "." ms "()")}))))
+
 (defn symbol-resolver [db tsnum]
   "Returns SymbolResolver with Elastic Search as backend."
   (reify
     SymbolResolver
     (^Map resolveSymbols [_ ^Set sids]
-           (let [rslt (HashMap.)]
-             (doseq [[sid sym] (syms-resolve db tsnum (seq sids))]
-               (.put rslt (.intValue sid) sym))
-             rslt))
+      (let [rslt (HashMap.)]
+        (doseq [[sid sym] (syms-resolve db tsnum (seq sids))]
+          (.put rslt (.intValue sid) sym))
+        rslt))
     (^Map resolveMethods [_ ^Set mids]
-      (let [rslt (HashMap.),
-            mdss (mids-resolve db tsnum (seq mids))
-            sids (into #{} (flatten (vals mdss)))
-            syms (syms-resolve db tsnum sids)]
-        (doseq [[i [c m s]] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
-          (.put rslt (.intValue i) (str cs "." ms "()")))
+      (let [rslt (HashMap.)]
+        (doseq [[i s] (methods-resolve db tsnum (seq mids))]
+          (.put rslt (.intValue i) s))
         rslt))))
 
 (defn mdef->vec [md]
@@ -321,9 +334,8 @@
 
 (def RE-TRC-CHUNK-ID #"TRC\.([0-9a-fA-F]{8,16})\.([0-9a-fA-F]{8})\.([0-9a-zA-Z]{8})\.([0-9a-zA-Z]+)")
 
-(defn chunk-add [db tsnum {:keys [traceid spanid parentid chnum] :as doc}]
-  (let [id (str "TRC." traceid "." spanid "." (or parentid "00000000") "." chnum)]
-    (elastic http/post db tsnum :path ["/_doc"] :body doc)))
+(defn chunk-add [db tsnum doc]
+  (elastic http/post db tsnum :path ["/_doc"] :body doc))
 
 (defn chunk-store [db tsnum]
   "Returns trace chunk store with Elastic Search backend."
@@ -355,6 +367,8 @@
    (if order-by
      {order-by {:order (or order-dir :desc)}}
      {:tstamp {:order :desc}})
+   :from (or offset 0)
+   :size (or limit 100)
    :query
    {:bool
     {:must

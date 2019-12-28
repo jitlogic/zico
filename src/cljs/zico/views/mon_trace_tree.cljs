@@ -66,12 +66,10 @@
     ))
 
 
-(defn render-trace-tree-detail [{{:keys [result package class method args]} :method
-                                 :keys [pos attrs duration exception pct] :as tr}]
+(defn render-trace-tree-detail [{:keys [method pos attrs duration exception pct] :as tr}]
   ^{:key pos}
   [:div.det {:data-trace-pos pos}
    [:div.method
-    [:div.c-darker.flexible result]
     [:div.ti {:style {:color (pct-color pct)}} (zw/svg-icon :awe :clock :blue) [:div.flexible]
      (str (zu/ticks-to-str duration) " (" (pp/cl-format nil "~,2f" pct) "%)")]
     (when-let [dto (get attrs "DTRACE_OUT")]
@@ -79,24 +77,21 @@
         :awe :right-big :blue "Go to target trace..."
         [:to-screen "mon/trace/tree" {:uuid dto}]
         ))]
-   [:div.c-light.ellipsis.flex (str method args)
+   [:div.c-light.ellipsis.flex (str method)
     [:div.i.pad-l05
      (zw/svg-button
        :awe :paste :text "Copy method to clipboard"
-       [:write-to-clipboard (str result " " package "." class "." method args)])]]
-   [:div.c-darker.text-rtl.ellipsis package "." class]
+       [:write-to-clipboard method])]]
    (when attrs (zvmt/render-attrs attrs nil))
    (when exception (zvmt/render-exception exception true))])
 
 
-(defn render-trace-tree-item [{{:keys [result package class method args]} :method,
-                               :keys [pos level duration attrs exception state pct] :as tr}]
+(defn render-trace-tree-item [{:keys [method pos level duration attrs exception state pct] :as tr}]
   ^{:key pos}
   [:div.itm.method {:data-trace-pos pos}
    [:div.flex {:style {:color (pct-color pct)}}
-    [:div.t (zu/ticks-to-str duration)]
-    ;[:div.p (if (= pct 100.0) "100.0" (pp/cl-format nil "~,2f" pct))]
-    ]
+    [:div.t (zu/ns-to-str duration false)]
+    [:div.p (if (= pct 100.0) "100.0%" (pp/cl-format nil "~,2f%" pct))]]
    [(cond attrs :div.mc.c-blue exception :div.mc.c-red :else :div.mc.c-text)
     {:style {:margin-left (str (* level 10) "px"), :flex 10}}
     [:div.flex.ml.flexible
@@ -104,11 +99,7 @@
        :open (zw/svg-button :awe :minus-squared-alt :text "Collapse" [:toggle [:view :trace :tree :collapsed pos]])
        :closed (zw/svg-button :awe :plus-squared-alt :text "Expand" [:toggle [:view :trace :tree :collapsed pos]])
        (zw/svg-icon :awe :null :text))
-     [:div.mr.medium-or-more result]
-     [:div.large-or-more (str package ".")]
-     [:div.small-or-more (str class ".")]
-     [:div.m.medium-or-less (str method (if (= args "()") "()" "(...)"))]
-     [:div.m.medium-or-more (str method args)]]]
+     [:div method]]]
    (when-let [dto (get attrs "DTRACE_OUT")]
      (zw/svg-button
        :awe :right-big :blue "Go to target trace..."

@@ -90,7 +90,7 @@
     (when-let [attrs (.getAttributes tdr)]
       {:attrs (into {} attrs)})
     (when-let [children (.getChildren tdr)]
-      (map tdr->tr children)))
+      {:children (map tdr->tr children)}))
   )
 
 (defn trace-detail [{:keys [conf tstore]} traceid spanid]
