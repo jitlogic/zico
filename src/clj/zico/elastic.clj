@@ -78,6 +78,9 @@
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
         url (apply str (format "%s/%s_%06x" (:url db) (:name db) tsnum) path)]
+    (println "CLAZZ" (string? body) )
+    (println "REQ=" req)
+    (println "URL=" url)
     (->>
       (http-method url req)
       (checked-req req)
@@ -96,12 +99,15 @@
           :when m]
       (assoc ix :status status :health health, :tsnum (Long/parseLong (second m) 16)))))
 
+(def DEFAULT-INDEX-SETTINGS
+  {:number_of_shards   1
+   :number_of_replicas 0
+   })
+
 (defn index-create [db tsnum]
   (elastic
     http/put db tsnum
-    :body {:settings
-                     {:number_of_shards   (:num-shards db 1)
-                      :number_of_replicas (:num-replicas db 0)}
+    :body {:settings (merge DEFAULT-INDEX-SETTINGS (:settings db))
            :mappings DOC-MAPPINGS}))
 
 (defn index-delete [db tsnum]
@@ -128,7 +134,7 @@
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
       (elastic
         http/post db tsnum
-        :path ["/_bulk"]
+        :path ["/_bulk?refresh=true"]
         :body body)                                         ; TODO sprawdzic czy poprawnie sie dodaly
       rslt)))
 
@@ -148,7 +154,7 @@
     (let [idx (format "%s_%06x" (:name db) tsnum)
           data (for [s syms]
                  [{:index idx}
-                  {:query {:term {:symbol {:value s}}}}])
+                  {:query {:term {:symbol s}}}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")
           rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
       (into {}
@@ -224,9 +230,9 @@
     (^Map resolveMethods [_ ^Set mids]
       (let [rslt (HashMap.),
             mdss (mids-resolve db tsnum (seq mids))
-            sids (into #{} (concat (vals mdss)))
+            sids (into #{} (flatten (vals mdss)))
             syms (syms-resolve db tsnum sids)]
-        (doseq [[[c m s] i] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
+        (doseq [[i [c m s]] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
           (.put rslt (.intValue i) (str cs "." ms "()")))
         rslt))))
 
@@ -335,10 +341,11 @@
       (let [indexes (list-indexes tstore)
             tsnum (if (empty? indexes) 1 (apply max (map :tsnum indexes)))
             mapper (symbol-mapper tstore tsnum),
-            store (chunk-store tstore tsnum)
+            store (chunk-store tstore tsnum),
+            resolver (symbol-resolver tstore tsnum),
             collector (Collector. tsnum mapper store false)]
         (when (empty? indexes) (index-create tstore tsnum))
-        (swap! state assoc :tsnum tsnum, :mapper mapper, :store store, :collector collector)))
+        (swap! state assoc :tsnum tsnum, :mapper mapper, :store store, :collector collector, :resolver resolver)))
     state))
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
@@ -361,7 +368,6 @@
           {:range {:tstamp (into {}
                              (when min-tstamp {:gte min-tstamp})
                              (when max-tstamp {:lte max-tstamp}))}})
-
         ])}}})
 
 

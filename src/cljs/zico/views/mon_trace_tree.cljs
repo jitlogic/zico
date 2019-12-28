@@ -142,13 +142,13 @@
 
 (defn trace-tree [{{:keys [tid]} :params}]
   "Trace call tree display panel [:view :trace :tree]"
-  (when-let [{:keys [trace-id span-id]} (zu/parse-tid tid)]
+  (when-let [{:keys [traceid spanid]} (zu/parse-tid tid)]
     (zs/dispatch-sync
       [:do
        [:set [:view :trace :tree] {:tid tid, :collapsed {}}]
        [:set [:data :trace :tree] nil]])
     (zs/dispatch
-      [:xhr/get (io/api "/trace/" trace-id "/" span-id "?depth=9999") nil nil,
+      [:xhr/get (io/api "/trace/" traceid "/" spanid) nil nil,
        :on-success [::handle-xhr-result nil]
        :on-error zv/DEFAULT-SERVER-ERROR]))
   (zws/render-screen

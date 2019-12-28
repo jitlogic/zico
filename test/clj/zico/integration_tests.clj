@@ -5,12 +5,9 @@
      [zorka-integ-fixture *root-path* time-travel zico trace-store]]
     [clojure.test :refer :all]
     [clojure.data.json :as json])
-  (:import (com.jitlogic.zorka.common.util Base64)
-           (io.zorka.tdb.store RotatingTraceStore SimpleTraceStore)))
-
+  (:import (com.jitlogic.zorka.common.util Base64)))
 
 (use-fixtures :each zorka-integ-fixture)
-
 
 (defn rest-post [uri data]
   (let [r (zico {:uri     uri, :request-method :post,
@@ -33,5 +30,5 @@
   (testing "Load some trace data"
     (doseq [req (read-trace-file "testdata/traces1.txt")
             :let [res (zico req)]]
-      (is (< (:status res) 300)))
-    (is (= 1 (.size (.getQuickIndex (.getCurrent ^RotatingTraceStore (:tstore zorka-app-state))))))))
+      (is (< (:status res) 300)))))
+

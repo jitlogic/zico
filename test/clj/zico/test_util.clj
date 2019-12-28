@@ -5,7 +5,7 @@
     [clojure.java.io :as io])
   (:import
     (java.io File)
-    (io.zorka.tdb.store RotatingTraceStore)))
+    ))
 
 (def cur-time-val (atom 100))
 
@@ -29,7 +29,7 @@
   (.delete f))
 
 (defn cleanup-fixture [app-state]
-  (when-let [^RotatingTraceStore ts (-> app-state :trace-store)] (.close ts)))
+  nil)
 
 (defn zorka-integ-fixture [f]
   (let [root-path "/tmp/zico-collector-test"

@@ -82,7 +82,7 @@
 (defn tdr->tr [^TraceDataResult tdr]
   "Converts TraceDataRecord to clojure map matching TraceRecord schema."
   (merge
-    {:method   (.getMethod tdr),
+    {:method   (str (.getMethod tdr)),
      :pos      (.getChunkPos tdr),
      :errors   (.getErrors tdr),
      :duration (- (.getTstop tdr) (.getTstart tdr))
@@ -93,7 +93,7 @@
       (map tdr->tr children)))
   )
 
-(defn trace-detail [{:keys [conf tstore]} stack-limit traceid spanid]
+(defn trace-detail [{:keys [conf tstore]} traceid spanid]
   (let [chunks (ze/trace-search (:tstore conf) {:traceid traceid :spanid spanid} :chunks? true)
         tex (TraceDataExtractor. (:resolver @tstore))
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]

@@ -53,8 +53,8 @@
             (assoc-in [:headers "Pragma"] "no-cache"))))))
 
 
-(defn trace-detail [app-state tid sid depth]
-  (if-let [rslt (ztrc/trace-detail app-state depth tid sid)]
+(defn trace-detail [app-state tid sid]
+  (if-let [rslt (ztrc/trace-detail app-state tid sid)]
     (rhr/ok rslt)
     (rhr/not-found {:reason "trace not found"})))
 
@@ -95,9 +95,8 @@
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
-        :query-params [depth :- s/Int]
         :return zico.schema.tdb/TraceRecord
-        (trace-detail app-state tid sid (or depth 1)))
+        (trace-detail app-state tid sid))
       (ca/GET "/:tid/:sid/stats" []
         :summary "return trace method call stats"
         :path-params [tid :- s/Str, sid :- s/Str]

@@ -291,7 +291,7 @@
   (zs/dispatch-sync
     [:set [:data :dtrace :tree] []])
   (zs/dispatch
-    [:xhr/get (io/api "/trace/" (:trace-id (zu/parse-tid tid))) nil nil
+    [:xhr/get (io/api "/trace/" (:traceid (zu/parse-tid tid))) nil nil
      :on-success [::handle-dtrace-result],
      :on-error zv/DEFAULT-SERVER-ERROR])
   (zws/render-screen

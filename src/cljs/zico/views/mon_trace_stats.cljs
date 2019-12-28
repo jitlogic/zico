@@ -55,11 +55,11 @@
 
 (defn trace-stats [{{:keys [tid]} :params}]
   "Trace call stats panel [:view :trace :stats]"
-  (when-let [{:keys [trace-id span-id]} (zu/parse-tid tid)]
+  (when-let [{:keys [traceid spanid]} (zu/parse-tid tid)]
     (zs/dispatch-sync
       [:set [:data :trace :stats] nil])
     (zs/dispatch
-      [:xhr/get (io/api "/trace/" trace-id "/" span-id "/stats")
+      [:xhr/get (io/api "/trace/" traceid "/" spanid "/stats")
        [:data :trace :stats] nil
        :on-error zv/DEFAULT-SERVER-ERROR]))
   (zws/render-screen
