@@ -58,11 +58,13 @@
    (s/optional-key :password) s/Str})
 
 (s/defschema ElasticIndexConfig
-  {:url                       s/Str
+  {:type                      (s/enum :memory :elastic)
+   :url                       s/Str
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
    :name                      s/Str
    :max-size                  s/Num
+   :rotation-interval         s/Num
    :num-shards                s/Num
    :num-replicas              s/Num})
 

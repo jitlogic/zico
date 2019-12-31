@@ -83,4 +83,9 @@
     ))
 
 (deftest test-submit-retrieve-store-with-rotation
+  (testing "Submit two traces, rotate index inbetween"
+    (is (= 202 (:status (ztrc/submit-agd zsvr/zorka-app-state "1234" true AGD1))))
+    (is (= 202 (:status (ztrc/submit-trc zsvr/zorka-app-state "1234" "9234567812345001" 0 TRC2))))
+    (println (ze/list-indexes *DB*))
+    )
   )

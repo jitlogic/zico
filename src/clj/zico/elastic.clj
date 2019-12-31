@@ -8,8 +8,8 @@
     [clojure.set :as cs]
     [clojure.tools.logging :as log])
   (:import
-    (java.util HashMap Set Map)
-    (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector)
+    (java.util HashMap Set Map ArrayList Collection)
+    (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector TraceDataExtractor TraceStatsExtractor)
     (com.jitlogic.zorka.common.tracedata SymbolicMethod)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
@@ -89,14 +89,20 @@
 (defn list-indexes [db]
   "List indexes matching `mask` in database `db`"
   (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
-    (for [ix (-> (http/get (str (:url db) "/_cat/indices")
-                           {:headers {:accept "application/json"}})
-                 parse-response)
-          :let [ix (zu/keywordize ix), xname (:index ix),
-                status (keyword (:status ix)), health (keyword (:health ix))
-                m (when (string? xname) (re-matches mask xname))]
-          :when m]
-      (assoc ix :status status :health health, :tsnum (Long/parseLong (second m) 16)))))
+    (sort-by
+      :tsnum
+      (for [ix (-> (http/get (str (:url db) "/_cat/indices")
+                             {:headers {:accept "application/json"}})
+                   parse-response)
+            :let [ix (zu/keywordize ix), xname (:index ix),
+                  status (keyword (:status ix)), health (keyword (:health ix))
+                  m (when (string? xname) (re-matches mask xname))]
+            :when m]
+        (assoc ix
+          :status status :health health,
+          :tsnum (Long/parseLong (second m) 16)
+          :size (zu/size->bytes (:store.size ix)))
+        ))))
 
 (def DEFAULT-INDEX-SETTINGS
   {:number_of_shards   1
@@ -351,23 +357,22 @@
         (chunk-add db tsnum (tcd->doc tcd))))))
 
 (defn elastic-store-rotate [conf state new-tsnum]
-  (let [{:keys [tsnum ^Collector collector]} @state]
+  (let [{:keys [tsnum ^Collector collector]} state]
     (locking collector
-      (when (not= new-tsnum tsnum)
+      (when (not= new-tsnum @tsnum)
         (let [mapper (symbol-mapper conf new-tsnum),
               store (chunk-store conf new-tsnum)]
-          (swap! state assoc :tsnum new-tsnum)
+          (reset! tsnum new-tsnum)
           (.reset collector new-tsnum mapper store))))))
 
-(defn elastic-trace-store [new-conf old-conf old-store]
-  (let [state (or old-store (atom {:tsnum 0, :collector (Collector. 0 nil nil false)}))
-        collector (:collector @state)]
-    (locking collector
-      (let [indexes (list-indexes new-conf)
-            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
-        (when (empty? indexes) (index-create new-conf tsnum))
-        (elastic-store-rotate new-conf state tsnum)))
-    state))
+(defn check-rotate [app-state force]
+  (locking (-> app-state :tstore :collector)
+    (let [sz (-> (list-indexes (-> app-state :conf :tstore)) last :size), tsnum @(-> app-state :tstore :tsnum)]
+      (when (or force (>= sz (-> app-state :conf :tstore :max-size)))
+        (elastic-store-rotate (-> app-state :conf :tstore) (-> app-state :tstore) (inc tsnum))
+        (log/info "Rotating trace store. Size:" sz ", tsnum: " tsnum)
+        (index-create (-> app-state :conf :tstore) tsnum)
+        (log/info "Created new index: " (format "%06x" (inc tsnum)))))))
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
                     min-tstamp max-tstamp min-duration limit offset
@@ -417,13 +422,50 @@
     (when-let [[_ _ s] (when (string? index) (re-matches RE-INDEX-NAME index))]
       {:tsnum (Long/parseLong s 16)})))
 
+(defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata]}]
+  (let [tcd (TraceChunkData. traceid spanid parentid chnum)]
+    (when tst (.setTstamp tcd tst))
+    (when tsnum (.setTsNum tcd tsnum))
+    (when duration (.setDuration tcd duration))
+    (when klass (.setKlass tcd klass))
+    (when method (.setMethod tcd method))
+    (when ttype (.setTtype tcd ttype))
+    (when recs (.setRecs tcd (.intValue recs)))
+    (when calls (.setCalls tcd (.intValue calls)))
+    (when errors (.setErrors tcd (.intValue errors)))
+    (.setTraceData tcd (zu/b64dec tdata))
+    tcd))
 
-(defn trace-search [db _ query & {:keys [chunks?]}]
+
+
+(defn trace-search [app-state query & {:keys [chunks?]}]
   (let [body (q->e query)
         _source (clojure.string/join "," (map name RSLT-FIELDS))
-        rslt (elastic http/get db nil
+        rslt (elastic http/get (-> app-state :conf :tstore) nil
                       :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
       (doc->rest doc :chunks? chunks?, :index index))))
 
+(defn trace-detail [{:keys [conf] {:keys [search]} :tstore :as app-state} traceid spanid]
+  (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
+        tex (TraceDataExtractor. (symbol-resolver (:tstore conf)))
+        rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
+    rslt))
+
+(defn trace-stats [{{:keys [search]} :tstore :as app-state} traceid spanid]
+  (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
+        tex (TraceStatsExtractor.)
+        rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
+    rslt))
+
+(defn elastic-trace-store [app-state old-state]
+  (let [new-conf (-> app-state :conf :tstore)
+        state (or (:tstore old-state) {:tsnum (atom 0), :collector (Collector. 0 nil nil false)})
+        collector (:collector state)]
+    (locking collector
+      (let [indexes (list-indexes new-conf)
+            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
+        (when (empty? indexes) (index-create new-conf tsnum))
+        (elastic-store-rotate new-conf state tsnum)))
+    (assoc state :search trace-search, :detail trace-detail, :stats trace-stats)))

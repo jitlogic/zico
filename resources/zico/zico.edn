@@ -47,10 +47,12 @@
  :elastic {:url "http://127.0.0.1:9200"}
 
  ; Configuration of main data store
- :tstore {:url          #ref [:elastic :url]
+ :tstore {:type         :elastic
+          :url          #ref [:elastic :url]
           :username     #join [#ref [:elastic :username] nil]
           :password     #join [#ref [:elastic :password] nil]
           :name         "ztrace"
+          :rotation-interval 10
           :max-size     4096
           :num-shards   1
           :num-replicas 0}

@@ -199,3 +199,16 @@
     (re-matches #"[0-9a-fA-F]{32}" s) [(.longValue (BigInteger. (.substring s 0 16) 16))
                                        (.longValue (BigInteger. (.substring s 16 32) 16))]
     :else nil))
+
+(def RE-BSIZE #"(\d+)(?:\.(\d+))?([kKmMgGtT]?)[bB]?")
+
+(def BSIZES
+  {"k" 1024, "K" 1024,
+   "m" 1048576, "M" 1048576,
+   "g" 1073741824, "G" 1073741824,
+   "t" 1099511627776, "T" 1099511627776})
+
+(defn size->bytes [s]
+  (when s
+    (when-let [[_ n x m] (re-matches RE-BSIZE s)]
+      (* (Long/parseLong n) (BSIZES m 1)))))
