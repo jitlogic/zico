@@ -42,9 +42,10 @@
           (when children {:children children}))))
     tfn))
 
-(defn chunk->tcd [{:keys [traceid spanid parentid chnum tst duration klass method ttype recs calls errors tdata]}]
+(defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata]}]
   (let [tcd (TraceChunkData. traceid spanid parentid chnum)]
     (when tst (.setTstamp tcd tst))
+    (when tsnum (.setTsNum tcd tsnum))
     (when duration (.setDuration tcd duration))
     (when klass (.setKlass tcd klass))
     (when method (.setMethod tcd method))
@@ -64,8 +65,8 @@
     (when (:root cgroups)
       (chunks->tree-node (first (:root cgroups)) cgroups))))
 
-(defn trace-search [{:keys [conf trace-desc]} query]
-  (map trace-desc (ze/trace-search (:tstore conf) query)))
+(defn trace-search [{:keys [conf trace-desc tstore]} query]
+  (map trace-desc (ze/trace-search (:tstore conf) tstore query)))
 
 (def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
 
@@ -75,9 +76,6 @@
     (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
       (let [cs (.split c "\\." 0), cl (alength cs)]
         {:result r, :package p, :class c, :method m, :args a}))))
-
-(defn merge-chunk-data [chunks]
-  (:tdata (first chunks)))                                  ; TODO
 
 (defn tdr->tr [^TraceDataResult tdr]
   "Converts TraceDataRecord to clojure map matching TraceRecord schema."
@@ -94,8 +92,8 @@
   )
 
 (defn trace-detail [{:keys [conf tstore]} traceid spanid]
-  (let [chunks (ze/trace-search (:tstore conf) {:traceid traceid :spanid spanid} :chunks? true)
-        tex (TraceDataExtractor. (:resolver @tstore))
+  (let [chunks (ze/trace-search (:tstore conf) tstore {:traceid traceid :spanid spanid} :chunks? true)
+        tex (TraceDataExtractor. (ze/symbol-resolver (:tstore conf)))
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     (tdr->tr rslt)))
 
@@ -108,8 +106,8 @@
    :max-duration (.getMaxDuration tsr)
    :method (.getMethod tsr)})
 
-(defn trace-stats [{:keys [conf]} traceid spanid]
-  (let [chunks (ze/trace-search (:tstore conf) {:traceid traceid :spanid spanid} :chunks? true)
+(defn trace-stats [{:keys [conf tstore]} traceid spanid]
+  (let [chunks (ze/trace-search (:tstore conf) tstore {:traceid traceid :spanid spanid} :chunks? true)
         tex (TraceStatsExtractor.)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     (vec (map tsr->ts rslt))))
@@ -120,7 +118,6 @@
                        (when session-reset {HttpConstants/HDR_ZORKA_SESSION_RESET [session-reset]})
                        (when trace-id {HttpConstants/HDR_ZORKA_TRACE_ID [trace-id]}))]
     (locking path
-      ; TODO use json/write, current implementation is inefficient
       (spit path (str (json/write-str {:uri uri, :headers headers, :body (Base64/encode data false)}) "\n") :append true))))
 
 (defn submit-agd [{{{:keys [dump dump-path]} :log} :conf tstore :tstore} session-id session-reset data]
@@ -137,7 +134,6 @@
 
 (defn submit-trc [{{{:keys [dump dump-path]} :log} :conf :keys [tstore]} session-id trace-id chnum data]
   (try
-    ; TODO weryfikacja argumentów
     (.handleTraceData ^Collector (:collector @tstore) session-id trace-id chnum data)
     (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data))
     (rhr/accepted)

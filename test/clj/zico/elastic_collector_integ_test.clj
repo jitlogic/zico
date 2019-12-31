@@ -40,6 +40,7 @@
       (is (= 100 (:duration r1)))
       (is (= 1 (:recs r1)))
       (is (= 3 (:calls r1)))
+      (is (= 1 (:tsnum r1)))
       (is (= "1970-01-01T00:00:01" (:tstamp r1)))
       (is (= "9234567812345001" (:traceid r1)))
       (is (= "1234567812345001" (:spanid r1))))))
@@ -75,10 +76,11 @@
     (is (= 202 (:status (ztrc/submit-trc zsvr/zorka-app-state "1234" "9234567812345001" 0 TRC2))))
     (ze/index-refresh *DB* 1)
     (let [r (ztrc/trace-detail zsvr/zorka-app-state "9234567812345001" "1234567812345003")]
-      (println r)
       (is (= "mydb.PStatement.execute()" (:method r)))
       (is (= "db" (get-in r [:attrs "component"])))
       (is (= 100 (:duration r)))
       (is (= 200 (:tstart r))))
     ))
 
+(deftest test-submit-retrieve-store-with-rotation
+  )

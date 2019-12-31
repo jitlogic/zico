@@ -73,6 +73,7 @@
    :spanid                    s/Str
    (s/optional-key :parentid) (s/maybe s/Str)
    (s/optional-key :chnum)    s/Int
+   (s/optional-key :tsnum)    s/Int
    (s/optional-key :tst)      s/Int                       ; Timestamp in milliseconds since Epoch
    (s/optional-key :tstamp)   s/Str                       ; Timestamp
    (s/optional-key :desc)     s/Str

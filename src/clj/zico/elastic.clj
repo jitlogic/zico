@@ -77,7 +77,9 @@
                :unexceptional-status (constantly true)}
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
-        url (apply str (format "%s/%s_%06x" (:url db) (:name db) tsnum) path)]
+        idx-name (if (number? tsnum) (format "%s/%s_%06x" (:url db) (:name db) tsnum)
+                                     (format "%s/%s_*" (:url db) (:name db)))
+        url (apply str idx-name path)]
     (->>
       (http-method url req)
       (checked-req req)
@@ -234,16 +236,16 @@
       (for [[i [c m s]] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
         {i (str cs "." ms "()")}))))
 
-(defn symbol-resolver [db tsnum]
+(defn symbol-resolver [db]
   "Returns SymbolResolver with Elastic Search as backend."
   (reify
     SymbolResolver
-    (^Map resolveSymbols [_ ^Set sids]
+    (^Map resolveSymbols [_ ^Set sids ^int tsnum]
       (let [rslt (HashMap.)]
         (doseq [[sid sym] (syms-resolve db tsnum (seq sids))]
           (.put rslt (.intValue sid) sym))
         rslt))
-    (^Map resolveMethods [_ ^Set mids]
+    (^Map resolveMethods [_ ^Set mids ^int tsnum]
       (let [rslt (HashMap.)]
         (doseq [[i s] (methods-resolve db tsnum (seq mids))]
           (.put rslt (.intValue i) s))
@@ -313,12 +315,13 @@
 
 (def RE-ATTR #"([^\t]*)\t(.*)")
 
-(defn doc->tcd [{:keys [traceid spanid parentid chnum tst duration klass method calls errors recs tdata ttype term mids] :as doc}]
+(defn doc->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method calls errors recs tdata ttype term mids] :as doc}]
   (let [[tid1 tid2] (zu/parse-hex-tid traceid)
         [spanid _] (zu/parse-hex-tid spanid)
         [pid _] (zu/parse-hex-tid parentid)
         rslt (TraceChunkData. tid1 tid2 spanid (or pid 0) chnum)]
     (when tst (.setTstamp rslt tst))
+    (when tsnum (.setTsNum rslt tsnum))
     (when duration (.setDuration rslt duration))
     (when class (.setKlass rslt klass))
     (when method (.setMethod rslt method))
@@ -347,17 +350,23 @@
       (doseq [tcd tcds]
         (chunk-add db tsnum (tcd->doc tcd))))))
 
-(defn elastic-trace-store [tstore old-conf old-store]
-  (let [state (or old-store (atom {:tsnum 1}))]
-    (locking state
-      (let [indexes (list-indexes tstore)
-            tsnum (if (empty? indexes) 1 (apply max (map :tsnum indexes)))
-            mapper (symbol-mapper tstore tsnum),
-            store (chunk-store tstore tsnum),
-            resolver (symbol-resolver tstore tsnum),
-            collector (Collector. tsnum mapper store false)]
-        (when (empty? indexes) (index-create tstore tsnum))
-        (swap! state assoc :tsnum tsnum, :mapper mapper, :store store, :collector collector, :resolver resolver)))
+(defn elastic-store-rotate [conf state new-tsnum]
+  (let [{:keys [tsnum ^Collector collector]} @state]
+    (locking collector
+      (when (not= new-tsnum tsnum)
+        (let [mapper (symbol-mapper conf new-tsnum),
+              store (chunk-store conf new-tsnum)]
+          (swap! state assoc :tsnum new-tsnum)
+          (.reset collector new-tsnum mapper store))))))
+
+(defn elastic-trace-store [new-conf old-conf old-store]
+  (let [state (or old-store (atom {:tsnum 0, :collector (Collector. 0 nil nil false)}))
+        collector (:collector @state)]
+    (locking collector
+      (let [indexes (list-indexes new-conf)
+            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
+        (when (empty? indexes) (index-create new-conf tsnum))
+        (elastic-store-rotate new-conf state tsnum)))
     state))
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
@@ -391,7 +400,9 @@
 (def RE-ATTRF #"attrs\.(.*)")
 (def RE-ATTRV #"(.*)\t(.*)")
 
-(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks?]}]
+(def RE-INDEX-NAME #"([a-zA-Z0-9]+)_([0-9a-fA-F]+)")
+
+(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index]}]
   (merge
     (assoc
       (select-keys doc RSLT-FIELDS)
@@ -402,15 +413,17 @@
                      :let [[_ s a] (re-matches RE-ATTRV v)]
                      :when (and (string? s) (string? a))]
                  {a s})))
-    (when chunks? {:tdata (:tdata doc)})))
+    (when chunks? {:tdata (:tdata doc)})
+    (when-let [[_ _ s] (when (string? index) (re-matches RE-INDEX-NAME index))]
+      {:tsnum (Long/parseLong s 16)})))
 
 
-(defn trace-search [db query & {:keys [chunks?]}]
+(defn trace-search [db _ query & {:keys [chunks?]}]
   (let [body (q->e query)
         _source (clojure.string/join "," (map name RSLT-FIELDS))
-        rslt (elastic http/get db 1
+        rslt (elastic http/get db nil
                       :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
                       :body body)]
-    (for [doc (-> rslt :hits :hits) :let [doc (:_source (zu/keywordize doc))]]
-      (doc->rest doc :chunks? chunks?))))
+    (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
+      (doc->rest doc :chunks? chunks?, :index index))))
 
