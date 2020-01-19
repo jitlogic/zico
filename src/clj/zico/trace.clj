@@ -110,7 +110,7 @@
     ;(catch Exception _ (rhr/bad-request {:reason "Missing session UUID header."}))
     (catch Exception e
       (log/error e (str "Error processing AGD data: " (String. ^bytes data "UTF-8")))
-      (rhr/internal-server-error {:reason "internal error"}))))
+      (rhr/internal-server-error (json/write-str {:reason "internal error"})))))
 
 
 (defn submit-trc [{{{:keys [dump dump-path]} :log} :conf {:keys [collector]} :tstore} session-id trace-id chnum data]
@@ -118,11 +118,12 @@
     (.handleTraceData collector session-id trace-id chnum data)
     (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data))
     (rhr/accepted)
-    (catch ZorkaRuntimeException _
-      (rhr/unauthorized {:reason "invalid or missing session ID header"}))
+    (catch ZorkaRuntimeException e
+      (log/error e "Invalid session or missing header")
+      (rhr/unauthorized (json/write-str {:reason "invalid or missing session ID header"})))
     (catch Exception e
       (log/error e "Error processing TRC data: " (Base64/encode data false))
-      (rhr/internal-server-error {:reason "internal error"}))))
+      (rhr/internal-server-error (json/write-str {:reason "internal error"})))))
 
 
 (defn trace-desc-default [t]

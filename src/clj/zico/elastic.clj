@@ -291,6 +291,7 @@
              (-> s
                  (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
                  (.replaceAll "^[_\\.]" "")
+                 (.replaceAll "\\.(\\d)" "_$1")
                  .toLowerCase))]
     (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
 

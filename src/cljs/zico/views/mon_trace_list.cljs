@@ -36,7 +36,7 @@
                              :let [v (get-in vroot [:filter k :selected])]
                              :when (and (string? k) (string? v))] {k v}))]
     (merge
-      {:limit 50, :offset offset, :fetch-attrs true, :spans-only (not (:deep-search vroot))}
+      {:limit 100, :offset offset, :fetch-attrs true, :spans-only (not (:deep-search vroot))}
       (when-not (empty? attrs) {:attr-matches attrs})
       (when min-duration {:min-duration (* min-duration 1000000000)})
       (when time {:min-tstamp (ctf/unparse PARAM-FORMATTER time)
