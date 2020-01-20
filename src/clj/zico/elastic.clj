@@ -456,7 +456,7 @@
 
 (defn trace-stats [{{:keys [search]} :tstore :as app-state} traceid spanid]
   (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
-        tex (TraceStatsExtractor.)
+        tex (TraceStatsExtractor. (symbol-resolver (-> app-state :conf :tstore)))
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 

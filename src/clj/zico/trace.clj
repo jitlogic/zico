@@ -87,6 +87,7 @@
    :errors (.getErrors tsr)
    :sum-duration (.getSumDuration tsr)
    :max-duration (.getMaxDuration tsr)
+   :min-duration (.getMinDuration tsr)
    :method (.getMethod tsr)})
 
 (defn trace-stats [{{:keys [stats]} :tstore :as app-state} traceid spanid]
