@@ -448,15 +448,15 @@
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
       (doc->rest doc :chunks? chunks?, :index index))))
 
-(defn trace-detail [{:keys [conf] {:keys [search]} :tstore :as app-state} traceid spanid]
+(defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
   (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
-        tex (TraceDataExtractor. (symbol-resolver (:tstore conf)))
+        tex (TraceDataExtractor. resolver)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
-(defn trace-stats [{{:keys [search]} :tstore :as app-state} traceid spanid]
+(defn trace-stats [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
   (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
-        tex (TraceStatsExtractor. (symbol-resolver (-> app-state :conf :tstore)))
+        tex (TraceStatsExtractor. resolver)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
@@ -469,4 +469,6 @@
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
         (when (empty? indexes) (index-create new-conf tsnum))
         (elastic-store-rotate new-conf state tsnum)))
-    (assoc state :search trace-search, :detail trace-detail, :stats trace-stats)))
+    (assoc state
+      :search trace-search, :detail trace-detail, :stats trace-stats,
+      :resolver (symbol-resolver new-conf))))
