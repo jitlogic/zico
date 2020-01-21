@@ -388,25 +388,27 @@
                     min-tstamp max-tstamp min-duration limit offset
                     attr-matches text match-start match-end]}]
   {:sort
-   (if order-by
-     {order-by {:order (or order-dir :desc)}}
-     {:tstamp {:order :desc}})
+         (if order-by
+           {order-by {:order (or order-dir :desc)}}
+           {:tstamp {:order :desc}})
    :from (or offset 0)
    :size (or limit 100)
    :query
-   {:bool
-    {:must
-     (filter
-       some?
-       [{:term {:doctype TYPE-CHUNK}}
-        (when traceid {:term {:traceid traceid}})
-        (when spanid {:term {:spanid spanid}})
-        (when min-duration {:range {:duration {:gte min-duration}}})
-        (when (or min-tstamp max-tstamp)
-          {:range {:tstamp (into {}
-                             (when min-tstamp {:gte min-tstamp})
-                             (when max-tstamp {:lte max-tstamp}))}})
-        ])}}})
+         {:bool
+          {:must
+           (concat
+             (filter
+               some?
+               [{:term {:doctype TYPE-CHUNK}}
+                (when traceid {:term {:traceid traceid}})
+                (when spanid {:term {:spanid spanid}})
+                (when min-duration {:range {:duration {:gte min-duration}}})
+                (when (or min-tstamp max-tstamp)
+                  {:range {:tstamp (into {}
+                                     (when min-tstamp {:gte min-tstamp})
+                                     (when max-tstamp {:lte max-tstamp}))}})])
+             (for [[k v] attr-matches] {:match {(str->akey k) (str v)}})
+             )}}})
 
 
 (def RSLT-FIELDS [:traceid :spanid :parentid :ttype :tstamp :duration :calls :errors :recs
@@ -456,6 +458,7 @@
 
 (defn trace-search [app-state query & {:keys [chunks?]}]
   (let [body (q->e query)
+        _ (println "BODY=" (pr-str body))
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
                       :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
