@@ -109,6 +109,23 @@
    :number_of_replicas 0
    })
 
+(defn str->akey [s]
+  (let [rslt
+        (str "attrs."
+             (-> s
+                 (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
+                 (.replaceAll "^[_\\.]" "")
+                 (.replaceAll "\\.(\\d)" "_$1")
+                 .toLowerCase))]
+    (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
+
+(defn enable-field-mapping [app-state fields]
+  (let [fm (into {} (for [f fields] {(str->akey f) {:type "text", :fielddata true}}))
+        rslt (elastic http/put (-> app-state :conf :tstore) nil
+                      :path ["/_mapping"]
+                      :body {:properties fm})]
+    rslt))
+
 (defn index-create [db tsnum]
   (elastic
     http/put db tsnum
@@ -285,15 +302,6 @@
 (defn millis->date [l]
   l)
 
-(defn str->field [s]
-  (let [rslt
-        (str "attrs."
-             (-> s
-                 (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
-                 (.replaceAll "^[_\\.]" "")
-                 (.replaceAll "\\.(\\d)" "_$1")
-                 .toLowerCase))]
-    (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
 
 (defn tcd->doc [^TraceChunkData tcd]
   (zu/without-nil-vals
@@ -317,7 +325,7 @@
        :terms     (seq (.getTerms tcd))
        :mids     (seq (.getMethods tcd))}
       (into {}
-        (for [[k v] (.getAttrs tcd) :let [f (str->field k) ]]
+        (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
           {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
 
 (def RE-ATTR #"([^\t]*)\t(.*)")
@@ -373,6 +381,7 @@
         (elastic-store-rotate (-> app-state :conf :tstore) (-> app-state :tstore) (inc tsnum))
         (log/info "Rotating trace store. Size:" sz ", tsnum: " tsnum)
         (index-create (-> app-state :conf :tstore) tsnum)
+        (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
         (log/info "Created new index: " (format "%06x" (inc tsnum)))))))
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
@@ -437,7 +446,13 @@
     (.setTraceData tcd (zu/b64dec tdata))
     tcd))
 
-
+(defn attr-vals [app-state attr]
+  (let [body {:size 0, :aggregations {:avals {:terms {:field (str->akey attr)}}}}
+        rslt (elastic http/get (-> app-state :conf :tstore) nil
+                      :path ["/_search"] :body body)]
+    (for [b (-> rslt :aggregations :avals :buckets)
+          :let [ak (get b "key")] :when (not= ak attr)]
+      ak)))
 
 (defn trace-search [app-state query & {:keys [chunks?]}]
   (let [body (q->e query)
@@ -467,8 +482,10 @@
     (locking collector
       (let [indexes (list-indexes new-conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
-        (when (empty? indexes) (index-create new-conf tsnum))
+        (when (empty? indexes)
+          (index-create new-conf tsnum)
+          (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
         (elastic-store-rotate new-conf state tsnum)))
     (assoc state
-      :search trace-search, :detail trace-detail, :stats trace-stats,
+      :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals
       :resolver (symbol-resolver new-conf))))

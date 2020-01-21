@@ -58,6 +58,8 @@
     (rhr/ok rslt)
     (rhr/not-found {:reason "trace not found"})))
 
+(defn attr-vals [app-state id]
+  ((-> app-state :tstore :attr-vals) app-state id))
 
 (defn zico-api-routes [app-state]
   (ca/api
@@ -86,7 +88,7 @@
         :query-params [{limit :- s/Int 100}]
         :path-params [id :- s/Str]
         :return [s/Str]
-        (rhr/ok "NIECZYNNE"))
+        (rhr/ok (attr-vals app-state id)))
       (ca/GET "/:tid" []
         :summary "return all spans of a distributed trace"
         :path-params [tid :- s/Str]
