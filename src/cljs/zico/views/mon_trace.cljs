@@ -128,7 +128,7 @@
 
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]
-  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration desc recs calls errs attrs error has-children]
+  (fn [{:keys [trace-id span-id chunk-num parent-id tstamp duration desc recs calls errors attrs error has-children]
         {{:keys [package method class result args]} :method :as detail} :detail :as t}]
     (let [tid (zu/to-tid t)]
       ^{:key tid}
@@ -142,7 +142,7 @@
        [:div.btns
         (zw/svg-icon :awe :flash :yellow) [:div.lbl.small-or-more "Calls:"] [:div.val (str calls)]
         (zw/svg-icon :awe :inbox :green) [:div.lbl.small-or-more "Recs:"] [:div.val (str recs)]
-        (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errs)]
+        (zw/svg-icon :awe :bug :red) [:div.lbl.small-or-more "Errors:"] [:div.val (str errors)]
         (zw/svg-icon :awe :clock :blue) [:div.lbl.small-or-more "Time:"] [:div.val (zu/ns-to-str duration false)]
         [:div.flexible.flex]                                ; TODO display trace type
         (zw/svg-button
@@ -179,7 +179,7 @@
     [:awe :paw :text]))
 
 (defn render-trace-list-item-fn [& {:keys [dtrace-links]}]
-  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errs error has-children] :as t}]
+  (fn [{:keys [trace-id span-id chunk-num tstamp attrs parent-id depth desc duration recs calls errors error has-children] :as t}]
     (let [tid (zu/to-tid t), [_ t] (cs/split tstamp #"T") [t _] (cs/split t #"\.")]
       ^{:key tid}
       [:div.itm
@@ -204,7 +204,7 @@
           [:div.flex
            (zw/svg-icon :awe :flash :yellow) (str calls)
            (zw/svg-icon :awe :inbox :green) (str recs)
-           (zw/svg-icon :awe :bug :red) (str errs)])
+           (zw/svg-icon :awe :bug :red) (str errors)])
         (when (and dtrace-links @GROUP-SPANS)
           (if has-children
             (zw/svg-icon :ent :flow-cascade :blue, :class " clickable btn-dtrace", :title "View distributed trace")

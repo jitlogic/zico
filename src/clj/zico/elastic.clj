@@ -13,7 +13,7 @@
     (com.jitlogic.zorka.common.tracedata SymbolicMethod)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
-    (java.time LocalDateTime ZoneOffset)))
+    (java.time LocalDateTime ZoneOffset OffsetDateTime)))
 
 (def TYPE-SYMBOL 1)
 (def TYPE-METHOD 2)
@@ -423,7 +423,7 @@
   (merge
     (assoc
       (select-keys doc RSLT-FIELDS)
-      :tstamp (.toString (LocalDateTime/ofEpochSecond (/ tstamp 1000), 0, (ZoneOffset/ofHours 0)))
+      :tstamp (.toString (LocalDateTime/ofEpochSecond (/ tstamp 1000), 0, (.getOffset (OffsetDateTime/now))))
       :tst tstamp
       :attrs (into {}
                (for [[k v] doc :when (re-matches RE-ATTRF (name k))
