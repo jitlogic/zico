@@ -188,7 +188,6 @@
         [:div.ct t]
         [:div.flexible]
         (when @SHOW-HOSTS
-          (println (str attrs))
           [:div.ch (get attrs "local.service")])
         [:div.seg
          {:style {:padding-left (str (* 16 (or depth 0)) "px")}}
@@ -206,9 +205,7 @@
            (zw/svg-icon :awe :inbox :green) (str recs)
            (zw/svg-icon :awe :bug :red) (str errors)])
         (when (and dtrace-links @GROUP-SPANS)
-          (if has-children
-            (zw/svg-icon :ent :flow-cascade :blue, :class " clickable btn-dtrace", :title "View distributed trace")
-            (zw/svg-icon :ent :flow-cascade :dark :title "This is single trace")))
+          (zw/svg-icon :ent :flow-cascade :blue, :class " clickable btn-dtrace", :title "View distributed trace"))
         (zw/svg-icon
           :awe :right-big :blue,
           :class " clickable btn-details",

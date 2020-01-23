@@ -402,11 +402,12 @@
              (filter
                some?
                [{:term {:doctype TYPE-CHUNK}}
-                {:term {:top-level (not spans-only)}}
-                (when traceid {:term {:traceid traceid}})
-                (when spanid {:term {:spanid spanid}})
+                (when-not spans-only {:term {:top-level true}})
+                (when traceid {:match {:traceid traceid}})
+                (when spanid {:match {:spanid spanid}})
                 (when min-duration {:range {:duration {:gte min-duration}}})
                 (when-not (empty? text) {:query_string {:query text}})
+                (when errors-only {:term {:error true}})
                 (when (or min-tstamp max-tstamp)
                   {:range {:tstamp (into {}
                                      (when min-tstamp {:gte min-tstamp})
@@ -416,7 +417,7 @@
 
 
 (def RSLT-FIELDS [:traceid :spanid :parentid :ttype :tstamp :duration :calls :errors :recs
-                  :klass :method])
+                  :klass :method :top-level])
 
 (def RE-ATTRF #"attrs\.(.*)")
 (def RE-ATTRV #"(.*)\t(.*)")
@@ -462,13 +463,12 @@
 
 (defn trace-search [app-state query & {:keys [chunks?]}]
   (let [body (q->e query)
-        _ (println "BODY=" (pr-str body))
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
                       :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
-      (doc->rest doc :chunks? chunks?, :index index))))
+      (zu/spy (doc->rest doc :chunks? chunks?, :index index)))))
 
 (defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
   (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
