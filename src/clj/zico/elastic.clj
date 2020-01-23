@@ -30,6 +30,7 @@
    :tstamp {:type :date}
    ; :desc is not saved in elasticsearch
    :error {:type :boolean}
+   :top-level {:type :boolean}
    :duration {:type :long}
    :klass {:type :keyword}
    :method {:type :keyword}
@@ -309,7 +310,6 @@
       {:doctype  TYPE-CHUNK
        :traceid  (.getTraceIdHex tcd)
        :spanid   (.getSpanIdHex tcd)
-       :parentid (.getParentIdHex tcd)
        :chnum    (.getChunkNum tcd)
        :tst      (.getTstamp tcd)
        :tstamp   (millis->date (.getTstamp tcd))
@@ -324,6 +324,9 @@
        :tdata    (zu/b64enc (.getTraceData tcd))
        :terms     (seq (.getTerms tcd))
        :mids     (seq (.getMethods tcd))}
+      (if (.getParentIdHex tcd)
+        {:parentid (.getParentIdHex tcd), :top-level false}
+        {:top-level true})
       (into {}
         (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
           {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
@@ -368,11 +371,10 @@
 (defn elastic-store-rotate [conf state new-tsnum]
   (let [{:keys [tsnum ^Collector collector]} state]
     (locking collector
-      (when (not= new-tsnum @tsnum)
-        (let [mapper (symbol-mapper conf new-tsnum),
-              store (chunk-store conf new-tsnum)]
-          (reset! tsnum new-tsnum)
-          (.reset collector new-tsnum mapper store))))))
+      (let [mapper (symbol-mapper conf new-tsnum),
+            store (chunk-store conf new-tsnum)]
+        (reset! tsnum new-tsnum)
+        (.reset collector new-tsnum mapper store)))))
 
 (defn check-rotate [app-state force]
   (locking (-> app-state :tstore :collector)
@@ -400,9 +402,11 @@
              (filter
                some?
                [{:term {:doctype TYPE-CHUNK}}
+                {:term {:top-level (not spans-only)}}
                 (when traceid {:term {:traceid traceid}})
                 (when spanid {:term {:spanid spanid}})
                 (when min-duration {:range {:duration {:gte min-duration}}})
+                (when-not (empty? text) {:query_string {:query text}})
                 (when (or min-tstamp max-tstamp)
                   {:range {:tstamp (into {}
                                      (when min-tstamp {:gte min-tstamp})
