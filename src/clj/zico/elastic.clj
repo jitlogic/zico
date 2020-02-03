@@ -468,7 +468,7 @@
                       :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
-      (zu/spy (doc->rest doc :chunks? chunks?, :index index)))))
+      (doc->rest doc :chunks? chunks?, :index index))))
 
 (defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
   (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)

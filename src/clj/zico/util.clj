@@ -108,12 +108,15 @@
 
 (defn filter-unique
   ([seq]
-   (filter-unique seq #{}))
-  ([[obj & seq] acc]
-   (cond
-     (nil? obj) nil
-     (acc obj) (recur seq acc)
-     :else (lazy-seq (cons obj (filter-unique seq (conj acc obj)))))))
+   (filter-unique identity seq))
+  ([ufn seq]
+   (filter-unique ufn seq #{}))
+  ([ufn [obj & seq] acc]
+   (let [k (ufn obj)]
+     (cond
+       (nil? obj) nil
+       (acc k) (recur ufn seq acc)
+       :else (lazy-seq (cons obj (filter-unique ufn seq (conj acc k))))))))
 
 
 (defn recursive-merge [map1 map2]

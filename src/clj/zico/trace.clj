@@ -10,8 +10,7 @@
   (:import
     (com.jitlogic.zorka.common.util Base64 ZorkaRuntimeException)
     (com.jitlogic.zorka.common.collector TraceChunkData Collector TraceDataExtractor TraceDataResult TraceStatsExtractor TraceStatsResult)
-    (com.jitlogic.zorka.common.tracedata HttpConstants)
-    (java.util ArrayList Collection)))
+    (com.jitlogic.zorka.common.tracedata HttpConstants)))
 
 
 (def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
@@ -43,8 +42,12 @@
     tfn))
 
 (defn chunks->tree-node [node cgroups]
-  (let [children (for [[k [v & _]] cgroups :when (= (:spanid node) (:parentid v))] v)]
-    (if (empty? children) node (assoc node :children children))))
+  (if-let [children (get cgroups (:spanid node))]
+    (assoc node :children
+                (sort-by :tst
+                  (for [c (zu/filter-unique :spanid children)]
+                    (chunks->tree-node c cgroups))))
+    node))
 
 (defn chunks->tree [chunks]
   (let [cgroups (group-by #(:parentid % :root) chunks)]

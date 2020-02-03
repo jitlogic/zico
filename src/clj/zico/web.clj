@@ -93,7 +93,7 @@
         :summary "return all spans of a distributed trace"
         :path-params [tid :- s/Str]
         :return zico.schema.tdb/ChunkMetadata
-        (rhr/ok (zu/spy (ztrc/chunks->tree (ztrc/trace-search app-state {:traceid tid, :spans-only true, :limit 1024})))))
+        (rhr/ok (ztrc/chunks->tree (ztrc/trace-search app-state {:traceid tid, :spans-only true, :limit 1024}))))
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
