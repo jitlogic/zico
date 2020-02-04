@@ -68,17 +68,17 @@
 
 (defn tdr->tr [^TraceDataResult tdr]
   "Converts TraceDataRecord to clojure map matching TraceRecord schema."
-  (merge
-    {:method   (str (.getMethod tdr)),
-     :pos      (.getChunkPos tdr),
-     :errors   (.getErrors tdr),
-     :duration (- (.getTstop tdr) (.getTstart tdr))
-     :tstart   (.getTstart tdr)}
-    (when-let [attrs (.getAttributes tdr)]
-      {:attrs (into {} attrs)})
-    (when-let [children (.getChildren tdr)]
-      {:children (map tdr->tr children)}))
-  )
+  (when tdr
+    (merge
+      {:method   (str (.getMethod tdr)),
+       :pos      (.getChunkPos tdr),
+       :errors   (.getErrors tdr),
+       :duration (- (.getTstop tdr) (.getTstart tdr))
+       :tstart   (.getTstart tdr)}
+      (when-let [attrs (.getAttributes tdr)]
+        {:attrs (into {} attrs)})
+      (when-let [children (.getChildren tdr)]
+        {:children (map tdr->tr children)}))))
 
 (defn trace-detail [{{:keys [detail]} :tstore :as app-state} traceid spanid]
   (tdr->tr (detail app-state traceid spanid)))

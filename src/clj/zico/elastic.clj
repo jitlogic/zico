@@ -471,7 +471,7 @@
       (doc->rest doc :chunks? chunks?, :index index))))
 
 (defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
-  (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
+  (let [chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true)
         tex (TraceDataExtractor. resolver)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
