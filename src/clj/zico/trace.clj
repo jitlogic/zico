@@ -5,6 +5,7 @@
     [ring.util.http-response :as rhr]
     [zico.util :as zu]
     [zico.elastic :as ze]
+    [zico.memstore :as zm]
     [clojure.tools.logging :as log]
     [clojure.data.json :as json])
   (:import
@@ -31,14 +32,10 @@
        :recs         (.getRecs c)
        :calls        (.getCalls c)
        :errors       (.getErrors c)
-       :has-children (.isHasChildren c)
        :tdata        (.getTraceData c)}
       (when (.hasError c) {:error true})
       (when-let [attrs (.getAttrs c)]
-        {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))})
-      (when (> (.size (.getChildren c)) 0)
-        (let [children (doall (for [c (.getChildren c)] (tcd->chunk tfn c)))]
-          (when children {:children children}))))
+        {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))}))
     tfn))
 
 (defn chunks->tree-node [node cgroups]
@@ -152,7 +149,7 @@
   (let [new-state
         (case (-> app-state :conf :tstore :type)
           :elastic (assoc app-state :tstore (ze/elastic-trace-store app-state old-state))
-          :memory (throw (ex-info "Memory store not implemented (yet)" {}))
+          :memory (assoc app-state :tstore (zm/memory-trace-store app-state old-state))
           (throw (ex-info "No trace store type selected." {})))
         tfn (trace-desc-fn (:conf app-state))]
     (assoc new-state :trace-desc #(assoc % :desc (tfn %)))))

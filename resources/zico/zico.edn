@@ -47,7 +47,7 @@
  :elastic {:url "http://127.0.0.1:9200"}
 
  ; Configuration of main data store
- :tstore {:type         :elastic
+ :tstore {:type         :memory
           :url          #ref [:elastic :url]
           :username     #join [#ref [:elastic :username] nil]
           :password     #join [#ref [:elastic :password] nil]
