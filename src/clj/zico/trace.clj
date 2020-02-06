@@ -14,30 +14,6 @@
     (com.jitlogic.zorka.common.tracedata HttpConstants)))
 
 
-(def PARAM-FORMATTER (ctf/formatter "yyyyMMdd'T'HHmmssZ"))
-
-(defn tcd->chunk [tfn ^TraceChunkData c]
-  (->
-    (merge
-      {:traceid     (.getTraceIdHex c)
-       :spanid      (.getSpanIdHex c)
-       :parentid    (.getParentIdHex c)
-       :chnum       (.getChunkNum c)
-       :tst         (.getTstamp c)
-       :tstamp      (zu/str-time-yymmdd-hhmmss-sss (long (/ (.getTstamp c) 1000000)))
-       :duration    (.getDuration c)
-       :klass       (.getKlass c)
-       :method      (.getMethod c)
-       :ttype        (.getTtype c)
-       :recs         (.getRecs c)
-       :calls        (.getCalls c)
-       :errors       (.getErrors c)
-       :tdata        (.getTraceData c)}
-      (when (.hasError c) {:error true})
-      (when-let [attrs (.getAttrs c)]
-        {:attrs (into {} (for [[k v] attrs] {(str k) (str v)}))}))
-    tfn))
-
 (defn chunks->tree-node [node cgroups]
   (if-let [children (get cgroups (:spanid node))]
     (assoc node :children
@@ -54,14 +30,6 @@
 (defn trace-search [{:keys [trace-desc] {:keys [search]} :tstore :as app-state} query]
   (map trace-desc (search app-state query)))
 
-(def RE-METHOD-DESC #"(.*)\s+(.*)\.(.+)\.([^\(]+)(\(.*\))")
-
-(defn parse-method-str [s]
-  ; TODO dedicated StructuredTextIndex method that returns method description already parsed
-  (when s
-    (when-let [[_ r p c m a] (re-matches RE-METHOD-DESC s)]
-      (let [cs (.split c "\\." 0), cl (alength cs)]
-        {:result r, :package p, :class c, :method m, :args a}))))
 
 (defn tdr->tr [^TraceDataResult tdr]
   "Converts TraceDataRecord to clojure map matching TraceRecord schema."

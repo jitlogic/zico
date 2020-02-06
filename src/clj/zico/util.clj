@@ -133,14 +133,6 @@
     cfg))
 
 
-(defn to-int [x]
-  (cond
-    (int? x) x
-    (string? x) (Integer/parseInt x)
-    (number? x) (.longValue x)
-    :else (throw (RuntimeException. (str "Cannot coerce to int: " x)))))
-
-
 (def ALPHA-STR "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 (defn random-string
@@ -178,11 +170,6 @@
        (for [[k v] m :let [k (keyword k)]]
          {(keyword k) (keywordize v)}))
      :else m)))
-
-(defn java-map [m]
-  (let [rslt (HashMap.)]
-    (doseq [[k v] m] (.put rslt k v))
-    rslt))
 
 
 (defn without-nil-vals [m]
