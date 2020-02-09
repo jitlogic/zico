@@ -71,7 +71,7 @@
   [:div.det {:data-trace-pos pos}
    [:div.method
     [:div.ti {:style {:color (pct-color pct)}} (zw/svg-icon :awe :clock :blue) [:div.flexible]
-     (str (zu/ticks-to-str duration) " (" (pp/cl-format nil "~,2f" pct) "%)")]
+     (str (zu/ns-to-str duration false) " (" (pp/cl-format nil "~,2f" pct) "%)")]
     (when-let [dto (get attrs "DTRACE_OUT")]
       (zw/svg-button
         :awe :right-big :blue "Go to target trace..."

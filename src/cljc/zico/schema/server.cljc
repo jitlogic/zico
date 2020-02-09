@@ -52,25 +52,24 @@
    :description s/Str
    :icon s/Str})
 
-(s/defschema ElasticConfig
-  {:url                       s/Str
-   (s/optional-key :username) s/Str
-   (s/optional-key :password) s/Str})
-
 (s/defschema ElasticIndexConfig
   {:type                      (s/enum :memory :elastic)
    :url                       s/Str
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
    :name                      s/Str
-   :max-size                  s/Num
+   :index-size                s/Num
+   :index-overcommit          s/Num
+   :index-count               s/Num
    :rotation-interval         s/Num
+   :post-merge-pause          s/Num
+   :pre-merge-segments        s/Num
+   :final-merge-segments      s/Num
    :num-shards                s/Num
    :num-replicas              s/Num})
 
 (s/defschema ZicoConf
   {:home-dir    s/Str
-   :elastic     ElasticConfig
    :tstore ElasticIndexConfig
    :http        JettyHttpConf
    :log         LoggerConfig

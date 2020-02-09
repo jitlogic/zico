@@ -5,10 +5,12 @@
     [schema.core :as s]
     [clj-time.coerce :as ctco]
     [clj-time.format :as ctfo]
-    [clojure.tools.logging :as log])
+    [clojure.tools.logging :as log]
+    [clojure.java.io :as io])
   (:import
-    (java.io File)
-    (java.util Properties HashMap Base64)))
+    (java.io File ByteArrayOutputStream ByteArrayInputStream)
+    (java.util Properties HashMap Base64)
+    (java.util.zip GZIPOutputStream GZIPInputStream)))
 
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
@@ -180,6 +182,18 @@
 
 (defn b64dec [^String s]
   (when s (.decode (Base64/getDecoder) s)))
+
+(defn gzip [^bytes b]
+  (with-open [out (ByteArrayOutputStream.), gzip (GZIPOutputStream. out)]
+    (do
+      (.write gzip b)
+      (.finish gzip)
+      (.toByteArray out))))
+
+(defn gunzip [^bytes z]
+  (with-open [out (ByteArrayOutputStream.)]
+    (io/copy (GZIPInputStream. (ByteArrayInputStream. z)) out)
+    (.toByteArray out)))
 
 (defn parse-hex-tid [^String s]
   "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."

@@ -33,10 +33,8 @@
             :file-pattern    "%-12date{YYYY-MM-dd HH:mm:ss.SSS} %-5level - %msg%n"
             :file-level      :debug
             :console-level   :debug
-            :log-levels
-                             {:ROOT         :debug
+            :log-levels      {:ROOT         :debug
                               :org.eclipse  :info
-                              :io.zorka.tdb :info
                               }}
 
  :auth {:type :none
@@ -44,18 +42,21 @@
         :users {"admin" "zico"}}
 
 
- :elastic {:url "http://127.0.0.1:9200"}
-
  ; Configuration of main data store
- :tstore {:type         :memory
-          :url          #ref [:elastic :url]
-          :username     #join [#ref [:elastic :username] nil]
-          :password     #join [#ref [:elastic :password] nil]
-          :name         "ztrace"
-          :rotation-interval 10
-          :max-size     4096
-          :num-shards   1
-          :num-replicas 0}
+ :tstore {:type               #or [#env ZICO_TSTORE_TYPE #prop zico.tstore.type :elastic]
+          :url                "http://127.0.0.1:9200"
+          :username           "zico"
+          :password           "zico"
+          :name               "zico"
+          :rotation-interval    30
+          :post-merge-pause     30
+          :pre-merge-segments   4
+          :final-merge-segments 1
+          :index-size           16384
+          :index-overcommit     1024
+          :index-count          16
+          :num-shards           1
+          :num-replicas         0}
 
  :filter-defs
            [{:attr "component", :description "Component", :icon "awe/puzzle#light"}

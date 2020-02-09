@@ -72,7 +72,7 @@
     (throw (ex-info (str "Error calling elastic: " (:status resp) ": " (:body resp)) {:req req :resp resp})))
   resp)
 
-(defn- elastic [http-method db tsnum & {:keys [path body]}]
+(defn- elastic [http-method db tsnum & {:keys [path body verbose?]}]
   (let [req (merge
               {:headers (index-headers db tsnum)
                :unexceptional-status (constantly true)}
@@ -81,6 +81,7 @@
         idx-name (if (number? tsnum) (format "%s/%s_%06x" (:url db) (:name db) tsnum)
                                      (format "%s/%s_*" (:url db) (:name db)))
         url (apply str idx-name path)]
+    (when verbose? (log/info "elastic: tsnum:" tsnum "url:" url "req:" req))
     (->>
       (http-method url req)
       (checked-req req)
@@ -105,9 +106,15 @@
           :size (zu/size->bytes (:store.size ix)))
         ))))
 
+(defn merge-index [db tsnum num-segments]
+  (elastic
+    http/post db tsnum
+    :path [(format "/_forcemerge?max_num_segments=%d" num-segments)]))
+
 (def DEFAULT-INDEX-SETTINGS
   {:number_of_shards   1
    :number_of_replicas 0
+   :index.mapping.total_fields.limit 16384
    })
 
 (defn str->akey [s]
@@ -321,8 +328,8 @@
        :calls    (.getCalls tcd)
        :errors   (.getErrors tcd)
        :ttype    (.getTtype tcd)
-       :tdata    (zu/b64enc (.getTraceData tcd))
-       :terms     (seq (.getTerms tcd))
+       :tdata    (zu/b64enc (zu/gzip (.getTraceData tcd)))  ; TODO tutaj kompresja
+       :terms    (seq (.getTerms tcd))
        :mids     (seq (.getMethods tcd))}
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
@@ -346,7 +353,7 @@
     (when calls (.setCalls rslt calls))
     (when errors (.setErrors rslt errors))
     (when recs (.setRecs rslt recs))
-    (when tdata (.setTraceData rslt (zu/b64dec tdata)))
+    (when tdata (.setTraceData rslt (zu/gunzip (zu/b64dec tdata))))
     (when ttype (.setTtype rslt ttype))
     ; TODO (doseq [a attr :let [[_ v k] (re-matches RE-ATTR a)]] (.setAttr rslt k v))
     (doseq [t term] (.addTerm rslt t))
@@ -368,23 +375,56 @@
       (doseq [tcd tcds]
         (chunk-add db tsnum (tcd->doc tcd))))))
 
-(defn elastic-store-rotate [conf state new-tsnum]
-  (let [{:keys [tsnum ^Collector collector]} state]
-    (locking collector
-      (let [mapper (symbol-mapper conf new-tsnum),
-            store (chunk-store conf new-tsnum)]
-        (reset! tsnum new-tsnum)
-        (.reset collector new-tsnum mapper store)))))
+(defn index-stats [app-state tsnum]
+  (elastic
+    http/get (-> app-state :conf :tstore) tsnum
+    :path [ "/_stats"]))
 
-(defn check-rotate [app-state force]
+(defn index-size [app-state tsnum]
+  (-> (index-stats app-state tsnum)
+      :indices first second :total :store :size_in_bytes))
+
+(defn next-active-index [app-state]
+  (let [tsnum (-> app-state :tstore :tsnum deref)
+        new-tsnum (inc tsnum),
+        conf (-> app-state :conf :tstore)
+        mapper (symbol-mapper conf new-tsnum),
+        store (chunk-store conf new-tsnum)]
+    (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
+    (index-create conf new-tsnum)
+    (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
+    (.reset ^Collector (-> app-state :tstore :collector) new-tsnum mapper store)
+    (reset! (-> app-state :tstore :tsnum) new-tsnum)
+    (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
+    (log/info "Running final index merge ...")
+    (merge-index conf tsnum (:final-merge-segments conf 1))
+    (log/info "Current active index is" new-tsnum)))
+
+(defn delete-old-indexes [app-state max-count]
+  (let [conf (-> app-state :conf :tstore),
+        indexes (sort-by :tsnum (list-indexes conf))
+        rmc (- (count indexes) max-count)]
+    (when (> rmc 0)
+      (let [rmi (take rmc indexes)]
+        (doseq [i rmi :let [tsn (:tsnum i)]]
+          (log/info "Removing index" tsn)
+          (index-delete conf (:tsnum i))
+          )))))
+
+(defn check-rotate [app-state]
   (locking (-> app-state :tstore :collector)
-    (let [sz (-> (list-indexes (-> app-state :conf :tstore)) last :size), tsnum @(-> app-state :tstore :tsnum)]
-      (when (or force (>= sz (-> app-state :conf :tstore :max-size)))
-        (elastic-store-rotate (-> app-state :conf :tstore) (-> app-state :tstore) (inc tsnum))
-        (log/info "Rotating trace store. Size:" sz ", tsnum: " tsnum)
-        (index-create (-> app-state :conf :tstore) tsnum)
-        (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
-        (log/info "Created new index: " (format "%06x" (inc tsnum)))))))
+    (let [conf (-> app-state :conf :tstore), max-count (:index-count conf),
+          max-size (* 1024 1024 (+ (:index-size conf) (:index-overcommit conf))),
+          tsnum @(-> app-state :tstore :tsnum)
+          cur-size (index-size app-state tsnum)]
+      (log/debug (format "Active index utilization: %.02f" (* 100.0 (/ cur-size max-size))) "%")
+      (when (> cur-size max-size)
+        (log/debug "Pre-merging index " tsnum)
+        (merge-index conf tsnum (:pre-merge-segments conf 4))
+        (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
+        (when (> (index-size app-state tsnum) max-size)
+          (next-active-index app-state)))
+      (delete-old-indexes app-state (:index-count conf 16)))))
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
                     min-tstamp max-tstamp min-duration limit offset
@@ -450,7 +490,7 @@
     (when recs (.setRecs tcd (.intValue recs)))
     (when calls (.setCalls tcd (.intValue calls)))
     (when errors (.setErrors tcd (.intValue errors)))
-    (.setTraceData tcd (zu/b64dec tdata))
+    (when tdata (.setTraceData tcd (zu/gunzip (zu/b64dec tdata))))
     tcd))
 
 (defn attr-vals [app-state attr]
@@ -489,10 +529,12 @@
     (locking collector
       (let [indexes (list-indexes new-conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
+        (reset! (:tsnum state) tsnum)
+        (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
           (index-create new-conf tsnum)
           (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
-        (elastic-store-rotate new-conf state tsnum)))
+        (.reset collector tsnum (symbol-mapper new-conf tsnum) (chunk-store new-conf tsnum))))
     (assoc state
       :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals
       :resolver (symbol-resolver new-conf))))

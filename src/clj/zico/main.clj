@@ -7,7 +7,8 @@
     [zico.schema.server]
     [zico.trace :as ztrc]
     [zico.web :as zweb]
-    [clojure.tools.logging :as log])
+    [clojure.tools.logging :as log]
+    [zico.elastic :as ze])
   (:gen-class)
   (:import (ch.qos.logback.classic Level)
            (org.slf4j LoggerFactory Logger)
@@ -36,6 +37,7 @@
 (defonce ^:dynamic stop-f (atom nil))
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
+(defonce ^:dynamic index-rotation-f (atom nil))
 
 (defonce LOG-STATE (atom {}))
 (def LOG-LEVELS {:trace Level/TRACE, :debug Level/DEBUG, :info Level/INFO, :warn Level/WARN, :error Level/ERROR})
@@ -91,6 +93,18 @@
     (main-handler req)
     {:status 500, :body "Application not initialized."}))
 
+(defn index-rotation-task []
+  (future
+    (log/info "Started index rotation/removal task.")
+    (loop []
+      (let [conf (-> zorka-app-state :conf :tstore)]
+        (zu/sleep (* 1000 (:rotation-interval conf 60)))
+        (try
+          (when (= :elastic (:type conf))
+            (ze/check-rotate zorka-app-state))
+          (catch Throwable e
+            (log/error e "Error running index rotation check")))
+        (recur)))))
 
 (defn stop-server []
   (when-let [f @stop-f]
@@ -99,6 +113,9 @@
   (when-let [j @jetty-server]
     (.stop j)
     (reset! jetty-server nil))
+  (when-let [f @index-rotation-f]
+    (future-cancel f)
+    (reset! index-rotation-f nil))
   (when-let [cf @conf-autoreload-f]
     (future-cancel cf)
     (reset! conf-autoreload-f nil)))
@@ -110,6 +127,7 @@
     (reset!
       conf-autoreload-f
       (zu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.edn"))
+    (reset! index-rotation-f (index-rotation-task))
     ; Set up Jetty container
     (System/setProperty "org.eclipse.jetty.server.Request.maxFormContentSize" (str (:max-form-size http)))
     (run-jetty zorka-main-handler http)

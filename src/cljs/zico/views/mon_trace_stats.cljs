@@ -32,7 +32,7 @@
       [:div.t (str recs)]]
      [:div.flex.n
       (zw/svg-icon :awe :clock :blue, :title "Average execution time (ms)")
-      [:div.t tt]]
+      [:div.t (zu/ns-to-str tt false)]]
      [:div.m method]]))
 
 

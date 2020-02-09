@@ -26,21 +26,6 @@
       :else (recur args1 attrs (conj children arg0)))))
 
 
-(defn from-mouse-event [e]
-  (let [c (.-target e), r (.getBoundingClientRect c)]
-    {:x (.-clientX e), :y (.-clientY e),
-     :w (.-offsetWidth c), :h (.-offsetHeight c),
-     :l (.-left r), :r (.-right r), :t (.-top r), :b (.-bottom r)}))
-
-
-(defn dom-attr-lookup [node attr class]
-  (let [n (.-nodeName node), c (.getAttribute node "class"), v (.getAttribute node attr), p (.-parentNode node)]
-    (cond
-      (and (some? v) (or (nil? class) (= c class))) v
-      (or (nil? p) (= "HTML" n)) nil
-      :else (recur p attr class))))
-
-
 (defn group [& [coll & _ :as colls]]
   (when-not (empty? coll)
     (cons
@@ -81,23 +66,6 @@
     (< t 10000000000) (pp/cl-format nil "~4fs" (/ t 1000000000))
     (< t 100000000000) (pp/cl-format nil "~3fs" (/ t 1000000000))
     :else (pp/cl-format nil "~ds" (int (/ t 1000000000)))))
-
-(defn ticks-to-str
-  ([ticks] (ticks-to-str ticks false))
-  ([ticks ms?]
-   (let [t (* ticks 65536)]
-     (ns-to-str t ms?))))
-
-(defn secs-to-str
-  ([t]
-    (cond
-      (= t 0) "<1s"
-      (< t 60) (pp/cl-format nil "~ds" t)
-      :else
-      (let [s (mod t 60)
-            m (/ (- t s) 60)
-            h (/ (- m (mod m 60)) 60)]
-        (pp/cl-format nil "~d:~d:~d" h m s)))))
 
 (defn to-string [v]
   (cond
