@@ -40,7 +40,6 @@
    :ttype {:type :keyword}
 
    :tdata {:type :binary, :index false}
-   :terms {:type :text}
    :mids {:type :long}
 
    ; symbol registries and sequence generators
@@ -329,7 +328,6 @@
        :errors   (.getErrors tcd)
        :ttype    (.getTtype tcd)
        :tdata    (zu/b64enc (zu/gzip (.getTraceData tcd)))  ; TODO tutaj kompresja
-       :terms    (seq (.getTerms tcd))
        :mids     (seq (.getMethods tcd))}
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
@@ -413,7 +411,7 @@
 
 (defn check-rotate [app-state]
   (locking (-> app-state :tstore :collector)
-    (let [conf (-> app-state :conf :tstore), max-count (:index-count conf),
+    (let [conf (-> app-state :conf :tstore),
           max-size (* 1024 1024 (+ (:index-size conf) (:index-overcommit conf))),
           tsnum @(-> app-state :tstore :tsnum)
           cur-size (index-size app-state tsnum)]
@@ -428,7 +426,7 @@
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
                     min-tstamp max-tstamp min-duration limit offset
-                    attr-matches text match-start match-end]}]
+                    attr-matches text]}]
   {:sort
          (if order-by
            {order-by {:order (or order-dir :desc)}}

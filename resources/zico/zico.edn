@@ -43,7 +43,7 @@
 
 
  ; Configuration of main data store
- :tstore {:type               #or [#env ZICO_TSTORE_TYPE #prop zico.tstore.type :elastic]
+ :tstore {:type               #or [#env ZICO_TSTORE_TYPE #prop zico.tstore.type :memory]
           :url                "http://127.0.0.1:9200"
           :username           "zico"
           :password           "zico"
@@ -52,6 +52,7 @@
           :post-merge-pause     30
           :pre-merge-segments   4
           :final-merge-segments 1
+          :memory-size          2048
           :index-size           16384
           :index-overcommit     1024
           :index-count          16

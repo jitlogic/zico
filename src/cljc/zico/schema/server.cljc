@@ -52,12 +52,13 @@
    :description s/Str
    :icon s/Str})
 
-(s/defschema ElasticIndexConfig
+(s/defschema TraceStoreConfig
   {:type                      (s/enum :memory :elastic)
    :url                       s/Str
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
    :name                      s/Str
+   :memory-size               s/Num
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num
@@ -70,7 +71,7 @@
 
 (s/defschema ZicoConf
   {:home-dir    s/Str
-   :tstore ElasticIndexConfig
+   :tstore TraceStoreConfig
    :http        JettyHttpConf
    :log         LoggerConfig
    :auth        AuthConfig

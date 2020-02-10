@@ -9,8 +9,9 @@
     [clojure.java.io :as io])
   (:import
     (java.io File ByteArrayOutputStream ByteArrayInputStream)
-    (java.util Properties HashMap Base64)
-    (java.util.zip GZIPOutputStream GZIPInputStream)))
+    (java.util Properties Base64)
+    (java.util.zip GZIPOutputStream GZIPInputStream)
+    (java.time LocalDateTime OffsetDateTime)))
 
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
@@ -137,6 +138,7 @@
 
 (def ALPHA-STR "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
+
 (defn random-string
   "Generates random string of alphanumeric characters of given length."
   ([len]
@@ -152,6 +154,24 @@
    (ctfo/unparse
      (:date-hour-minute-second-ms ctfo/formatters)
      (ctco/from-long t))))
+
+
+(defn millis->iso-time [t]
+  (.toString (LocalDateTime/ofEpochSecond (/ t 1000), 0, (.getOffset (OffsetDateTime/now)))))
+
+
+(def RE-TST #"(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z?")
+
+
+(defn iso-time->millis [s]
+  (when-let [[_ y m d hh mm ss] (when (string? s) (re-matches RE-TST s))]
+    (->
+      (LocalDateTime/of
+        (Integer/parseInt y) (Integer/parseInt m) (Integer/parseInt d)
+        (Integer/parseInt hh) (Integer/parseInt mm) (Integer/parseInt ss))
+      (.atOffset (.getOffset (OffsetDateTime/now)))
+      .toInstant
+      .toEpochMilli)))
 
 
 (defn render-page [& content]

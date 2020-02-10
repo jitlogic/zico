@@ -1,6 +1,6 @@
 (ns zico.memstore
+  (:require [zico.util :as zu])
   (:import (com.jitlogic.zorka.common.collector MemoryChunkStore Collector TraceChunkData TraceDataExtractor TraceStatsExtractor)
-           (com.jitlogic.zorka.common.util ZorkaUtil)
            (com.jitlogic.zorka.common.tracedata SymbolRegistry TraceMarker)
            (java.time LocalDateTime OffsetDateTime)
            (java.util ArrayList Collection)))
@@ -9,16 +9,21 @@
   (seq (.attrVals store attr)))
 
 (defn- tcd-matches [{:keys [traceid spanid errors-only spans-only min-tstamp max-tstamp min-duration attr-matches text]} ^TraceChunkData tcd]
-  (and
-    (or (nil? traceid) (= traceid (.getTraceIdHex tcd)))
-    (or (nil? spanid) (= spanid (.getSpanIdHex tcd)))
-    (or (not errors-only) (.hasFlag tcd TraceMarker/ERROR_MARK))
-    (or (nil? text) (some? (for [t (.getTerms tcd) :when (.contains t text)] t)))
-    (or (nil? attr-matches) (every? true? (for [[k v] attr-matches :let [s (.getAttr tcd k)]]
-                                            (and (some? s) (.contains s v)))))
-    (or (nil? min-duration) (> (.getDuration tcd) min-duration))
-    ; TODO spans-only, min-tstamp, max-tstamp
-    ))
+  (let [min-tstamp (zu/iso-time->millis min-tstamp), max-tstamp (zu/iso-time->millis max-tstamp)]
+    (and
+      (or (nil? traceid) (= traceid (.getTraceIdHex tcd)))
+      (or (nil? spanid) (= spanid (.getSpanIdHex tcd)))
+      (or (not errors-only) (.hasFlag tcd TraceMarker/ERROR_MARK))
+      (or (nil? text) (not (empty? (for [[_ t] (.getAttrs tcd) :when (some? t)
+                                         :when (.contains (.toUpperCase t) (.toUpperCase text))] t))))
+      (or (nil? attr-matches) (every? true? (for [[k v] attr-matches :let [s (.getAttr tcd k)]]
+                                              (and (some? s) (.contains s v)))))
+      (or (nil? min-duration) (> (.getDuration tcd) min-duration))
+      (or (nil? min-tstamp) (>= (.getTstamp tcd) min-tstamp))
+      (or (nil? max-tstamp) (<= (.getTstamp tcd) max-tstamp))
+      (or spans-only (= 0 (.getParentId tcd)))
+      ; TODO spans-only
+      )))
 
 (defn- tcd->rest [^TraceChunkData tcd & {:keys [chunks?]}]
   (when (some? tcd)
