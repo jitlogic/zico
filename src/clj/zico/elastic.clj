@@ -13,7 +13,7 @@
     (com.jitlogic.zorka.common.tracedata SymbolicMethod)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
-    (java.time LocalDateTime ZoneOffset OffsetDateTime)))
+    (java.time LocalDateTime OffsetDateTime)))
 
 (def TYPE-SYMBOL 1)
 (def TYPE-METHOD 2)
@@ -286,9 +286,6 @@
    (.longValue (.getMethodId md))
    (.longValue (.getSignatureId md))])
 
-(defn vec->mdef [[c m s]]
-  (SymbolicMethod. (.intValue c) (.intValue m) (.intValue s)))
-
 (defn symbol-mapper [db tsnum]
   "Returns SymbolMapper with Elastic Search as backend."
   (reify
@@ -335,30 +332,6 @@
       (into {}
         (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
           {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
-
-(def RE-ATTR #"([^\t]*)\t(.*)")
-
-(defn doc->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method calls errors recs tdata ttype term mids] :as doc}]
-  (let [[tid1 tid2] (zu/parse-hex-tid traceid)
-        [spanid _] (zu/parse-hex-tid spanid)
-        [pid _] (zu/parse-hex-tid parentid)
-        rslt (TraceChunkData. tid1 tid2 spanid (or pid 0) chnum)]
-    (when tst (.setTstamp rslt tst))
-    (when tsnum (.setTsNum rslt tsnum))
-    (when duration (.setDuration rslt duration))
-    (when class (.setKlass rslt klass))
-    (when method (.setMethod rslt method))
-    (when calls (.setCalls rslt calls))
-    (when errors (.setErrors rslt errors))
-    (when recs (.setRecs rslt recs))
-    (when tdata (.setTraceData rslt (zu/gunzip (zu/b64dec tdata))))
-    (when ttype (.setTtype rslt ttype))
-    ; TODO (doseq [a attr :let [[_ v k] (re-matches RE-ATTR a)]] (.setAttr rslt k v))
-    (doseq [t term] (.addTerm rslt t))
-    (doseq [m mids] (.addMethod rslt (.intValue m)))
-    rslt))
-
-(def RE-TRC-CHUNK-ID #"TRC\.([0-9a-fA-F]{8,16})\.([0-9a-fA-F]{8})\.([0-9a-zA-Z]{8})\.([0-9a-zA-Z]+)")
 
 (defn chunk-add [db tsnum doc]
   (elastic http/post db tsnum :path ["/_doc"] :body doc))
