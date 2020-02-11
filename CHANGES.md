@@ -1,3 +1,13 @@
+ZICO 1.90.7 (2020-02-11)
+------------------------
+
+* get rid of internal on-disk trace store, collector is now stateless;
+* use Elastic as backend for trace storage;
+* memory trace store - for quick development setups;
+* simplify collector, get rid of internal SQL config database;
+* use OpenTracing compliant labels and attribute names;
+
+
 ZICO 1.90.6 (2019-01-19)
 ------------------------
 
