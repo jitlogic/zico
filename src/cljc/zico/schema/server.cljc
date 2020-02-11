@@ -58,7 +58,8 @@
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
    :name                      s/Str
-   :memory-size               s/Num
+   :memstore-size-max         s/Num
+   :memstore-size-del         s/Num
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num

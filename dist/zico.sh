@@ -23,7 +23,7 @@ for F in jvm.conf zico.conf zico.jar ; do
   fi
 done
 
-for D in log data data/backup data/trace data/conf ; do
+for D in log ; do
   if [ ! -d $ZICO_HOME/$D ] ; then
     echo "Missing directory: $ZICO_HOME/$D. Creating..."
     mkdir $ZICO_HOME/$D
@@ -33,7 +33,7 @@ done
 . $ZICO_HOME/jvm.conf
 
 if [ -z "$JAVA_HOME" ] ; then
-  echo "Missing JAVA_HOME setting. Add JAVA_HOME=/path/to/jdk7 to $ZICO_HOME/zico.conf."
+  echo "Missing JAVA_HOME setting. Add JAVA_HOME=/path/to/jdk8 to $ZICO_HOME/jvm.conf."
   exit 1
 fi
 
