@@ -237,6 +237,6 @@
     (when-let [[_ n x m] (re-matches RE-BSIZE s)]
       (* (Long/parseLong n) (BSIZES m 1)))))
 
-(defn spy [x]
-  (println "SPY:" x)
+(defn spy [s x]
+  (println s x)
   x)

@@ -23,7 +23,7 @@
     node))
 
 (defn chunks->tree [chunks]
-  (let [cgroups (group-by #(:parentid % :root) chunks)]
+  (let [cgroups (group-by #(or (:parentid %) :root) chunks)]
     (when (:root cgroups)
       (chunks->tree-node (first (:root cgroups)) cgroups))))
 
