@@ -62,8 +62,11 @@
   (when (string? (:body resp))
     (json/read-str (:body resp))))
 
-(defn- index-headers [db tsnum]
-  {:accept "application/json", :content-type "application/json"})
+(defn- index-headers [{:keys [username password] :as db} tsnum]
+  (merge
+    {:accept "application/json", :content-type "application/json"}
+    (when (string? password)
+      {:authorization (str "Basic " (zu/b64enc (.getBytes (str username ":" password))))})))
 
 (defn checked-req [req resp]
   (when-not (<= 200 (:status resp) 299)
@@ -92,9 +95,7 @@
   (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
     (sort-by
       :tsnum
-      (for [ix (-> (http/get (str (:url db) "/_cat/indices")
-                             {:headers {:accept "application/json"}})
-                   parse-response)
+      (for [ix (-> (http/get (str (:url db) "/_cat/indices") {:headers (index-headers db 0)}) parse-response)
             :let [ix (zu/keywordize ix), xname (:index ix),
                   status (keyword (:status ix)), health (keyword (:health ix))
                   m (when (string? xname) (re-matches mask xname))]
