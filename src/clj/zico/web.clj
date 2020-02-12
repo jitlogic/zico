@@ -173,8 +173,9 @@
       )))
 
 (defn password-check [pwhash passwd]
-  ; TODO implement some password hashing
-  (= pwhash passwd))
+  (cond
+    (.startsWith pwhash "SSHA512:") (zu/ssha512-verify pwhash passwd)
+    :else (= pwhash passwd)))
 
 
 (defn wrap-web-middleware [handler]

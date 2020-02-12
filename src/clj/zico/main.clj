@@ -133,7 +133,18 @@
     (run-jetty zorka-main-handler http)
     (println "ZICO is up and running on: " (str (:ip http) ":" (:port http)))))
 
+(defn gen-passwd []
+  (let [p1 (String. (.readPassword (System/console) "Enter password: " (object-array [])))
+        p2 (String. (.readPassword (System/console) "Repeat password: " (object-array [])))]
+    (cond
+      (empty? p1) (println "ERROR: Empty password.")
+      (not= p1 p2) (println "ERROR: passwords don't match.")
+      :else (println (zu/ssha512 p1)))))
 
 (defn -main [& args]
-  (start-server))
+  (println "args=" args)
+  (cond
+    (empty? args) (start-server)
+    (= (first args) "passwd") (gen-passwd)
+    :else (start-server)))
 

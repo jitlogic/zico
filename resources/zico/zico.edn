@@ -37,9 +37,9 @@
                               :org.eclipse  :info
                               }}
 
- :auth {:type :none
-        ;:type :http-basic
-        :users {"admin" "zico"}}
+ :auth {:type :http-basic                                   ; :none, :http-basic
+        :users {"admin" "SSHA512:iKMGEUtcBLP6jLHZl1kDSRX6yN0D2L3DBPXMuAk5uM1Af7mUHAk5ApYW9j24yGNxZzCcNrZ4TP62ky2PlToqtQ=="} ; 'zico'
+        }
 
 
  ; Configuration of main data store

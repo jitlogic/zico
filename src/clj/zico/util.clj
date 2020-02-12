@@ -11,7 +11,8 @@
     (java.io File ByteArrayOutputStream ByteArrayInputStream)
     (java.util Properties Base64)
     (java.util.zip GZIPOutputStream GZIPInputStream)
-    (java.time LocalDateTime OffsetDateTime)))
+    (java.time LocalDateTime OffsetDateTime)
+    (java.security MessageDigest)))
 
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
@@ -240,3 +241,15 @@
 (defn spy [s x]
   (println s x)
   x)
+
+(defn ssha512
+  ([pwd]
+   (ssha512 (rand-int 4096) pwd))
+  ([salt pwd]
+   (let [md (MessageDigest/getInstance "SHA-512")
+         s (str (format "%04x" salt) pwd)]
+     (str "SSHA512:" (b64enc (.digest md (.getBytes s)))))))
+
+(defn ssha512-verify [pwh pwd]
+  (not (empty? (for [i (range 4096) :when (= pwh (ssha512 i pwd))] true))))
+
