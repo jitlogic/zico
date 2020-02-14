@@ -57,8 +57,10 @@
           :index-size           16384
           :index-overcommit     1024
           :index-count          16
-          :num-shards           1
-          :num-replicas         0}
+          ; Elastic index creation parameters
+          :number_of_shards     1
+          :number_of_replicas   0
+          :index.mapping.total_fields.limit 16384}
 
  :filter-defs
            [{:attr "component", :description "Component", :icon "awe/puzzle#light"}

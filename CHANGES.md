@@ -1,7 +1,7 @@
 ZICO 1.90.8 (2020-??-??)
 ------------------------
 
-* 
+* http authentication between zico and elastic; 
 
 
 ZICO 1.90.7 (2020-02-11)

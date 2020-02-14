@@ -9,8 +9,8 @@
     [clojure.tools.logging :as log])
   (:import
     (java.util HashMap Set Map ArrayList Collection)
-    (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector TraceDataExtractor TraceStatsExtractor)
-    (com.jitlogic.zorka.common.tracedata SymbolicMethod)
+    (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
+                                         TraceDataExtractor TraceStatsExtractor)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
     (java.time LocalDateTime OffsetDateTime)))
@@ -111,11 +111,12 @@
     http/post db tsnum
     :path [(format "/_forcemerge?max_num_segments=%d" num-segments)]))
 
-(def DEFAULT-INDEX-SETTINGS
+(def INDEX-SETTINGS-DEFAUTLS
   {:number_of_shards   1
    :number_of_replicas 0
-   :index.mapping.total_fields.limit 16384
-   })
+   :index.mapping.total_fields.limit 16384})
+
+(def INDEX-SETTINGS-KEYS (keys INDEX-SETTINGS-DEFAUTLS))
 
 (defn str->akey [s]
   (let [rslt
@@ -137,7 +138,7 @@
 (defn index-create [db tsnum]
   (elastic
     http/put db tsnum
-    :body {:settings (merge DEFAULT-INDEX-SETTINGS (:settings db))
+    :body {:settings (merge INDEX-SETTINGS-DEFAUTLS (select-keys db INDEX-SETTINGS-KEYS))
            :mappings DOC-MAPPINGS}))
 
 (defn index-delete [db tsnum]
@@ -325,7 +326,7 @@
        :calls    (.getCalls tcd)
        :errors   (.getErrors tcd)
        :ttype    (.getTtype tcd)
-       :tdata    (zu/b64enc (zu/gzip (.getTraceData tcd)))  ; TODO tutaj kompresja
+       :tdata    (zu/b64enc (.getTraceData tcd))  ; TODO tutaj kompresja
        :mids     (seq (.getMethods tcd))}
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
@@ -462,7 +463,7 @@
     (when recs (.setRecs tcd (.intValue recs)))
     (when calls (.setCalls tcd (.intValue calls)))
     (when errors (.setErrors tcd (.intValue errors)))
-    (when tdata (.setTraceData tcd (zu/gunzip (zu/b64dec tdata))))
+    (when tdata (.setTraceData tcd (zu/b64dec tdata)))
     tcd))
 
 (defn attr-vals [app-state attr]

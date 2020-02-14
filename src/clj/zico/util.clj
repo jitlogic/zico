@@ -8,9 +8,8 @@
     [clojure.tools.logging :as log]
     [clojure.java.io :as io])
   (:import
-    (java.io File ByteArrayOutputStream ByteArrayInputStream)
+    (java.io File)
     (java.util Properties Base64)
-    (java.util.zip GZIPOutputStream GZIPInputStream)
     (java.time LocalDateTime OffsetDateTime)
     (java.security MessageDigest)))
 
@@ -204,26 +203,6 @@
 (defn b64dec [^String s]
   (when s (.decode (Base64/getDecoder) s)))
 
-(defn gzip [^bytes b]
-  (with-open [out (ByteArrayOutputStream.), gzip (GZIPOutputStream. out)]
-    (do
-      (.write gzip b)
-      (.finish gzip)
-      (.toByteArray out))))
-
-(defn gunzip [^bytes z]
-  (with-open [out (ByteArrayOutputStream.)]
-    (io/copy (GZIPInputStream. (ByteArrayInputStream. z)) out)
-    (.toByteArray out)))
-
-(defn parse-hex-tid [^String s]
-  "Parses trace or span ID. Returns vector of two components, if second component does not exist, 0."
-  (cond
-    (nil? s) nil
-    (re-matches #"[0-9a-fA-F]{16}" s) [(.longValue (BigInteger. s 16)) 0]
-    (re-matches #"[0-9a-fA-F]{32}" s) [(.longValue (BigInteger. (.substring s 0 16) 16))
-                                       (.longValue (BigInteger. (.substring s 16 32) 16))]
-    :else nil))
 
 (def RE-BSIZE #"(\d+)(?:\.(\d+))?([kKmMgGtT]?)[bB]?")
 

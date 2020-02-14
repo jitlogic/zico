@@ -67,8 +67,9 @@
    :post-merge-pause          s/Num
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num
-   :num-shards                s/Num
-   :num-replicas              s/Num})
+   :number_of_shards          s/Num
+   :number_of_replicas        s/Num
+   :index.mapping.total_fields.limit s/Num})
 
 (s/defschema ZicoConf
   {:home-dir    s/Str
