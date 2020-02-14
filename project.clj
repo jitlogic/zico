@@ -22,6 +22,10 @@
                  [metosin/compojure-api "2.0.0-alpha28"]
                  [hiccup "1.0.5"]
 
+                 [io.micrometer/micrometer-core "1.3.5"]
+                 [io.micrometer/micrometer-registry-prometheus "1.3.5"]
+                 [io.micrometer/micrometer-registry-elastic "1.3.5"]
+
                  [clj-http "3.10.0"]
                  [org.slf4j/slf4j-api "1.7.25"]
                  [ch.qos.logback/logback-classic "1.0.13"]

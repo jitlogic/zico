@@ -41,7 +41,6 @@
   {:type s/Keyword
    :users {s/Str s/Str}})
 
-
 (s/defschema TraceType
   {:component             s/Str
    :render                s/Any
@@ -71,12 +70,26 @@
    :number_of_replicas        s/Num
    :index.mapping.total_fields.limit s/Num})
 
+(s/defschema MetricsRegistryConf
+  {:type (s/enum :none :simple :jmx :prometheus :elastic)
+   :prefix s/Str
+   :step s/Num
+   :threads s/Num
+   :conn-timeout s/Num
+   :read-timeout s/Num
+   :batch-size s/Num
+   :host s/Str
+   :index s/Str
+   :username s/Str
+   :password s/Str})
+
 (s/defschema ZicoConf
   {:home-dir    s/Str
-   :tstore TraceStoreConfig
+   :tstore      TraceStoreConfig
    :http        JettyHttpConf
    :log         LoggerConfig
    :auth        AuthConfig
+   :metrics     MetricsRegistryConf
    :filter-defs [FilterDef]
-   :trace-types {s/Keyword TraceType}
-   })
+   :trace-types {s/Keyword TraceType}})
+

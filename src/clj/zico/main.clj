@@ -7,6 +7,7 @@
     [zico.schema.server]
     [zico.trace :as ztrc]
     [zico.web :as zweb]
+    [zico.metrics :as zmet]
     [clojure.tools.logging :as log]
     [zico.elastic :as ze])
   (:gen-class)
@@ -70,6 +71,7 @@
 (defn  new-app-state [old-state conf]
   (->
     {:conf conf}
+    (zmet/with-metrics-registry old-state)
     (ztrc/with-tracer-components old-state)
     zweb/with-zorka-web-handler))
 

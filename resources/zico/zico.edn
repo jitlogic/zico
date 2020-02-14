@@ -41,6 +41,17 @@
         :users {"admin" "SSHA512:iKMGEUtcBLP6jLHZl1kDSRX6yN0D2L3DBPXMuAk5uM1Af7mUHAk5ApYW9j24yGNxZzCcNrZ4TP62ky2PlToqtQ=="} ; 'zico'
         }
 
+ :metrics {:type :prometheus
+           :prefix "zico"
+           :step 60
+           :threads 2
+           :conn-timeout 1
+           :read-timeout 1
+           :batch-size 10000
+           :host "127.0.0.1:9200"
+           :index "zico_metrics"
+           :username "zico"
+           :password "zico"}
 
  ; Configuration of main data store
  :tstore {:type                 #or [#env ZICO_TSTORE_TYPE #prop zico.tstore.type :memory]

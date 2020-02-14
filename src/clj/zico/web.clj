@@ -22,7 +22,8 @@
     [zico.schema.tdb]
     [zico.schema.server]
     [zico.trace :as ztrc]
-    [zico.util :as zu])
+    [zico.util :as zu]
+    [zico.metrics :as zmet])
   (:import (com.jitlogic.zorka.common.util Base64 ZorkaUtil)))
 
 
@@ -61,7 +62,7 @@
 (defn attr-vals [app-state id]
   ((-> app-state :tstore :attr-vals) app-state id))
 
-(defn zico-api-routes [app-state]
+(defn zico-api-routes [{{:keys [user-search user-dtrace user-detail user-tstats]} :metrics :as app-state}]
   (ca/api
     {:exceptions
      {:handlers {:zico zico-error-handler}}
@@ -82,7 +83,7 @@
         :summary "search traces according to posted query"
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/ChunkMetadata]
-        (rhr/ok (ztrc/trace-search app-state query)))
+        (rhr/ok (zmet/with-timer user-search (ztrc/trace-search app-state query))))
       (ca/GET "/attr/:id" []
         :summary "return all values of given attribute"
         :query-params [{limit :- s/Int 100}]
@@ -93,17 +94,23 @@
         :summary "return all spans of a distributed trace"
         :path-params [tid :- s/Str]
         :return zico.schema.tdb/ChunkMetadata
-        (rhr/ok (ztrc/chunks->tree (ztrc/trace-search app-state {:traceid tid, :spans-only true, :limit 1024}))))
+        (rhr/ok
+          (zmet/with-timer user-dtrace
+            (ztrc/chunks->tree
+              (ztrc/trace-search app-state {:traceid tid, :spans-only true, :limit 1024})))))
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
         :return zico.schema.tdb/TraceRecord
-        (trace-detail app-state tid sid))
+        (zmet/with-timer user-detail
+          (trace-detail app-state tid sid)))
       (ca/GET "/:tid/:sid/stats" []
         :summary "return trace method call stats"
         :path-params [tid :- s/Str, sid :- s/Str]
         :return [zico.schema.tdb/TraceStats]
-        (rhr/ok (ztrc/trace-stats app-state tid sid))))
+        (rhr/ok
+          (zmet/with-timer user-tstats
+            (ztrc/trace-stats app-state tid sid)))))
 
     (ca/context "/config" []
       :tags ["config"]
@@ -117,21 +124,23 @@
         (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))))
 
 
-(defn zico-agent-routes [app-state]
+(defn zico-agent-routes [{{:keys [agent-agd agent-trc]} :metrics :as app-state}]
   (cc/routes
     (cc/POST "/submit/agd" {:keys [headers body]}
-      (ztrc/submit-agd
-        app-state
-        (get headers "x-zorka-session-id")
-        (.equalsIgnoreCase "true" (get headers "x-zorka-session-reset" "false"))
-        (ZorkaUtil/slurp body)))
+      (zmet/with-timer agent-agd
+        (ztrc/submit-agd
+          app-state
+          (get headers "x-zorka-session-id")
+          (.equalsIgnoreCase "true" (get headers "x-zorka-session-reset" "false"))
+          (ZorkaUtil/slurp body))))
     (cc/POST "/submit/trc" {:keys [headers body]}
-      (ztrc/submit-trc
-        app-state
-        (get headers "x-zorka-session-id")
-        (get headers "x-zorka-trace-id")
-        0
-        (ZorkaUtil/slurp body)))))
+      (zmet/with-timer agent-trc
+        (ztrc/submit-trc
+          app-state
+          (get headers "x-zorka-session-id")
+          (get headers "x-zorka-trace-id")
+          0
+          (ZorkaUtil/slurp body))))))
 
 
 (defn zorka-web-routes [app-state]
@@ -145,8 +154,11 @@
       (cc/context "/agent" [] agent-routes)
       (cc/context "/view" [] render-loading-page)
 
+      (cc/GET "/prometheus" []
+        (zmet/prometheus-scrape app-state))
+
       (resources "/")
-      (not-found "Not Found.\n"))))
+      (not-found "Not Found!\n"))))
 
 (def RE-AUTH-HDR #"\s*(\w+)\s+(\S+)\s*")
 (def RE-AUTH-VAL #"(\w+):(\S+)")
@@ -160,6 +172,7 @@
           [_ auths authv] (re-matches RE-AUTH-HDR auth)]
       (cond
         (.startsWith uri "/agent") (f req)
+        (.startsWith uri "/prometheus") (f req)
         (empty? auth) WWW-AUTHZ
         (not (.equalsIgnoreCase "Basic" auths)) WWW-AUTHZ
         :else
