@@ -481,6 +481,18 @@
           :let [ak (get b "key")] :when (not= ak attr)]
       ak)))
 
+(defn extract-props [prefix props]
+  (for [[k v] props :let [k (zu/to-str k), vp (or (get v "properties") (get v :properties))]]
+    (if vp
+      (extract-props (str prefix "." k) vp)
+      (str prefix "." k))))
+
+(defn attr-names [app-state tsnum]
+  (when (= :elastic (-> app-state :conf :tstore :type))
+    (let [rslt (elastic http/get (-> app-state :conf :tstore) tsnum :path "/_mapping")
+          attrs (flatten (for [[_ xdef] rslt] (extract-props "" (get-in xdef [:mappings :properties]))))]
+      (sort (for [a attrs :when (.startsWith a ".attrs")] (.substring a 7))))))
+
 (defn trace-search [app-state query & {:keys [chunks?]}]
   (let [body (q->e query)
         _source (clojure.string/join "," (map name RSLT-FIELDS))

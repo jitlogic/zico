@@ -76,7 +76,7 @@
              :tags     [{:name "config", :description "configuration objects"}
                         {:name "trace", :description "trace data search & browsing"}]
              :consumes ["application/json", "application/edn"]
-             :produces ["application/json", "application/edn"]}}}
+             :produces ["application/json", "application/edn", "text/plain"]}}}
 
     (ca/context "/trace" []
       :tags ["trace"]
@@ -123,9 +123,13 @@
         :summary "returns configured trace types"
         :return [(dissoc zico.schema.server/TraceType :render)]
         (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))
-
     (ca/context "/admin" []
       :tags ["admin"]
+      (ca/GET "/attrs/:tsnum" []
+        :summary "lists all symbols in given index (elastic only)"
+        :path-params [tsnum :- s/Num]
+        :return [s/Str],
+        (rhr/ok (zela/attr-names app-state tsnum)))
       (ca/POST "/rotate" []
         :summary "rotates trace index (useful only in elastic mode)"
         :return s/Str
