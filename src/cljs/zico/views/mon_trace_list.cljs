@@ -176,9 +176,9 @@
     (fn []
       (let [view-state @view-state]
         [:div.flexible.flex
-         (zw/svg-button :awe :attention-circled :red "Errors only"
-           [:do [:toggle [:view :trace :list :filter :errors-only :selected]] [::refresh-list]]
-           :opaque (get-in view-state [:filter :errors-only :selected]))
+         ;(zw/svg-button :awe :attention-circled :red "Errors only"
+         ;  [:do [:toggle [:view :trace :list :filter :errors-only :selected]] [::refresh-list]]
+         ;  :opaque (get-in view-state [:filter :errors-only :selected]))
          (zw/svg-button :awe :calendar :light "Select timespan"
            [:popup/open :calendar, :position :top-right, :on-click-kw ::filter-list,
             :path [:view :trace :list :filter :time]]
