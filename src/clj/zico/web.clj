@@ -22,6 +22,7 @@
     [zico.schema.tdb]
     [zico.schema.server]
     [zico.trace :as ztrc]
+    [zico.elastic :as zela]
     [zico.util :as zu]
     [zico.metrics :as zmet])
   (:import (com.jitlogic.zorka.common.util Base64 ZorkaUtil)))
@@ -121,7 +122,14 @@
       (ca/GET "/ttypes" []
         :summary "returns configured trace types"
         :return [(dissoc zico.schema.server/TraceType :render)]
-        (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))))
+        (rhr/ok (for [tt (vals (-> app-state :conf :trace-types))] (dissoc tt :when :render)))))
+
+    (ca/context "/admin" []
+      :tags ["admin"]
+      (ca/POST "/rotate" []
+        :summary "rotates trace index (useful only in elastic mode)"
+        :return s/Str
+        (rhr/ok (zela/rotate-index app-state))))))
 
 
 (defn zico-agent-routes [{{:keys [agent-agd agent-trc]} :metrics :as app-state}]

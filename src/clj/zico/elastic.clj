@@ -373,6 +373,13 @@
     (merge-index conf tsnum (:final-merge-segments conf 1))
     (log/info "Current active index is" new-tsnum)))
 
+(defn rotate-index [app-state]
+  (if (= :elastic (-> app-state :conf :tstore :type))
+    (do
+      (next-active-index app-state)
+      "Rotation successful.")
+    "Rotation request ignored."))
+
 (defn delete-old-indexes [app-state max-count]
   (let [conf (-> app-state :conf :tstore),
         indexes (sort-by :tsnum (list-indexes conf))
