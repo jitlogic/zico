@@ -10,7 +10,7 @@
   (:import
     (java.util HashMap Set Map ArrayList Collection)
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
-                                         TraceDataExtractor TraceStatsExtractor)
+                                         TraceDataExtractor TraceStatsExtractor CachingSymbolMapper)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
     (java.time LocalDateTime OffsetDateTime)))
@@ -361,7 +361,7 @@
   (let [tsnum (-> app-state :tstore :tsnum deref)
         new-tsnum (inc tsnum),
         conf (-> app-state :conf :tstore)
-        mapper (symbol-mapper conf new-tsnum),
+        mapper (CachingSymbolMapper. (symbol-mapper conf new-tsnum)),
         store (chunk-store conf new-tsnum)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
@@ -514,7 +514,7 @@
         (when (empty? indexes)
           (index-create new-conf tsnum)
           (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
-        (.reset collector tsnum (symbol-mapper new-conf tsnum) (chunk-store new-conf tsnum))))
+        (.reset collector tsnum (CachingSymbolMapper. (symbol-mapper new-conf tsnum)) (chunk-store new-conf tsnum))))
     (assoc state
       :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals
       :resolver (symbol-resolver new-conf))))
