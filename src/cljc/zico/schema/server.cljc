@@ -57,12 +57,12 @@
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
    :name                      s/Str
+   :session-timeout           s/Num
    :memstore-size-max         s/Num
    :memstore-size-del         s/Num
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num
-   :rotation-interval         s/Num
    :post-merge-pause          s/Num
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num

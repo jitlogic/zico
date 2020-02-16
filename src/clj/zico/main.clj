@@ -15,7 +15,8 @@
            (org.slf4j LoggerFactory Logger)
            (ch.qos.logback.classic.encoder PatternLayoutEncoder)
            (ch.qos.logback.core ConsoleAppender)
-           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)))
+           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
+           (com.jitlogic.zorka.common.collector Collector)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -39,6 +40,7 @@
 (defonce ^:dynamic jetty-server (atom nil))
 (defonce ^:dynamic conf-autoreload-f (atom nil))
 (defonce ^:dynamic index-rotation-f (atom nil))
+(defonce ^:dynamic session-cleaner-f (atom nil))
 
 (defonce LOG-STATE (atom {}))
 (def LOG-LEVELS {:trace Level/TRACE, :debug Level/DEBUG, :info Level/INFO, :warn Level/WARN, :error Level/ERROR})
@@ -100,13 +102,24 @@
     (log/info "Started index rotation/removal task.")
     (loop []
       (let [conf (-> zorka-app-state :conf :tstore)]
-        (zu/sleep (* 1000 (:rotation-interval conf 60)))
+        (zu/sleep 30000)
         (try
           (when (= :elastic (:type conf))
             (ze/check-rotate zorka-app-state))
           (catch Throwable e
             (log/error e "Error running index rotation check")))
         (recur)))))
+
+(defn session-cleaner-task []
+  (future
+    (log/info "Started session cleaner task.")
+    (loop []
+      (zu/sleep 30000)
+      (when-let [tstore-state (:tstore-state zorka-app-state)]
+        (let [t (* 1000 (or (-> zorka-app-state :conf :tstore :session-timeout) 300))
+              n (.cleanup (:collector @tstore-state) t)]
+          (log/debug "Session cleanup cycle:" n "sessions removed.")))
+      (recur))))
 
 (defn stop-server []
   (when-let [f @stop-f]
@@ -118,6 +131,9 @@
   (when-let [f @index-rotation-f]
     (future-cancel f)
     (reset! index-rotation-f nil))
+  (when-let [f @session-cleaner-f]
+    (future-cancel f)
+    (reset! session-cleaner-f nil))
   (when-let [cf @conf-autoreload-f]
     (future-cancel cf)
     (reset! conf-autoreload-f nil)))
@@ -130,6 +146,7 @@
       conf-autoreload-f
       (zu/conf-reload-task #'reload (System/getProperty "zico.home") "zico.edn"))
     (reset! index-rotation-f (index-rotation-task))
+    (reset! session-cleaner-f (session-cleaner-task))
     ; Set up Jetty container
     (System/setProperty "org.eclipse.jetty.server.Request.maxFormContentSize" (str (:max-form-size http)))
     (run-jetty zorka-main-handler http)

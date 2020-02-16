@@ -59,7 +59,7 @@
           :username             "zico"
           :password             "zico"
           :name                 "zico"
-          :rotation-interval    30
+          :session-timeout      90
           :post-merge-pause     30
           :pre-merge-segments   4
           :final-merge-segments 1
