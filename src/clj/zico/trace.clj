@@ -27,8 +27,8 @@
     (when (:root cgroups)
       (chunks->tree-node (first (:root cgroups)) cgroups))))
 
-(defn trace-search [{:keys [trace-desc] {:keys [search]} :tstore :as app-state} query]
-  (map trace-desc (search app-state query)))
+(defn trace-search [{:keys [trace-desc tstore-state] :as app-state} query]
+  (map trace-desc ((:search @tstore-state) app-state query)))
 
 
 (defn tdr->tr [^TraceDataResult tdr]
@@ -45,8 +45,8 @@
       (when-let [children (.getChildren tdr)]
         {:children (map tdr->tr children)}))))
 
-(defn trace-detail [{{:keys [detail]} :tstore :as app-state} traceid spanid]
-  (tdr->tr (detail app-state traceid spanid)))
+(defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
+  (tdr->tr ((:detail @tstore-state) app-state traceid spanid)))
 
 (defn tsr->ts [^TraceStatsResult tsr]
   "Converts TraceStatsResult to clojure map matching TraceStats schema"
@@ -58,8 +58,8 @@
    :min-duration (.getMinDuration tsr)
    :method (.getMethod tsr)})
 
-(defn trace-stats [{{:keys [stats]} :tstore :as app-state} traceid spanid]
-  (let [rslt (stats app-state traceid spanid)]
+(defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
+  (let [rslt ((:stats @tstore-state) app-state traceid spanid)]
     (vec (map tsr->ts rslt))))
 
 (defn dump-trace-req [path uri session-id session-reset trace-id data]
@@ -70,9 +70,9 @@
     (locking path
       (spit path (str (json/write-str {:uri uri, :headers headers, :body (Base64/encode data false)}) "\n") :append true))))
 
-(defn submit-agd [{{{:keys [dump dump-path]} :log} :conf {:keys [collector]} :tstore} session-id session-reset data]
+(defn submit-agd [{{{:keys [dump dump-path]} :log} :conf :keys [tstore-state]} session-id session-reset data]
   (try
-    (.handleAgentData collector session-id session-reset data)
+    (.handleAgentData (:collector @tstore-state) session-id session-reset data)
     (when dump (dump-trace-req dump-path "/agent/submit/agd" session-id session-reset nil data))
     (rhr/accepted)
     ; TODO session-renew - handle broken sessions
@@ -82,9 +82,9 @@
       (rhr/internal-server-error (json/write-str {:reason "internal error"})))))
 
 
-(defn submit-trc [{{{:keys [dump dump-path]} :log} :conf {:keys [collector]} :tstore} session-id trace-id chnum data]
+(defn submit-trc [{{{:keys [dump dump-path]} :log} :conf :keys [tstore-state]} session-id trace-id chnum data]
   (try
-    (.handleTraceData collector session-id trace-id chnum data)
+    (.handleTraceData (:collector @tstore-state) session-id trace-id chnum data)
     (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data))
     (rhr/accepted)
     (catch ZorkaRuntimeException e
@@ -113,12 +113,15 @@
           )))))
 
 
-(defn with-tracer-components [app-state old-state]
-  (let [new-state
-        (case (-> app-state :conf :tstore :type)
-          :elastic (assoc app-state :tstore (ze/elastic-trace-store app-state old-state))
-          :memory (assoc app-state :tstore (zm/memory-trace-store app-state old-state))
-          (throw (ex-info "No trace store type selected." {})))
+(defn with-tracer-components [{{{:keys [type]} :tstore} :conf :as app-state} old-state]
+  (let [tstore-lock (or (:tstore-lock old-state) (Object.)),
+        new-tstore (case type
+                 :elastic (ze/elastic-trace-store app-state old-state)
+                 :memory (zm/memory-trace-store app-state old-state)
+                 (throw (ex-info "No trace store type selected." {}))),
         tfn (trace-desc-fn (:conf app-state))]
-    (assoc new-state :trace-desc #(assoc % :desc (tfn %)))))
+    (assoc app-state
+      :tstore-state (atom new-tstore),
+      :tstore-lock tstore-lock,
+      :trace-desc #(assoc % :desc (tfn %)))))
 

@@ -5,8 +5,9 @@
            (java.time LocalDateTime OffsetDateTime)
            (java.util ArrayList Collection)))
 
-(defn attr-vals [{{:keys [^MemoryChunkStore store]} :tstore} attr]
-  (seq (.attrVals store attr)))
+(defn attr-vals [{:keys [tstore-state]} attr]
+  (let [{:keys [^MemoryChunkStore store]} @tstore-state]
+    (seq (.attrVals store attr))))
 
 (defn- tcd-matches [{:keys [traceid spanid errors-only spans-only min-tstamp max-tstamp min-duration attr-matches text]} ^TraceChunkData tcd]
   (let [min-tstamp (zu/iso-time->millis min-tstamp), max-tstamp (zu/iso-time->millis max-tstamp)]
@@ -49,8 +50,9 @@
   {:tst #(.getTstamp %), :duration #(.getDuration %),
    :calls #(.getCalls %), :recs #(.getRecs %), :errors #(.getErrors %)})
 
-(defn trace-search [{{:keys [^MemoryChunkStore store]} :tstore} query & {:keys [raw?]}]
-  (let [odir (if (= :asc (:order-dir query)) identity reverse)
+(defn trace-search [{:keys [tstore-state]} query & {:keys [raw?]}]
+  (let [{:keys [^MemoryChunkStore store]} @tstore-state,
+        odir (if (= :asc (:order-dir query)) identity reverse)
         mfn (if raw? identity tcd->rest)]
     (take
       (:limit query 100)
@@ -60,15 +62,17 @@
               :when (and tcd (tcd-matches query tcd))]
           (mfn tcd))))))
 
-(defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
-  (let [chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true, :raw? true)
-        tex (TraceDataExtractor. resolver)
+(defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
+  (let [{:keys [search resolver]} @tstore-state,
+        chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true, :raw? true)
+        tex (TraceDataExtractor. resolver),
         rslt (.extract tex (ArrayList. ^Collection chunks))]
     rslt))
 
-(defn trace-stats [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
-  (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true, :raw? true)
-        tex (TraceStatsExtractor. resolver)
+(defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
+  (let [{:keys [search resolver]} @tstore-state,
+        chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true, :raw? true),
+        tex (TraceStatsExtractor. resolver),
         rslt (.extract tex (ArrayList. ^Collection chunks))]
     rslt))
 
@@ -78,6 +82,8 @@
                 (* 1024 1024 (:memstore-size-max new-conf 2048))
                 (* 1024 1024 (:memstore-size-del new-conf 1024))),
         sreg (or (-> old-state :tstore :resolver) (SymbolRegistry.)),
-        state (or (:tstore old-state) {:store store, :collector (Collector. 1 sreg store false), :registry sreg})]
+        state (if (:tstore-state old-state)
+                @(:tstore-state old-state)
+                {:store store, :collector (Collector. 1 sreg store false), :registry sreg})]
     (assoc state
       :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals, :resolver sreg)))

@@ -61,7 +61,7 @@
     (rhr/not-found {:reason "trace not found"})))
 
 (defn attr-vals [app-state id]
-  ((-> app-state :tstore :attr-vals) app-state id))
+  ((:attr-vals @(:tstore-state app-state)) app-state id))
 
 (defn zico-api-routes [{{:keys [user-search user-dtrace user-detail user-tstats]} :metrics :as app-state}]
   (ca/api

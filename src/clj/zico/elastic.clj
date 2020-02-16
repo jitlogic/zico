@@ -6,7 +6,8 @@
     [clojure.data.json :as json]
     [clj-http.client :as http]
     [clojure.set :as cs]
-    [clojure.tools.logging :as log])
+    [clojure.tools.logging :as log]
+    [slingshot.slingshot :refer [throw+ try+]])
   (:import
     (java.util HashMap Set Map ArrayList Collection)
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
@@ -68,10 +69,15 @@
     (when (string? password)
       {:authorization (str "Basic " (zu/b64enc (.getBytes (str username ":" password))))})))
 
-(defn checked-req [req resp]
-  (when-not (<= 200 (:status resp) 299)
+(defn checked-req [req {:keys [body status] :as resp}]
+  (when-not (<= 200 status 299)
     (log/error "Error occured in elastic request: req:" req "resp: " resp)
-    (throw (ex-info (str "Error calling elastic: " (:status resp) ": " (:body resp)) {:req req :resp resp})))
+    (cond
+      (nil? body)
+      (throw+ {:type :unknown, :req req, :resp resp, :status status})
+      (re-matches #"Limit of total fields .* in index .* has been exceeded" (:body resp))
+      (throw+ {:type :field-limit-exceeded, :req req, :resp resp, :status status})
+      :else (throw+ {:type :other, :req req, :resp resp, :status status})))
   resp)
 
 (defn- elastic [http-method db tsnum & {:keys [path body verbose?]}]
@@ -335,18 +341,32 @@
         (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
           {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
 
-(defn chunk-add [db tsnum doc]
-  (elastic http/post db tsnum :path ["/_doc"] :body doc))
+(declare next-active-index)
 
-(defn chunk-store [db tsnum]
+(defn chunk-add [app-state tsnum doc retry]
+  (let [db (-> app-state :conf :tstore)]
+    (try+
+      (elastic http/post db tsnum :path ["/_doc"] :body doc)
+      (catch [:type :field-limit-exceeded] _
+        (when retry
+          (locking (-> app-state :tstore-lock)
+            (try+
+              (elastic http/post db tsnum :path ["/_doc"] :body doc)
+              (catch [:type :field-limit-exceeded] _
+                (next-active-index app-state)
+                (elastic http/post db tsnum :path ["/_doc"] :body doc)))
+            ))))))
+
+
+(defn chunk-store [app-state tsnum]
   "Returns trace chunk store with Elastic Search backend."
   (reify
     TraceChunkStore
     (add [_ tcd]
-      (chunk-add db tsnum (tcd->doc tcd)))
+      (chunk-add app-state tsnum (tcd->doc tcd) true))
     (addAll [_ tcds]
       (doseq [tcd tcds]
-        (chunk-add db tsnum (tcd->doc tcd))))))
+        (chunk-add app-state tsnum (tcd->doc tcd) true)))))
 
 (defn index-stats [app-state tsnum]
   (elastic
@@ -358,19 +378,22 @@
       :indices first second :total :store :size_in_bytes))
 
 (defn next-active-index [app-state]
-  (let [tsnum (-> app-state :tstore :tsnum deref)
+  (let [{:keys [tsnum collector]} @(:tstore-state app-state)
         new-tsnum (inc tsnum),
         conf (-> app-state :conf :tstore)
         mapper (CachingSymbolMapper. (symbol-mapper conf new-tsnum)),
-        store (chunk-store conf new-tsnum)]
+        store (chunk-store app-state new-tsnum)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
     (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
-    (.reset ^Collector (-> app-state :tstore :collector) new-tsnum mapper store)
-    (reset! (-> app-state :tstore :tsnum) new-tsnum)
-    (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
-    (log/info "Running final index merge ...")
-    (merge-index conf tsnum (:final-merge-segments conf 1))
+    (.reset ^Collector collector new-tsnum mapper store)
+    ; TODO zapamiętać w app-state mapper i store
+    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum)
+    (future
+      (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
+      (log/info "Running final index merge ...")
+      (merge-index conf tsnum (:final-merge-segments conf 1))
+      (log/info "Finished final index merge ..."))
     (log/info "Current active index is" new-tsnum)))
 
 (defn rotate-index [app-state]
@@ -392,10 +415,10 @@
           )))))
 
 (defn check-rotate [app-state]
-  (locking (-> app-state :tstore :collector)
+  (locking (:tstore-lock app-state)
     (let [conf (-> app-state :conf :tstore),
           max-size (* 1024 1024 (+ (:index-size conf) (:index-overcommit conf))),
-          tsnum @(-> app-state :tstore :tsnum)
+          {:keys [tsnum]} @(:tstore-state app-state)
           cur-size (index-size app-state tsnum)]
       (log/debug (format "Active index utilization: %.02f" (* 100.0 (/ cur-size max-size))) "%")
       (when (> cur-size max-size)
@@ -502,31 +525,37 @@
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
       (doc->rest doc :chunks? chunks?, :index index))))
 
-(defn trace-detail [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
-  (let [chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true)
+(defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
+  (let [{:keys [search resolver]} @tstore-state,
+        chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true)
         tex (TraceDataExtractor. resolver)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
-(defn trace-stats [{{:keys [search resolver]} :tstore :as app-state} traceid spanid]
-  (let [chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
+(defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
+  (let [{:keys [search resolver]} @tstore-state,
+        chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
         tex (TraceStatsExtractor. resolver)
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
 (defn elastic-trace-store [app-state old-state]
   (let [new-conf (-> app-state :conf :tstore)
-        state (or (:tstore old-state) {:tsnum (atom 0), :collector (Collector. 0 nil nil false)})
+        state (if (:tstore-state old-state) @(:tstore-state old-state) {:tsnum (atom 0), :collector (Collector. 0 nil nil false)})
+        tstore-lock (or (:tstore-lock old-state) (Object.))
         collector (:collector state)]
-    (locking collector
+    (locking tstore-lock
       (let [indexes (list-indexes new-conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
-        (reset! (:tsnum state) tsnum)
         (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
           (index-create new-conf tsnum)
           (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
-        (.reset collector tsnum (CachingSymbolMapper. (symbol-mapper new-conf tsnum)) (chunk-store new-conf tsnum))))
-    (assoc state
-      :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals
-      :resolver (symbol-resolver new-conf))))
+        (.reset collector tsnum (CachingSymbolMapper. (symbol-mapper new-conf tsnum)) (chunk-store app-state tsnum)) ; TODO pozbyc sie .reset()
+        (assoc state
+          :search trace-search,
+          :detail trace-detail,
+          :stats trace-stats,
+          :attr-vals attr-vals
+          :tsnum tsnum,
+          :resolver (symbol-resolver new-conf))))))
