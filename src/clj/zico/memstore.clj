@@ -84,6 +84,6 @@
         sreg (or (-> old-state :tstore :resolver) (SymbolRegistry.)),
         state (if (:tstore-state old-state)
                 @(:tstore-state old-state)
-                {:store store, :collector (Collector. 1 sreg store false), :registry sreg})]
+                {:store store, :collector (Collector. sreg store false), :registry sreg})]
     (assoc state
       :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals, :resolver sreg)))

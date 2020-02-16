@@ -378,17 +378,16 @@
       :indices first second :total :store :size_in_bytes))
 
 (defn next-active-index [app-state]
-  (let [{:keys [tsnum collector]} @(:tstore-state app-state)
+  (let [{:keys [tsnum]} @(:tstore-state app-state),
         new-tsnum (inc tsnum),
-        conf (-> app-state :conf :tstore)
+        conf (-> app-state :conf :tstore),
         mapper (CachingSymbolMapper. (symbol-mapper conf new-tsnum)),
-        store (chunk-store app-state new-tsnum)]
+        store (chunk-store app-state new-tsnum),
+        collector (Collector. mapper store false)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
     (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
-    (.reset ^Collector collector new-tsnum mapper store)
-    ; TODO zapamiętać w app-state mapper i store
-    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum)
+    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum, :collector collector, :mapper mapper, :store store)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
       (log/info "Running final index merge ...")
@@ -539,23 +538,19 @@
         rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
-(defn elastic-trace-store [app-state old-state]
-  (let [new-conf (-> app-state :conf :tstore)
-        state (if (:tstore-state old-state) @(:tstore-state old-state) {:tsnum (atom 0), :collector (Collector. 0 nil nil false)})
-        tstore-lock (or (:tstore-lock old-state) (Object.))
-        collector (:collector state)]
+(defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
+  (let [tstore-lock (or (:tstore-lock old-state) (Object.))]
     (locking tstore-lock
-      (let [indexes (list-indexes new-conf)
-            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))]
+      (let [indexes (list-indexes conf)
+            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
+            mapper (CachingSymbolMapper. (symbol-mapper conf tsnum))
+            resolver (symbol-resolver conf),
+            store (chunk-store app-state tsnum)
+            collector (Collector. mapper store false)]
         (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
-          (index-create new-conf tsnum)
+          (index-create conf tsnum)
           (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
-        (.reset collector tsnum (CachingSymbolMapper. (symbol-mapper new-conf tsnum)) (chunk-store app-state tsnum)) ; TODO pozbyc sie .reset()
-        (assoc state
-          :search trace-search,
-          :detail trace-detail,
-          :stats trace-stats,
-          :attr-vals attr-vals
-          :tsnum tsnum,
-          :resolver (symbol-resolver new-conf))))))
+        {:collector collector, :tsnum tsnum,
+         :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
+         :mapper mapper, :store store, :resolver resolver}))))
