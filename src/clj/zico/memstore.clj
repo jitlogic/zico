@@ -34,7 +34,7 @@
        :parentid (.getParentIdHex tcd)
        :ttype    (.getTtype tcd)
        :tst      (.getTstamp tcd)
-       :tstamp   (.toString (LocalDateTime/ofEpochSecond (/ (.getTstamp tcd) 1000), 0, (.getOffset (OffsetDateTime/now))))
+       :tstamp   (zu/millis->iso-time (.getTstamp tcd))
        :duration (.getDuration tcd)
        :calls    (.getCalls tcd)
        :errors   (.getErrors tcd)

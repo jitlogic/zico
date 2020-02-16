@@ -11,7 +11,8 @@
     (java.io File)
     (java.util Properties Base64)
     (java.time LocalDateTime OffsetDateTime)
-    (java.security MessageDigest)))
+    (java.security MessageDigest)
+    (java.time.format DateTimeFormatter)))
 
 
 (def DEV-MODE (.equalsIgnoreCase "true" (System/getProperty "zico.dev.mode")))
@@ -157,7 +158,7 @@
 
 
 (defn millis->iso-time [t]
-  (.toString (LocalDateTime/ofEpochSecond (/ t 1000), 0, (.getOffset (OffsetDateTime/now)))))
+  (.format DateTimeFormatter/ISO_LOCAL_DATE_TIME (LocalDateTime/ofEpochSecond (/ t 1000), 0, (.getOffset (OffsetDateTime/now)))))
 
 
 (def RE-TST #"(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z?")

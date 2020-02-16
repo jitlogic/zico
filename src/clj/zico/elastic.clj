@@ -471,7 +471,7 @@
   (merge
     (assoc
       (select-keys doc RSLT-FIELDS)
-      :tstamp (.toString (LocalDateTime/ofEpochSecond (/ tstamp 1000), 0, (.getOffset (OffsetDateTime/now))))
+      :tstamp (zu/millis->iso-time tstamp)
       :tst tstamp
       :attrs (into {}
                (for [[k v] doc :when (re-matches RE-ATTRF (name k))
