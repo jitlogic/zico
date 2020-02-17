@@ -13,8 +13,7 @@
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
                                          TraceDataExtractor TraceStatsExtractor CachingSymbolMapper)
     (java.util.regex Pattern)
-    (com.jitlogic.zorka.common.cbor TraceRecordFlags)
-    (java.time LocalDateTime OffsetDateTime)))
+    (com.jitlogic.zorka.common.cbor TraceRecordFlags)))
 
 (def TYPE-SYMBOL 1)
 (def TYPE-METHOD 2)
@@ -124,19 +123,40 @@
 
 (def INDEX-SETTINGS-KEYS (keys INDEX-SETTINGS-DEFAUTLS))
 
+(defonce ATTR-KEY-TRANSFORMS [])
+
+(defn attr-key-transform [rules attr]
+  (if attr
+    (or
+      (first
+        (for [{:keys [match replace]} rules :let [r (re-matches match attr)] :when r]
+          (if (string? r)
+            replace
+            (-> replace
+                (.replace "$1" (nth r 1 ""))
+                (.replace "$2" (nth r 2 ""))
+                (.replace "$3" (nth r 3 ""))
+                (.replace "$4" (nth r 4 ""))))))
+      attr)
+    attr))
+
 (defn str->akey [s]
+  (println "str->akey" s)
   (let [rslt
         (str "attrs."
-             (-> s
-                 (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
-                 (.replaceAll "^[_\\.]" "")
-                 (.replaceAll "\\.(\\d)" "_$1")
-                 .toLowerCase))]
+             (attr-key-transform
+               ATTR-KEY-TRANSFORMS
+               (-> s
+                   (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
+                   (.replaceAll "^[_\\.]" "")
+                   (.replaceAll "\\.(\\d)" "_$1")
+                   (.replace \. \_)
+                   .toLowerCase)))]
     (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
 
-(defn enable-field-mapping [app-state fields]
+(defn enable-field-mapping [app-state tsnum fields]
   (let [fm (into {} (for [f fields] {(str->akey f) {:type "text", :fielddata true}}))
-        rslt (elastic http/put (-> app-state :conf :tstore) nil
+        rslt (elastic http/put (-> app-state :conf :tstore) tsnum
                       :path ["/_mapping"]
                       :body {:properties fm})]
     rslt))
@@ -337,9 +357,9 @@
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
         {:top-level true})
-      (into {}
+      (zu/group-map
         (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
-          {f (str (.replace v \tab \space) \tab (.replace k \tab \space))})))))
+          [f (str (.replace v \tab \space) \tab (.replace k \tab \space))])))))
 
 (declare next-active-index)
 
@@ -386,7 +406,7 @@
         collector (Collector. mapper store false)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
-    (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs)))
+    (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs)))
     (swap! (:tstore-state app-state) assoc :tsnum new-tsnum, :collector collector, :mapper mapper, :store store)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
@@ -550,7 +570,7 @@
         (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
           (index-create conf tsnum)
-          (enable-field-mapping app-state (map :attr (-> app-state :conf :filter-defs))))
+          (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs))))
         {:collector collector, :tsnum tsnum,
          :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
          :mapper mapper, :store store, :resolver resolver}))))

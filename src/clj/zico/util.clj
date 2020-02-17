@@ -194,6 +194,10 @@
          {(keyword k) (keywordize v)}))
      :else m)))
 
+(defn group-map [coll]
+  (let [m (group-by first coll)]
+    (println "m=" m)
+    (into {} (for [[k v] m] {k (if (not= 1 (count v)) (map second v) (second (first v)))}))))
 
 (defn without-nil-vals [m]
   (into {} (for [[k v] m :when (some? v)] {k v})))

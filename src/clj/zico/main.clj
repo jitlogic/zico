@@ -16,7 +16,8 @@
            (ch.qos.logback.classic.encoder PatternLayoutEncoder)
            (ch.qos.logback.core ConsoleAppender)
            (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
-           (com.jitlogic.zorka.common.collector Collector)))
+           (com.jitlogic.zorka.common.collector Collector)
+           (java.util.regex Pattern)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -82,13 +83,15 @@
   ([] (reload (System/getProperty "zico.home" (System/getProperty "user.dir"))))
   ([home-dir]
    (println "Zico home directory:" home-dir)
-   (let [conf (zu/read-config
+   (let [{:keys [attr-transforms] :as conf} (zu/read-config
                 zico.schema.server/ZicoConf
                 (io/resource "zico/zico.edn")
-                (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))]
+                (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))
+         attr-transforms (for [a attr-transforms] (assoc a :match (Pattern/compile (:match a))))]
      (configure-logger (-> conf :log))
      (zu/ensure-dir (-> conf :log :path))
-     (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
+     (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf)))
+     (alter-var-root #'zico.elastic/ATTR-KEY-TRANSFORMS (constantly attr-transforms)))))
 
 
 (defn zorka-main-handler [req]

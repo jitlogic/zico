@@ -77,6 +77,10 @@
            [{:attr "component", :description "Component", :icon "awe/puzzle#light"}
             {:attr "local.service", :description "Service", :icon "awe/cubes#light"}]
 
+ :attr-transforms [
+   ; { :match #"foo" :replace "bar" }
+ ]
+
  :trace-types
            {:db  {:component "db", :render :db.statement, :icon "awe/database#darkgreen"}
             :http {:component "http", :render :http.url, :icon "awe/globe#steelblue"}

@@ -83,13 +83,17 @@
    :username s/Str
    :password s/Str})
 
+(s/defschema AttrTransformsConf
+  {:match s/Any, :replace s/Str})
+
 (s/defschema ZicoConf
-  {:home-dir    s/Str
-   :tstore      TraceStoreConfig
-   :http        JettyHttpConf
-   :log         LoggerConfig
-   :auth        AuthConfig
-   :metrics     MetricsRegistryConf
-   :filter-defs [FilterDef]
-   :trace-types {s/Keyword TraceType}})
+  {:home-dir        s/Str
+   :tstore          TraceStoreConfig
+   :http            JettyHttpConf
+   :log             LoggerConfig
+   :auth            AuthConfig
+   :metrics         MetricsRegistryConf
+   :filter-defs     [FilterDef]
+   :attr-transforms [AttrTransformsConf]
+   :trace-types     {s/Keyword TraceType}})
 
