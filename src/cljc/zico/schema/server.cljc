@@ -62,6 +62,7 @@
    :session-timeout           s/Num
    :memstore-size-max         s/Num
    :memstore-size-del         s/Num
+   :seq-block-size            s/Num
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num

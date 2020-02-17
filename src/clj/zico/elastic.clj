@@ -198,7 +198,7 @@
     (locking SYMS-ADD-LOCK
       ; TODO dual locking here (check if symbols were added before lock)
       (let [idx (index-name db prefix tsnum)
-            rslt (zipmap syms (seq-next db prefix tsnum :SYMBOLS (count syms) 4))
+            rslt (zipmap syms (seq-next db prefix tsnum :SYMBOLS (count syms) (:seq-block-size db)))
             data (for [[s i] rslt]
                    [{:index {:_index idx, :_id (str "SYM." i)}}
                     {:doctype TYPE-SYMBOL, :symbol s}])
@@ -246,7 +246,7 @@
   (if (empty? mdescs)
     {}
     (let [idx (index-name db prefix tsnum)
-          rslt (zipmap mdescs (seq-next db prefix tsnum :METHODS (count mdescs) 2))
+          rslt (zipmap mdescs (seq-next db prefix tsnum :METHODS (count mdescs) (:seq-block-size db)))
           data (for [[[c m s] i] rslt]
                  [{:index {:_index idx, :_id (str "MID." i)}}
                   {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])

@@ -71,6 +71,7 @@
           :final-merge-segments 1
           :memstore-size-max    768
           :memstore-size-del    256
+          :seq-block-size       4
           :index-size           16384
           :index-overcommit     1024
           :index-count          16
