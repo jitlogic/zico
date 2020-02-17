@@ -11,13 +11,13 @@
     [clojure.tools.logging :as log]
     [zico.elastic :as ze])
   (:gen-class)
-  (:import (ch.qos.logback.classic Level)
-           (org.slf4j LoggerFactory Logger)
-           (ch.qos.logback.classic.encoder PatternLayoutEncoder)
-           (ch.qos.logback.core ConsoleAppender)
-           (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
-           (com.jitlogic.zorka.common.collector Collector)
-           (java.util.regex Pattern)))
+  (:import
+    (ch.qos.logback.classic Level)
+    (org.slf4j LoggerFactory Logger)
+    (ch.qos.logback.classic.encoder PatternLayoutEncoder)
+    (ch.qos.logback.core ConsoleAppender)
+    (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
+    (java.util.regex Pattern)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 

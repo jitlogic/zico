@@ -79,6 +79,9 @@
       :else (throw+ {:type :other, :req req, :resp resp, :status status})))
   resp)
 
+(defn index-name [db prefix tsnum]
+  (format "%s_%s_%s_%06x" (:name db) prefix (:instance db) tsnum))
+
 (defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
   (let [req (merge
               {:headers (index-headers db tsnum)
@@ -86,7 +89,7 @@
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
         idx-name (if (number? tsnum)
-                   (format "%s/%s_%s_%s_%06x" (:url db) (:name db "zico") prefix (:instance db) tsnum)
+                   (format "%s/%s" (:url db) (index-name db prefix tsnum))
                    (format "%s/%s_%s_*" (:url db) (:name db "zico") prefix))
         url (apply str idx-name path)]
     (when verbose? (log/info "elastic: tsnum:" tsnum "url:" url "req:" req))
@@ -173,8 +176,8 @@
 (defn index-refresh [db tsnum]
   (elastic http/get db tsnum :path ["/_refresh"]))
 
-(defn seq-next [db tsnum seq-name block-sz seq-quant]
-  (let [idx (format "%s_%06x" (:name db) tsnum)
+(defn seq-next [db prefix tsnum seq-name block-sz seq-quant]
+  (let [idx (index-name db prefix tsnum)
         data (for [_ (range 0 block-sz seq-quant)]
                [{:update {:_index idx, :_id (str "SEQ." (name seq-name)), :retry_on_conflict 8}}
                 {:script {:source (format "ctx._source.seq += %d" seq-quant)}
@@ -189,13 +192,13 @@
 
 (def SYMS-ADD-LOCK (Object.))
 
-(defn syms-add [db tsnum syms]
+(defn syms-add [db prefix tsnum syms]
   (if (empty? syms)
     {}
     (locking SYMS-ADD-LOCK
       ; TODO dual locking here (check if symbols were added before lock)
-      (let [idx (format "%s_%06x" (:name db) tsnum)
-            rslt (zipmap syms (seq-next db tsnum :SYMBOLS (count syms) 4))
+      (let [idx (index-name db prefix tsnum)
+            rslt (zipmap syms (seq-next db prefix tsnum :SYMBOLS (count syms) 4))
             data (for [[s i] rslt]
                    [{:index {:_index idx, :_id (str "SYM." i)}}
                     {:doctype TYPE-SYMBOL, :symbol s}])
@@ -216,10 +219,10 @@
           {(Long/parseLong (.substring ^String (get d "_id") 4))
            (get-in d ["_source" "symbol"])})))))
 
-(defn syms-search [db tsnum syms]
+(defn syms-search [db prefix tsnum syms]
   (if (empty? syms)
     {}
-    (let [idx (format "%s_%06x" (:name db) tsnum)
+    (let [idx (index-name db prefix tsnum)
           data (for [s syms]
                  [{:index idx}
                   {:query {:term {:symbol s}}}])
@@ -229,21 +232,21 @@
         (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
           {(get-in h ["_source" "symbol"]) (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
-(defn syms-map [db tsnum m]
+(defn syms-map [db prefix tsnum m]
   "Given agent-side symbol map (aid -> name), produce agent-collector mapping (aid -> rid)"
   (let [syms (set (vals m)),
-        rsmap (syms-search db tsnum syms),
+        rsmap (syms-search db prefix tsnum syms),
         asyms (cs/difference syms (keys rsmap)),
-        asmap (syms-add db tsnum asyms)]
+        asmap (syms-add db prefix tsnum asyms)]
     (into {}
       (for [[aid sym] m :let [rid (or (rsmap sym) (asmap sym))] :when rid]
         {aid rid}))))
 
-(defn mids-add [db tsnum mdescs]
+(defn mids-add [db prefix tsnum mdescs]
   (if (empty? mdescs)
     {}
-    (let [idx (format "%s_%06x" (:name db) tsnum),
-          rslt (zipmap mdescs (seq-next db tsnum :METHODS (count mdescs) 2))
+    (let [idx (index-name db prefix tsnum)
+          rslt (zipmap mdescs (seq-next db prefix tsnum :METHODS (count mdescs) 2))
           data (for [[[c m s] i] rslt]
                  [{:index {:_index idx, :_id (str "MID." i)}}
                   {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
@@ -262,10 +265,10 @@
           {(Long/parseLong (.substring ^String (get d "_id") 4))
            (vec (for [i (.split mdesc ",")] (Long/parseLong i)))})))))
 
-(defn mids-search [db tsnum mdescs]
+(defn mids-search [db prefix tsnum mdescs]
   (if (empty? mdescs)
     {}
-    (let [idx (format "%s_%06x" (:name db) tsnum),
+    (let [idx (index-name db prefix tsnum)
           data (for [[c m s] mdescs :let [md (str c "," m "," s)]]
                  [{:index idx} {:query {:term {:mdesc md}}}])
           body (str (join "\n" (map json/write-str (apply concat data))) "\n")
@@ -276,12 +279,12 @@
                   (if (re-matches #"\d+" i) (Long/parseLong i) 0)))
            (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
-(defn mids-map [db tsnum m]
+(defn mids-map [db prefix tsnum m]
   "Given agent-side mid map (aid -> [c,m,s]), produce agent-collector mapping (aid -> rid)"
   (let [mdefs (set (vals m)),
-        rsmap (mids-search db tsnum mdefs),
+        rsmap (mids-search db prefix tsnum mdefs),
         amids (cs/difference mdefs (keys rsmap)),
-        asmap (mids-add db tsnum amids)]
+        asmap (mids-add db prefix tsnum amids)]
     (into {}
       (for [[aid mdef] m :let [rid (or (rsmap mdef) (asmap mdef))] :when rid]
         {aid rid}))))
@@ -320,13 +323,13 @@
     SymbolMapper
     (^Map newSymbols [_ ^Map m]
       (let [rslt (HashMap.)]
-        (doseq [[aid rid] (syms-map db tsnum (into {} m))]
+        (doseq [[aid rid] (syms-map db "data" tsnum (into {} m))]
           (.put rslt (.intValue aid) (.intValue rid)))
         rslt))
     (^Map newMethods [_ ^Map m]
       (let [rslt (HashMap.),
             mdefs (into {} (for [[k v] m] {k, (mdef->vec v)}))
-            mimap (mids-map db tsnum mdefs)]
+            mimap (mids-map db "data" tsnum mdefs)]
         (doseq [[aid rid] mimap]
           (.put rslt (.intValue aid) (.intValue rid)))
         rslt))))
