@@ -56,6 +56,7 @@
    :url                       s/Str
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
+   :instance                  s/Str
    :name                      s/Str
    :session-timeout           s/Num
    :memstore-size-max         s/Num

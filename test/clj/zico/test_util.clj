@@ -44,7 +44,7 @@
 (defn elastic-integ-fixture [f]
   (if (elastic-ping)
     (do
-      (doseq [idx (ze/list-indexes *DB*)]
+      (doseq [idx (ze/list-data-indexes *DB*)]
         (ze/index-delete *DB* (:tsnum idx)))
       (ze/index-create *DB* 1)
       (f))

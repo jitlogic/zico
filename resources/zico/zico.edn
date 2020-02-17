@@ -58,6 +58,7 @@
           :url                  "http://127.0.0.1:9200"
           :username             "zico"
           :password             "zico"
+          :instance             "00"
           :name                 "zico"
           :session-timeout      90
           :post-merge-pause     30

@@ -79,14 +79,15 @@
       :else (throw+ {:type :other, :req req, :resp resp, :status status})))
   resp)
 
-(defn- elastic [http-method db tsnum & {:keys [path body verbose?]}]
+(defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
   (let [req (merge
               {:headers (index-headers db tsnum)
                :unexceptional-status (constantly true)}
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
-        idx-name (if (number? tsnum) (format "%s/%s_%06x" (:url db) (:name db) tsnum)
-                                     (format "%s/%s_*" (:url db) (:name db)))
+        idx-name (if (number? tsnum)
+                   (format "%s/%s_%s_%s_%06x" (:url db) (:name db "zico") prefix (:instance db) tsnum)
+                   (format "%s/%s_%s_*" (:url db) (:name db "zico") prefix))
         url (apply str idx-name path)]
     (when verbose? (log/info "elastic: tsnum:" tsnum "url:" url "req:" req))
     (->>
@@ -95,9 +96,9 @@
       parse-response
       zu/keywordize)))
 
-(defn list-indexes [db]
+(defn list-data-indexes [db]
   "List indexes matching `mask` in database `db`"
-  (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
+  (let [mask (Pattern/compile (str "^" (:name db) "_data_" (:instance db) "_([a-zA-Z0-9]+)$"))]
     (sort-by
       :tsnum
       (for [ix (-> (http/get (str (:url db) "/_cat/indices") {:headers (index-headers db 0)}) parse-response)
@@ -423,7 +424,7 @@
 
 (defn delete-old-indexes [app-state max-count]
   (let [conf (-> app-state :conf :tstore),
-        indexes (sort-by :tsnum (list-indexes conf))
+        indexes (sort-by :tsnum (list-data-indexes conf))
         rmc (- (count indexes) max-count)]
     (when (> rmc 0)
       (let [rmi (take rmc indexes)]
@@ -560,7 +561,7 @@
 (defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
   (let [tstore-lock (or (:tstore-lock old-state) (Object.))]
     (locking tstore-lock
-      (let [indexes (list-indexes conf)
+      (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
             mapper (CachingSymbolMapper. (symbol-mapper conf tsnum))
             resolver (symbol-resolver conf),
