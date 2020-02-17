@@ -178,7 +178,9 @@
 (def WWW-AUTHZ {:status 401, :body "Authentication required.",
                 :headers {"WWW-Authenticate", "Basic realm=\"ZICO\", charset=\"UTF-8\""}})
 
-(defn http-basic-filter [f users pwcheck]
+(def WWW-AUTHN {:status 403, :body "Forbidden."})
+
+(defn http-basic-filter [f users admin-users pwcheck]
   (fn [{:keys [headers uri] :as req}]
     (let [auth (get headers "authorization" "")
           [_ auths authv] (re-matches RE-AUTH-HDR auth)]
@@ -193,8 +195,10 @@
             (empty? login) WWW-AUTHZ
             (empty? passwd) WWW-AUTHZ
             (nil? (get users login)) WWW-AUTHZ
-            (pwcheck (get users login) passwd) (f req)
-            :else WWW-AUTHZ)))
+            (not (pwcheck (get users login) passwd)) WWW-AUTHZ
+            (not (.startsWith uri "/api/admin")) (f req)
+            (contains? admin-users login) (f req)
+            :else WWW-AUTHN)))
       )))
 
 (defn password-check [pwhash passwd]
@@ -220,11 +224,11 @@
       wrap-cache))
 
 
-(defn with-zorka-web-handler [{{{:keys [type users]} :auth} :conf :as app-state}]
+(defn with-zorka-web-handler [{{{:keys [type users admin-users]} :auth} :conf :as app-state}]
   (let [main-handler (-> app-state zorka-web-routes wrap-web-middleware)]
     (assoc app-state
       :main-handler
       (case type
-        :http-basic (http-basic-filter main-handler users password-check)
+        :http-basic (http-basic-filter main-handler users admin-users password-check)
         main-handler))))
 

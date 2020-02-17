@@ -39,7 +39,8 @@
 
 (s/defschema AuthConfig
   {:type s/Keyword
-   :users {s/Str s/Str}})
+   :users {s/Str s/Str}
+   :admin-users #{s/Str}})
 
 (s/defschema TraceType
   {:component             s/Str

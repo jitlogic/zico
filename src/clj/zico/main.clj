@@ -164,7 +164,6 @@
       :else (println (zu/ssha512 p1)))))
 
 (defn -main [& args]
-  (println "args=" args)
   (cond
     (empty? args) (start-server)
     (= (first args) "passwd") (gen-passwd)
