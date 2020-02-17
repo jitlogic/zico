@@ -51,7 +51,7 @@
 (def DOC-MAPPING-TEMPLATES
   [{:attrs_as_strings
     {:match   "attrs.*"
-     :mapping {:type :text}}}])
+     :mapping {:type :keyword}}}])
 
 (def DOC-MAPPINGS
   {:properties DOC-MAPPING-PROPS
@@ -141,7 +141,6 @@
     attr))
 
 (defn str->akey [s]
-  (println "str->akey" s)
   (let [rslt
         (str "attrs."
              (attr-key-transform
