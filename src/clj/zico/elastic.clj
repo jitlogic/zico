@@ -505,10 +505,12 @@
       :tstamp (zu/millis->iso-time tstamp)
       :tst tstamp
       :attrs (into {}
-               (for [[k v] doc :when (re-matches RE-ATTRF (name k))
-                     :let [[_ s a] (re-matches RE-ATTRV v)]
-                     :when (and (string? s) (string? a))]
-                 {a s})))
+               (apply concat
+                 (for [[k v] doc :when (re-matches RE-ATTRF (name k))
+                       :let [vs (if (vector? v) v [v])]
+                       v vs :let [[_ s a] (re-matches RE-ATTRV v)]
+                       :when (and (string? s) (string? a))]
+                   {a s}))))
     (when chunks? {:tdata (:tdata doc)})
     (when-let [[_ _ s] (when (string? index) (re-matches RE-INDEX-NAME index))]
       {:tsnum (Long/parseLong s 16)})))
