@@ -7,7 +7,8 @@
     [clj-http.client :as http]
     [clojure.set :as cs]
     [clojure.tools.logging :as log]
-    [slingshot.slingshot :refer [throw+ try+]])
+    [slingshot.slingshot :refer [throw+ try+]]
+    [zico.metrics :as zmet])
   (:import
     (java.util HashMap Set Map ArrayList Collection)
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
@@ -196,13 +197,14 @@
 
 (def SYMS-ADD-LOCK (Object.))
 
-(defn syms-add [db prefix tsnum syms]
+(defn syms-add [{{:keys [symbols-seq]} :metrics {db :tstore} :conf} prefix tsnum syms]
+
   (if (empty? syms)
     {}
     (locking SYMS-ADD-LOCK
       ; TODO dual locking here (check if symbols were added before lock)
       (let [idx (index-name db prefix tsnum)
-            rslt (zipmap syms (seq-next db prefix tsnum :SYMBOLS (count syms) (:seq-block-size db)))
+            rslt (zipmap syms (zmet/with-timer symbols-seq (seq-next db prefix tsnum :SYMBOLS (count syms) (:seq-block-size db))))
             data (for [[s i] rslt]
                    [{:index {:_index idx, :_id (str "SYM." i)}}
                     {:doctype TYPE-SYMBOL, :symbol s}])
@@ -236,21 +238,21 @@
         (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
           {(get-in h ["_source" "symbol"]) (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
-(defn syms-map [db prefix tsnum m]
+(defn syms-map [{{:keys [symbols-get]} :metrics {db :tstore} :conf  :as app-state} prefix tsnum m]
   "Given agent-side symbol map (aid -> name), produce agent-collector mapping (aid -> rid)"
   (let [syms (set (vals m)),
-        rsmap (syms-search db prefix tsnum syms),
+        rsmap (zmet/with-timer symbols-get (syms-search db prefix tsnum syms)),
         asyms (cs/difference syms (keys rsmap)),
-        asmap (syms-add db prefix tsnum asyms)]
+        asmap (syms-add app-state prefix tsnum asyms)]
     (into {}
       (for [[aid sym] m :let [rid (or (rsmap sym) (asmap sym))] :when rid]
         {aid rid}))))
 
-(defn mids-add [db prefix tsnum mdescs]
+(defn mids-add [{{:keys [symbols-seq]} :metrics {db :tstore} :conf} prefix tsnum mdescs]
   (if (empty? mdescs)
     {}
     (let [idx (index-name db prefix tsnum)
-          rslt (zipmap mdescs (seq-next db prefix tsnum :METHODS (count mdescs) (:seq-block-size db)))
+          rslt (zipmap mdescs (zmet/with-timer symbols-seq (seq-next db prefix tsnum :METHODS (count mdescs) (:seq-block-size db))))
           data (for [[[c m s] i] rslt]
                  [{:index {:_index idx, :_id (str "MID." i)}}
                   {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
@@ -283,12 +285,12 @@
                   (if (re-matches #"\d+" i) (Long/parseLong i) 0)))
            (Long/parseLong (.substring ^String (get h "_id") 4))})))))
 
-(defn mids-map [db prefix tsnum m]
+(defn mids-map [{{:keys [symbols-mid]} :metrics {db :tstore} :conf  :as app-state} prefix tsnum m]
   "Given agent-side mid map (aid -> [c,m,s]), produce agent-collector mapping (aid -> rid)"
   (let [mdefs (set (vals m)),
-        rsmap (mids-search db prefix tsnum mdefs),
+        rsmap (zmet/with-timer symbols-mid (mids-search db prefix tsnum mdefs)),
         amids (cs/difference mdefs (keys rsmap)),
-        asmap (mids-add db prefix tsnum amids)]
+        asmap (mids-add app-state prefix tsnum amids)]
     (into {}
       (for [[aid mdef] m :let [rid (or (rsmap mdef) (asmap mdef))] :when rid]
         {aid rid}))))
@@ -321,19 +323,19 @@
    (.longValue (.getMethodId md))
    (.longValue (.getSignatureId md))])
 
-(defn symbol-mapper [db tsnum]
+(defn symbol-mapper [app-state tsnum]
   "Returns SymbolMapper with Elastic Search as backend."
   (reify
     SymbolMapper
     (^Map newSymbols [_ ^Map m]
       (let [rslt (HashMap.)]
-        (doseq [[aid rid] (syms-map db "data" tsnum (into {} m))]
+        (doseq [[aid rid] (syms-map app-state "data" tsnum (into {} m))]
           (.put rslt (.intValue aid) (.intValue rid)))
         rslt))
     (^Map newMethods [_ ^Map m]
       (let [rslt (HashMap.),
             mdefs (into {} (for [[k v] m] {k, (mdef->vec v)}))
-            mimap (mids-map db "data" tsnum mdefs)]
+            mimap (mids-map app-state "data" tsnum mdefs)]
         (doseq [[aid rid] mimap]
           (.put rslt (.intValue aid) (.intValue rid)))
         rslt))))
@@ -411,7 +413,7 @@
   (let [{:keys [tsnum]} @(:tstore-state app-state),
         new-tsnum (inc tsnum),
         conf (-> app-state :conf :tstore),
-        mapper (CachingSymbolMapper. (symbol-mapper conf new-tsnum)),
+        mapper (CachingSymbolMapper. (symbol-mapper app-state new-tsnum)),
         store (chunk-store app-state new-tsnum),
         collector (Collector. mapper store false)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
@@ -573,7 +575,7 @@
     (locking tstore-lock
       (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
-            mapper (CachingSymbolMapper. (symbol-mapper conf tsnum))
+            mapper (CachingSymbolMapper. (symbol-mapper app-state tsnum))
             resolver (symbol-resolver conf),
             store (chunk-store app-state tsnum)
             collector (Collector. mapper store false)]

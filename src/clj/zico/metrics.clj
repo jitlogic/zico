@@ -69,6 +69,9 @@
       :metrics {:registry registry
                 :agent-agd (make-timer registry "zico.agent" :action :submit-agd)
                 :agent-trc (make-timer registry "zico.agent" :action :submit-trc)
+                :symbols-seq (make-timer registry "zico.symbols" :action :seq-next)
+                :symbols-get (make-timer registry "zico.symbols" :action :get-symbols)
+                :symbols-mid (make-timer registry "zico.symbols" :action :get-methods)
                 :user-search (make-timer registry "zico.user" :action :search)
                 :user-dtrace (make-timer registry "zico.user" :action :dtrace)
                 :user-detail (make-timer registry "zico.user" :action :detail)
