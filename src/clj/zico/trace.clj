@@ -1,16 +1,15 @@
 (ns zico.trace
   (:require
-    [clj-time.coerce :as ctc]
-    [clj-time.format :as ctf]
     [ring.util.http-response :as rhr]
     [zico.util :as zu]
     [zico.elastic :as ze]
     [zico.memstore :as zm]
     [clojure.tools.logging :as log]
-    [clojure.data.json :as json])
+    [clojure.data.json :as json]
+    [slingshot.slingshot :refer [try+]])
   (:import
     (com.jitlogic.zorka.common.util Base64 ZorkaRuntimeException)
-    (com.jitlogic.zorka.common.collector TraceDataResult TraceStatsResult NoSuchSessionException)
+    (com.jitlogic.zorka.common.collector TraceDataResult TraceStatsResult NoSuchSessionException Collector)
     (com.jitlogic.zorka.common.tracedata HttpConstants)))
 
 
@@ -72,24 +71,29 @@
 
 (defn submit-agd [{{{:keys [dump dump-path]} :log} :conf :keys [tstore-state]} session-id session-reset data]
   (try
-    (.handleAgentData (:collector @tstore-state) session-id session-reset data)
+    (.handleAgentData ^Collector (:collector @tstore-state) session-id session-reset data)
     (when dump (dump-trace-req dump-path "/agent/submit/agd" session-id session-reset nil data))
     (rhr/accepted)
     ; TODO session-renew - handle broken sessions
     ;(catch Exception _ (rhr/bad-request {:reason "Missing session UUID header."}))
+    (catch NoSuchSessionException e
+      (log/debug "Non-existent session:" (.getMessage e))
+      (rhr/unauthorized (json/write-str {:reason "invalid or missing session ID header"})))
     (catch Exception e
       (log/error e (str "Error processing AGD data: " (String. ^bytes data "UTF-8")))
       (rhr/internal-server-error (json/write-str {:reason "internal error"})))))
 
 
 (defn submit-trc [{{{:keys [dump dump-path]} :log} :conf :keys [tstore-state]} session-id trace-id chnum data]
-  (try
-    (.handleTraceData (:collector @tstore-state) session-id trace-id chnum data)
+  (try+
+    (.handleTraceData ^Collector (:collector @tstore-state) session-id trace-id chnum data)
     (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data))
     (rhr/accepted)
     (catch NoSuchSessionException e
       (log/debug "Non-existent session:" (.getMessage e))
       (rhr/unauthorized (json/write-str {:reason "invalid or missing session ID header"})))
+    (catch [:type :field-limit-exceeded] _
+      (log/debug "Redundant :field-limit-exceeded error (ignored)"))
     (catch ZorkaRuntimeException e
       (log/error e "Malformed data or missing header")
       (rhr/unauthorized (json/write-str {:reason "malformed data or missing header"})))
@@ -117,14 +121,17 @@
 
 
 (defn with-tracer-components [{{{:keys [type]} :tstore} :conf :as app-state} old-state]
-  (let [tstore-lock (or (:tstore-lock old-state) (Object.)),
+  (let [tstore-lock (:tstore-lock old-state (Object.)),
+        tstore-state (:tstore-state app-state (atom {}))
+        app-state (assoc app-state :tstore-state tstore-state :tstore-lock tstore-lock)
         new-tstore (case type
                  :elastic (ze/elastic-trace-store app-state old-state)
                  :memory (zm/memory-trace-store app-state old-state)
                  (throw (ex-info "No trace store type selected." {}))),
         tfn (trace-desc-fn (:conf app-state))]
+    (reset! tstore-state new-tstore)
     (assoc app-state
-      :tstore-state (atom new-tstore),
+      :tstore-state tstore-state
       :tstore-lock tstore-lock,
       :trace-desc #(assoc % :desc (tfn %)))))
 

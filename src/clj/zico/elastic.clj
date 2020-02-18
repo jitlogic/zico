@@ -70,13 +70,17 @@
 
 (defn checked-req [req {:keys [body status] :as resp}]
   (when-not (<= 200 status 299)
-    (log/error "Error occured in elastic request: req:" req "resp: " resp)
     (cond
       (nil? body)
-      (throw+ {:type :unknown, :req req, :resp resp, :status status})
-      (re-matches #"Limit of total fields .* in index .* has been exceeded" (:body resp))
+      (do
+        (log/error "Error occured in elastic request: req:" req "resp: " resp)
+        (throw+ {:type :unknown, :req req, :resp resp, :status status}))
+      (.contains body "Limit of total fields")
       (throw+ {:type :field-limit-exceeded, :req req, :resp resp, :status status})
-      :else (throw+ {:type :other, :req req, :resp resp, :status status})))
+      :else
+      (do
+        (log/error "Error occured in elastic request: req:" req "resp: " resp)
+        (throw+ {:type :other, :req req, :resp resp, :status status}))))
   resp)
 
 (defn index-name [db prefix tsnum]
@@ -371,6 +375,9 @@
     (try+
       (elastic http/post db tsnum :path ["/_doc"] :body doc)
       (catch [:type :field-limit-exceeded] _
+        (log/warn
+          "Detected :field-limit-exceeded error. Index will be rotated. You can either increase fields limit in zico.edn"
+          "or define some additional attribute transform rules (check index" tsnum "for redundant attribute names")
         (when retry
           (locking (-> app-state :tstore-lock)
             (try+
@@ -562,7 +569,7 @@
     rslt))
 
 (defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
-  (let [tstore-lock (or (:tstore-lock old-state) (Object.))]
+  (let [tstore-lock (:tstore-lock app-state)]
     (locking tstore-lock
       (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
