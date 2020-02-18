@@ -10,7 +10,7 @@
     [clojure.data.json :as json])
   (:import
     (com.jitlogic.zorka.common.util Base64 ZorkaRuntimeException)
-    (com.jitlogic.zorka.common.collector TraceChunkData Collector TraceDataExtractor TraceDataResult TraceStatsExtractor TraceStatsResult)
+    (com.jitlogic.zorka.common.collector TraceDataResult TraceStatsResult NoSuchSessionException)
     (com.jitlogic.zorka.common.tracedata HttpConstants)))
 
 
@@ -87,9 +87,12 @@
     (.handleTraceData (:collector @tstore-state) session-id trace-id chnum data)
     (when dump (dump-trace-req dump-path "/agent/submit/trc" session-id nil trace-id data))
     (rhr/accepted)
-    (catch ZorkaRuntimeException e
-      (log/error e "Invalid session or missing header")
+    (catch NoSuchSessionException e
+      (log/debug "Non-existent session:" (.getMessage e))
       (rhr/unauthorized (json/write-str {:reason "invalid or missing session ID header"})))
+    (catch ZorkaRuntimeException e
+      (log/error e "Malformed data or missing header")
+      (rhr/unauthorized (json/write-str {:reason "malformed data or missing header"})))
     (catch Exception e
       (log/error e "Error processing TRC data: " (Base64/encode data false))
       (rhr/internal-server-error (json/write-str {:reason "internal error"})))))
