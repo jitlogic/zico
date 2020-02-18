@@ -166,7 +166,7 @@
       (cc/context "/agent" [] agent-routes)
       (cc/context "/view" [] render-loading-page)
 
-      (cc/GET "/prometheus" []
+      (cc/GET "/metrics" []
         (zmet/prometheus-scrape app-state))
 
       (resources "/")
@@ -186,7 +186,7 @@
           [_ auths authv] (re-matches RE-AUTH-HDR auth)]
       (cond
         (.startsWith uri "/agent") (f req)
-        (.startsWith uri "/prometheus") (f req)
+        (.startsWith uri "/metrics") (f req)
         (empty? auth) WWW-AUTHZ
         (not (.equalsIgnoreCase "Basic" auths)) WWW-AUTHZ
         :else
