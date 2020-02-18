@@ -84,8 +84,14 @@
         (throw+ {:type :other, :req req, :resp resp, :status status}))))
   resp)
 
+(def RE-INDEX-NAME #"([\w^_]+)_([\w^_]+)_([\w^_]+)_([0-9a-fA-F]{6})")
+
 (defn index-name [db prefix tsnum]
   (format "%s_%s_%s_%06x" (:name db) prefix (:instance db) tsnum))
+
+(defn index-parse [s]
+  (when-let [[_ name prefix instance tsnum] (re-matches RE-INDEX-NAME (str s))]
+    {:name name, :prefix prefix, :instance instance, :tsnum (Long/parseLong tsnum 16)}))
 
 (defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
   (let [req (merge
@@ -496,8 +502,6 @@
 (def RE-ATTRF #"attrs\.(.*)")
 (def RE-ATTRV #"(.*)\t(.*)")
 
-(def RE-INDEX-NAME #"([a-zA-Z0-9]+)_([0-9a-fA-F]+)")
-
 (defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index]}]
   (merge
     (assoc
@@ -512,8 +516,7 @@
                        :when (and (string? s) (string? a))]
                    {a s}))))
     (when chunks? {:tdata (:tdata doc)})
-    (when-let [[_ _ s] (when (string? index) (re-matches RE-INDEX-NAME index))]
-      {:tsnum (Long/parseLong s 16)})))
+    {:tsnum (:tsnum (index-parse index))}))
 
 (defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata]}]
   (let [tcd (TraceChunkData. traceid spanid parentid chnum)]
