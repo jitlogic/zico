@@ -57,6 +57,12 @@
    :url                       s/Str
    (s/optional-key :username) s/Str
    (s/optional-key :password) s/Str
+   (s/optional-key :trust-store) s/Str
+   (s/optional-key :trust-store-type) s/Str
+   (s/optional-key :trust-store-pass) s/Str
+   (s/optional-key :keystore) s/Str
+   (s/optional-key :keystore-type) s/Str
+   (s/optional-key :keystore-pass) s/Str
    :instance                  s/Str
    :name                      s/Str
    :session-timeout           s/Num

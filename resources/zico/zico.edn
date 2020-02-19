@@ -75,6 +75,8 @@
           :index-size           16384
           :index-overcommit     1024
           :index-count          16
+          :trust-store-type     "jks"
+          :keystore-type        "jks"
           ; Elastic index creation parameters
           :number_of_shards     1
           :number_of_replicas   0
