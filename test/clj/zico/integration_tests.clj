@@ -5,7 +5,9 @@
      [zorka-integ-fixture *root-path* time-travel zico trace-store]]
     [clojure.test :refer :all]
     [clojure.data.json :as json])
-  (:import (com.jitlogic.zorka.common.util Base64)))
+  (:import
+    (com.jitlogic.zorka.common.util Base64)
+    (java.io ByteArrayInputStream)))
 
 (use-fixtures :each zorka-integ-fixture)
 
@@ -22,7 +24,7 @@
     (for [js (map json/read-str s)]
       {:headers (into {} (for [[k v] (get js "headers")] {(.toLowerCase k) (first v)}))
        :scheme  "http", :request-method :post,
-       :body    (Base64/decode (get js "body"))
+       :body    (ByteArrayInputStream. (Base64/decode (get js "body")))
        :uri     (get js "uri")})))
 
 

@@ -4,10 +4,12 @@
     [zico.util :as zu]
     [clojure.java.io :as io]
     [zico.elastic :as ze]
-    [clj-http.client :as http])
+    [clj-http.client :as http]
+    [zico.metrics :as zmet])
   (:import
     (java.io File ByteArrayInputStream)
-    (com.jitlogic.zorka.common.cbor TraceDataWriter CborDataWriter)))
+    (com.jitlogic.zorka.common.cbor TraceDataWriter CborDataWriter)
+    (io.micrometer.core.instrument.simple SimpleMeterRegistry)))
 
 (def cur-time-val (atom 100))
 
@@ -30,10 +32,20 @@
         (rm-rf (File. f n)))))
   (.delete f))
 
+(def REGISTRY (SimpleMeterRegistry.))
 
 (def ^:dynamic *DB*
   {:url "http://127.0.0.1:9200"
-   :name "zicotest"})
+   :name "zicotest"
+   :seq-block-size 16
+   :instance "00"})
+
+(def ^:dynamic *APP-STATE*
+  {:conf    {:tstore *DB*}
+   :metrics {:registry    REGISTRY
+             :symbols-seq (zmet/make-timer REGISTRY "zico.symbols" :action :seq-next)
+             :symbols-get (zmet/make-timer REGISTRY "zico.symbols" :action :get-symbols)
+             :symbols-mid (zmet/make-timer REGISTRY "zico.symbols" :action :get-methods)}})
 
 (defn elastic-ping []
   (try
