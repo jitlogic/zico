@@ -1,7 +1,12 @@
-ZICO 1.90.8 (2020-??-??)
+ZICO 1.90.8 (2020-02-20)
 ------------------------
 
-* http authentication between zico and elastic; 
+* TLS + http authentication between zico and elastic;
+* password encryption for local users;
+* expose collector metrics to prometheus & elastic;
+* performance: cache symbols and method defs;
+* admin API (index rotation, list symbols);
+* fixes: session timeout, elastic field mappings overflow;
 
 
 ZICO 1.90.7 (2020-02-11)

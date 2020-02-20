@@ -1,4 +1,4 @@
-(defproject zico "1.90.8-SNAPSHOT"
+(defproject zico "1.90.8"
   :description "Trace data collection and data presentation."
   :url "http://zorka.io"
   :license {:name "GPL v3"}
@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/tools.reader "1.3.2"]
 
-                 [com.jitlogic.zorka/zorka-common "1.90.8-SNAPSHOT" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
+                 [com.jitlogic.zorka/zorka-common "1.90.8" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
                  [prismatic/schema "1.1.9"]
                  [slingshot "0.12.2"]
                  [aero "1.1.3"]
