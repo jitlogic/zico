@@ -54,10 +54,6 @@
     {:match   "attrs.*"
      :mapping {:type :keyword}}}])
 
-(def DOC-MAPPINGS
-  {:properties DOC-MAPPING-PROPS
-   :dynamic_templates DOC-MAPPING-TEMPLATES
-   })
 
 (defn parse-response [resp]
   (when (string? (:body resp))
@@ -179,11 +175,13 @@
                       :body {:properties fm})]
     rslt))
 
-(defn index-create [db tsnum]
+(defn index-create [{:keys [flattened-attrs] :as db} tsnum]
   (elastic
     http/put db tsnum
     :body {:settings (merge INDEX-SETTINGS-DEFAUTLS (select-keys db INDEX-SETTINGS-KEYS))
-           :mappings DOC-MAPPINGS}))
+           :mappings (merge
+                       {:properties (merge DOC-MAPPING-PROPS (when flattened-attrs {:attrs {:type :flattened}}))}
+                       (when-not flattened-attrs {:dynamic_templates DOC-MAPPING-TEMPLATES}))}))
 
 (defn index-delete [db tsnum]
   (elastic http/delete db tsnum))
@@ -354,7 +352,7 @@
   l)
 
 
-(defn tcd->doc [^TraceChunkData tcd]
+(defn tcd->doc [^TraceChunkData tcd flattened-attrs]
   (zu/without-nil-vals
     (merge
       {:doctype  TYPE-CHUNK
@@ -376,9 +374,14 @@
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
         {:top-level true})
-      (zu/group-map
-        (for [[k v] (.getAttrs tcd) :let [f (str->akey k) ]]
-          [f (str (.replace v \tab \space) \tab (.replace k \tab \space))])))))
+      (if flattened-attrs
+        {:attrs
+         (zu/group-map
+           (for [[k v] (.getAttrs tcd) :let [f (.substring (str->akey k) 6)]]
+             [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))}
+        (zu/group-map
+          (for [[k v] (.getAttrs tcd) :let [f (str->akey k)]]
+            [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))))))
 
 (declare next-active-index)
 
@@ -400,15 +403,15 @@
             ))))))
 
 
-(defn chunk-store [app-state tsnum]
+(defn chunk-store [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} tsnum]
   "Returns trace chunk store with Elastic Search backend."
   (reify
     TraceChunkStore
     (add [_ tcd]
-      (chunk-add app-state tsnum (tcd->doc tcd) true))
+      (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true))
     (addAll [_ tcds]
       (doseq [tcd tcds]
-        (chunk-add app-state tsnum (tcd->doc tcd) true)))))
+        (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true)))))
 
 (defn index-stats [app-state tsnum]
   (elastic
@@ -428,7 +431,8 @@
         collector (Collector. mapper store false)]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
-    (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs)))
+    (when-not (-> app-state :conf :tstore :flattened-attrs)
+      (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs))))
     (swap! (:tstore-state app-state) assoc :tsnum new-tsnum, :collector collector, :mapper mapper, :store store)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
@@ -506,19 +510,28 @@
 (def RE-ATTRF #"attrs\.(.*)")
 (def RE-ATTRV #"(.*)\t(.*)")
 
-(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index]}]
+(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index flattened-attrs]}]
   (merge
     (assoc
       (select-keys doc RSLT-FIELDS)
       :tstamp (zu/millis->iso-time tstamp)
       :tst tstamp
-      :attrs (into {}
-               (apply concat
-                 (for [[k v] doc :when (re-matches RE-ATTRF (name k))
-                       :let [vs (if (vector? v) v [v])]
-                       v vs :let [[_ s a] (re-matches RE-ATTRV v)]
-                       :when (and (string? s) (string? a))]
-                   {a s}))))
+      :attrs
+      (if flattened-attrs
+        (into {}
+          (apply concat
+            (for [[_ v] (:attrs doc)
+                  :let [vs (if (vector? v) v [v])]
+                  v vs :let [[_ s a] (re-matches RE-ATTRV v)]
+                  :when (and (string? s) (string? a))]
+              {a s})))
+        (into {}
+          (apply concat
+            (for [[k v] doc :when (re-matches RE-ATTRF (name k))
+                  :let [vs (if (vector? v) v [v])]
+                  v vs :let [[_ s a] (re-matches RE-ATTRV v)]
+                  :when (and (string? s) (string? a))]
+              {a s})))))
     (when chunks? {:tdata (:tdata doc)})
     {:tsnum (:tsnum (index-parse index))}))
 
@@ -556,14 +569,14 @@
           attrs (flatten (for [[_ xdef] rslt] (extract-props "" (get-in xdef [:mappings :properties]))))]
       (sort (for [a attrs :when (.startsWith a ".attrs")] (.substring a 7))))))
 
-(defn trace-search [app-state query & {:keys [chunks?]}]
+(defn trace-search [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} query & {:keys [chunks?]}]
   (let [body (q->e query)
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
-                      :path ["/_search?_source=" _source ",attrs.*" (if chunks? ",tdata" "")]
+                      :path ["/_search?_source=" _source ",attrs" (if flattened-attrs "" ".*") (if chunks? ",tdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
-      (doc->rest doc :chunks? chunks?, :index index))))
+      (doc->rest doc :chunks? chunks?, :index index, :flattened-attrs flattened-attrs))))
 
 (defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
   (let [{:keys [search resolver]} @tstore-state,
@@ -591,7 +604,8 @@
         (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
           (index-create conf tsnum)
-          (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs))))
+          (when-not (-> app-state :conf :tstore :flattened-attrs)
+            (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs)))))
         {:collector collector, :tsnum tsnum,
          :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
          :mapper mapper, :store store, :resolver resolver}))))

@@ -72,6 +72,7 @@
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num
+   :flattened-attrs           s/Bool
    :post-merge-pause          s/Num
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num
