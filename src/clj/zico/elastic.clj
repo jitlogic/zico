@@ -609,3 +609,13 @@
         {:collector collector, :tsnum tsnum,
          :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
          :mapper mapper, :store store, :resolver resolver}))))
+
+(defn elastic-health [app-state]
+  (try
+    (let [ixs (sort-by :tsnum (list-data-indexes (-> app-state :conf :tstore)))]
+      (and
+        (not (empty? ixs))
+        (#{:green :yellow} (:health (last ixs)))))
+    (catch Exception e
+      (log/error "/healthz check returned :DOWN")))
+  )

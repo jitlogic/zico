@@ -24,7 +24,8 @@
     [zico.trace :as ztrc]
     [zico.elastic :as zela]
     [zico.util :as zu]
-    [zico.metrics :as zmet])
+    [zico.metrics :as zmet]
+    [clojure.data.json :as json])
   (:import (com.jitlogic.zorka.common.util Base64 ZorkaUtil)))
 
 
@@ -155,6 +156,11 @@
           (ZorkaUtil/slurp body))))))
 
 
+(defn healthz [app-state]
+  (if (= :elastic (-> app-state :conf :tstore :type))
+    (zela/elastic-health app-state)
+    true))
+
 (defn zorka-web-routes [app-state]
   (let [api-routes (zico-api-routes app-state)
         agent-routes (zico-agent-routes app-state)]
@@ -168,6 +174,11 @@
 
       (cc/GET "/metrics" []
         (zmet/prometheus-scrape app-state))
+
+      (cc/GET "/healthz" []
+        (if (healthz app-state)
+          {:status 200, :body   (json/write-str {:status :UP})}
+          {:status 503, :body (json/write-str {:status :DOWN})}))
 
       (resources "/")
       (not-found "Not Found!\n"))))
@@ -187,6 +198,7 @@
       (cond
         (.startsWith uri "/agent") (f req)
         (.startsWith uri "/metrics") (f req)
+        (.startsWith uri "/healthz") (f req)
         (empty? auth) WWW-AUTHZ
         (not (.equalsIgnoreCase "Basic" auths)) WWW-AUTHZ
         :else
