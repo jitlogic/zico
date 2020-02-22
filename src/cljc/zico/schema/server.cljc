@@ -73,6 +73,8 @@
    :index-overcommit          s/Num
    :index-count               s/Num
    :flattened-attrs           s/Bool
+   :timeout                   s/Num
+   :threads                   s/Num
    :post-merge-pause          s/Num
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num

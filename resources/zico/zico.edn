@@ -76,6 +76,8 @@
           :index-overcommit     1024
           :index-count          16
           :flattened-attrs      false
+          :timeout              60
+          :threads              32
           :trust-store-type     "jks"
           :keystore-type        "jks"
           ; Elastic index creation parameters

@@ -6,7 +6,9 @@
     [zico.memstore :as zm]
     [clojure.tools.logging :as log]
     [clojure.data.json :as json]
-    [slingshot.slingshot :refer [try+]])
+    [slingshot.slingshot :refer [try+]]
+    [clj-http.conn-mgr :as chcm]
+    [zico.elastic :as zela])
   (:import
     (com.jitlogic.zorka.common.util Base64 ZorkaRuntimeException)
     (com.jitlogic.zorka.common.collector TraceDataResult TraceStatsResult NoSuchSessionException Collector)
@@ -120,10 +122,12 @@
           )))))
 
 
-(defn with-tracer-components [{{{:keys [type]} :tstore} :conf :as app-state} old-state]
-  (let [tstore-lock (:tstore-lock old-state (Object.)),
+(defn with-tracer-components [{{{:keys [type] :as conf} :tstore} :conf :as app-state} old-state]
+  (let [conn-mgr (chcm/make-reusable-conn-manager (select-keys conf zela/CMGR-KEYS))
+        tstore-lock (:tstore-lock old-state (Object.)),
         tstore-state (:tstore-state app-state (atom {}))
         app-state (assoc app-state :tstore-state tstore-state :tstore-lock tstore-lock)
+        app-state (assoc-in app-state [:conf :tstore :connection-manager] conn-mgr)
         new-tstore (case type
                  :elastic (ze/elastic-trace-store app-state old-state)
                  :memory (zm/memory-trace-store app-state old-state)

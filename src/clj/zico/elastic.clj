@@ -89,15 +89,16 @@
   (when-let [[_ name prefix instance tsnum] (re-matches RE-INDEX-NAME (str s))]
     {:name name, :prefix prefix, :instance instance, :tsnum (Long/parseLong tsnum 16)}))
 
-(def TLS-KEYS [:trust-store :trust-store-type :trust-store-pass :keystore :keystore-db :keystore-pass])
+(def CMGR-KEYS [:trust-store :trust-store-type :trust-store-pass :keystore :keystore-db :keystore-pass
+                :timeout :threads])
 
 (defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
   (let [req (merge
               {:headers (index-headers db tsnum)
-               :unexceptional-status (constantly true)}
+               :unexceptional-status (constantly true)
+               :connection-manager (:connection-manager db)}
               (when (map? body) {:body (json/write-str body)})
-              (when (string? body) {:body body})
-              (select-keys db TLS-KEYS))
+              (when (string? body) {:body body}))
         idx-name (if (number? tsnum)
                    (format "%s/%s" (:url db) (index-name db prefix tsnum))
                    (format "%s/%s_%s_*" (:url db) (:name db "zico") prefix))
@@ -114,7 +115,8 @@
   (let [mask (Pattern/compile (str "^" (:name db) "_data_" (:instance db) "_([a-zA-Z0-9]+)$"))]
     (sort-by
       :tsnum
-      (for [ix (-> (http/get (str (:url db) "/_cat/indices") (merge {:headers (index-headers db 0)} (select-keys db TLS-KEYS)))
+      (for [ix (-> (http/get (str (:url db) "/_cat/indices")
+                             {:headers (index-headers db 0), :connection-manager (:connection-manager db)})
                    parse-response)
             :let [ix (zu/keywordize ix), xname (:index ix),
                   status (keyword (:status ix)), health (keyword (:health ix))
@@ -595,7 +597,8 @@
 (defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
   (let [tstore-lock (:tstore-lock app-state)]
     (locking tstore-lock
-      (let [indexes (list-data-indexes conf)
+      (let [
+            indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
             mapper (CachingSymbolMapper. (symbol-mapper app-state tsnum))
             resolver (symbol-resolver conf),
