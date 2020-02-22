@@ -34,7 +34,7 @@
         errors-only (get-in vroot [:filter :errors-only :selected])
         attrs (into {} (for [k (keys (-> vroot :filter))
                              :let [v (get-in vroot [:filter k :selected])]
-                             :when (and (string? k) (string? v))] {k v}))]
+                             :when (and (string? k) (string? v))] {k (str v "\t" k)}))]
     (merge
       {:limit 100, :offset offset, :fetch-attrs true, :spans-only (not (:deep-search vroot))}
       (when-not (empty? attrs) {:attr-matches attrs})
