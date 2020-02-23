@@ -48,9 +48,23 @@
 
 (defn parse-filter-query [db [_ q]]
   (if q
-    (let [_ (read-string (js/LZString.decompressFromBase64 q))]
-      ; TBD
-      db)
+    (let [qf (read-string (js/LZString.decompressFromBase64 q))]
+      (zu/recursive-merge
+        db
+        {:view
+         {:trace
+          {:list
+           {:deep-search (not (:spans-only qf))
+            :search
+            {:text (:text qf)}
+            :filter
+            (merge
+              {:min-duration (when (:min-duration qf) {:selected (/ (:min-duration qf) 1000000000)})
+               :time (when (:min-tstamp qf) {:selected (ctf/parse PARAM-FORMATTER (:min-tstamp qf))})
+               :errors-only {:selected (:errors-only qf false)}}
+              (into {}
+                (for [[k v] (:attr-matches qf)]
+                  {k {:selected v}})))}}}}))
     db))
 
 
@@ -237,7 +251,7 @@
 
 (defn trace-list [params]
   "Trace seach/listing panel: [:view :trace :list]"
-  (zs/dispatch [::parse-filter-query (:q params)])
+  (zs/dispatch [::parse-filter-query (:q (:params params))])
   (zs/dispatch [::refresh-list])
   (zws/render-screen
     :toolbar [zws/list-screen-toolbar

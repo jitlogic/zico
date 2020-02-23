@@ -37,6 +37,12 @@
 (defn merge-in [coll ks col1]
   (assoc-in coll ks (merge {} (get-in coll ks) col1)))
 
+(defn recursive-merge [map1 map2]
+  "Recursive merge"
+  (if (and (map? map1) (map? map2))
+    (merge-with recursive-merge map1 map2)
+    map2))
+
 
 (defn map-to-seq
   ([attrs]
