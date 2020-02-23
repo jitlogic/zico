@@ -6,6 +6,7 @@
     [clojure.data.json :as json]
     [clj-http.client :as http]
     [clojure.set :as cs]
+    [clojure.string :as cstr]
     [clojure.tools.logging :as log]
     [slingshot.slingshot :refer [throw+ try+]]
     [zico.metrics :as zmet])
@@ -39,6 +40,7 @@
    :calls {:type :long}
    :errors {:type :long}
    :ttype {:type :keyword}
+   :fulltext {:type :text}
 
    :tdata {:type :binary, :index false}
    :mids {:type :long}
@@ -182,7 +184,8 @@
     http/put db tsnum
     :body {:settings (merge INDEX-SETTINGS-DEFAUTLS (select-keys db INDEX-SETTINGS-KEYS))
            :mappings (merge
-                       {:properties (merge DOC-MAPPING-PROPS (when flattened-attrs {:attrs {:type :flattened}}))}
+                       {:_source {:excludes [:fulltext]}
+                        :properties (merge DOC-MAPPING-PROPS (when flattened-attrs {:attrs {:type :flattened}}))}
                        (when-not flattened-attrs {:dynamic_templates DOC-MAPPING-TEMPLATES}))}))
 
 (defn index-delete [db tsnum]
@@ -371,8 +374,9 @@
        :calls    (.getCalls tcd)
        :errors   (.getErrors tcd)
        :ttype    (.getTtype tcd)
-       :tdata    (zu/b64enc (.getTraceData tcd))  ; TODO tutaj kompresja
-       :mids     (seq (.getMethods tcd))}
+       :tdata    (zu/b64enc (.getTraceData tcd))
+       :fulltext    (str (.getKlass tcd) "." (.getMethod tcd) " "
+                      (when (.getAttrs tcd) (cstr/join " " (.values (.getAttrs tcd)))))}
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
         {:top-level true})

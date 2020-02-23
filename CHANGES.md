@@ -4,6 +4,8 @@ ZICO 1.90.9 (2020-??-??)
 * flattened-attrs mode for Elastic with X-Pack;
 * liveness endpoint: /healthz;
 * elastic search connection pooling & keep alive;
+* fixed full text search 
+
 
 ZICO 1.90.8 (2020-02-20)
 ------------------------
