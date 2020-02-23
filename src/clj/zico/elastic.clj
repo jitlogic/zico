@@ -91,8 +91,8 @@
   (when-let [[_ name prefix instance tsnum] (re-matches RE-INDEX-NAME (str s))]
     {:name name, :prefix prefix, :instance instance, :tsnum (Long/parseLong tsnum 16)}))
 
-(def CMGR-KEYS [:trust-store :trust-store-type :trust-store-pass :keystore :keystore-db :keystore-pass
-                :timeout :threads])
+(def JKS-KEYS [:trust-store :trust-store-type :trust-store-pass :keystore :keystore-type :keystore-pass])
+(def CMGR-KEYS (concat JKS-KEYS [:timeout :threads :insecure? :default-per-route]))
 
 (defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
   (let [req (merge
@@ -117,8 +117,9 @@
   (let [mask (Pattern/compile (str "^" (:name db) "_data_" (:instance db) "_([a-zA-Z0-9]+)$"))]
     (sort-by
       :tsnum
-      (for [ix (-> (http/get (str (:url db) "/_cat/indices")
-                             {:headers (index-headers db 0), :connection-manager (:connection-manager db)})
+      (for [ix (-> (http/get
+                     (str (:url db) "/_cat/indices")
+                     {:headers (index-headers db 0), :connection-manager (:connection-manager db)})
                    parse-response)
             :let [ix (zu/keywordize ix), xname (:index ix),
                   status (keyword (:status ix)), health (keyword (:health ix))

@@ -75,6 +75,8 @@
    :flattened-attrs           s/Bool
    :timeout                   s/Num
    :threads                   s/Num
+   (s/optional-key :default-per-route) s/Num
+   (s/optional-key :insecure?) s/Bool
    :post-merge-pause          s/Num
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num
