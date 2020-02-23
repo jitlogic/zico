@@ -136,15 +136,10 @@
 
 
 (defn current-screen [user-info on-error]
-  ;(zs/dispatch [:xhr/get (io/api "/user/info") [:user :info] nil :on-error on-error])
   (fn []
     (let [{:keys [query anchor]} @io/CURRENT-PAGE,
           view (get @SCREENS anchor (get @SCREENS :default))]
-
-      ;(println "VIEW=" view)
-      ;(println "Anchor=" anchor)
       (cond
-        ;(nil? @user-info) [:div.splash-centered [:div.splash-frame "Loading profile, please wait."]]
         (nil? anchor) [:div "NULL VIEW !!!"]
         (nil? view) [:div "No such view" anchor]
         :else [:div#top [view {:params query}]
@@ -152,6 +147,5 @@
 
 
 (defn defscreen [path view]
-  (println "DEFSCREEN: " path)
   (swap! SCREENS assoc path view))
 
