@@ -86,12 +86,15 @@
 
 (defn memory-trace-store [app-state old-state]
   (let [new-conf (-> app-state :conf :tstore)
-        store (MemoryChunkStore.
-                (* 1024 1024 (:memstore-size-max new-conf 2048))
-                (* 1024 1024 (:memstore-size-del new-conf 1024))),
-        sreg (or (-> old-state :tstore :resolver) (SymbolRegistry.)),
-        state (if (:tstore-state old-state)
-                @(:tstore-state old-state)
-                {:store store, :collector (Collector. sreg store false), :registry sreg})]
-    (assoc state
-      :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals, :resolver sreg)))
+        max-size (* 1024 1024 (:memstore-size-max new-conf 2048)),
+        del-size (* 1024 1024 (:memstore-size-del new-conf 1024))
+        tstore-state (:tstore-state old-state)]
+    (if tstore-state
+      (let [{:keys [store] :as tstore-state} @tstore-state]
+        (.setMaxSize store max-size)
+        (.setDelSize store del-size)
+        tstore-state)
+      (let [store (MemoryChunkStore. max-size del-size), sreg (SymbolRegistry.),
+            collector (Collector. sreg store false)]
+        {:store store, :collector collector, :registry sreg, :resolver sreg,
+         :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals}))))
