@@ -507,7 +507,7 @@
                   {:range {:tstamp (into {}
                                      (when min-tstamp {:gte min-tstamp})
                                      (when max-tstamp {:lte max-tstamp}))}})])
-             (for [[k v] attr-matches] {:match {(str->akey k) (str v)}})
+             (for [[k v] attr-matches] {:match {(str->akey k) (str v "\t" k)}})
              )}}})
 
 
@@ -562,7 +562,7 @@
                       :path ["/_search"] :body body)]
     (for [b (-> rslt :aggregations :avals :buckets)
           :let [ak (get b "key")] :when (not= ak attr)]
-      ak)))
+      (first (cstr/split ak #"\t")))))
 
 (defn extract-props [prefix props]
   (for [[k v] props :let [k (zu/to-str k), vp (or (get v "properties") (get v :properties))]]

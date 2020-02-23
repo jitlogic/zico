@@ -1,6 +1,6 @@
 (ns zico.memstore
   (:require [zico.util :as zu])
-  (:import (com.jitlogic.zorka.common.collector MemoryChunkStore Collector TraceChunkData TraceDataExtractor TraceStatsExtractor)
+  (:import (com.jitlogic.zorka.common.collector MemoryChunkStore Collector TraceChunkData TraceDataExtractor TraceStatsExtractor TraceChunkSearchQuery)
            (com.jitlogic.zorka.common.tracedata SymbolRegistry TraceMarker)
            (java.time LocalDateTime OffsetDateTime)
            (java.util ArrayList Collection)))
@@ -50,17 +50,25 @@
   {:tst #(.getTstamp %), :duration #(.getDuration %),
    :calls #(.getCalls %), :recs #(.getRecs %), :errors #(.getErrors %)})
 
+(defn q->tcq [{:keys [traceid spanid errors-only spans-only min-tstamp max-tstamp min-duration attr-matches text
+                      offset limit]}]
+  (let [q (TraceChunkSearchQuery.)]
+    (when traceid (.withTraceId q traceid))
+    (when spanid (.withSpanId q spanid))
+    (when errors-only (.setErrorsOnly q errors-only))
+    (when spans-only (.setSpansOnly q spans-only))
+    (when min-tstamp (.setMinTstamp q (zu/iso-time->millis min-tstamp)))
+    (when max-tstamp (.setMaxTstamp q (zu/iso-time->millis max-tstamp)))
+    (when min-duration (.setMinDuration q min-duration))
+    (when text (.setText q text))
+    (when offset (.setOffset q offset))
+    (when limit (.setLimit q limit))
+    (doseq [[k v] attr-matches] (.withAttr q k v))
+    q))
+
 (defn trace-search [{:keys [tstore-state]} query & {:keys [raw?]}]
-  (let [{:keys [^MemoryChunkStore store]} @tstore-state,
-        odir (if (= :asc (:order-dir query)) identity reverse)
-        mfn (if raw? identity tcd->rest)]
-    (take
-      (:limit query 100)
-      (drop
-        (:offset query 0)
-        (for [tcd (odir (sort-by (TCD-SORT-FNS (:order-by query :tst)) (.getChunks store)))
-              :when (and tcd (tcd-matches query tcd))]
-          (mfn tcd))))))
+  (let [q (q->tcq query), {:keys [^MemoryChunkStore store]} @tstore-state]
+    (map (if raw? identity tcd->rest) (.search store q))))
 
 (defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
   (let [{:keys [search resolver]} @tstore-state,
