@@ -76,6 +76,8 @@
           :index-overcommit     1024
           :index-count          16
           :flattened-attrs      false
+          :writer-threads       16
+          :writer-queue         16384
           :timeout              30
           :threads              32
           :default-per-route    32

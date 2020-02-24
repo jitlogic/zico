@@ -15,14 +15,16 @@
     (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
                                          TraceDataExtractor TraceStatsExtractor CachingSymbolMapper)
     (java.util.regex Pattern)
-    (com.jitlogic.zorka.common.cbor TraceRecordFlags)))
+    (com.jitlogic.zorka.common.cbor TraceRecordFlags)
+    (com.jitlogic.zorka.common.tracedata SymbolRegistry SymbolicMethod)
+    (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
 (def TYPE-SYMBOL 1)
 (def TYPE-METHOD 2)
 (def TYPE-CHUNK 3)
 (def TYPE-SEQ 4)
 
-(def DOC-MAPPING-PROPS                                      ; TODO wyrównac ten schemat z zico.schema.tdb/ChunkMetadata
+(def DOC-MAPPING-PROPS
   {:doctype {:type :long}
    :traceid {:type :keyword}
    :spanid {:type :keyword}
@@ -212,7 +214,6 @@
 (def SYMS-ADD-LOCK (Object.))
 
 (defn syms-add [{{:keys [symbols-seq]} :metrics {db :tstore} :conf} prefix tsnum syms]
-
   (if (empty? syms)
     {}
     (locking SYMS-ADD-LOCK
@@ -602,8 +603,7 @@
 (defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
   (let [tstore-lock (:tstore-lock app-state)]
     (locking tstore-lock
-      (let [
-            indexes (list-data-indexes conf)
+      (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
             mapper (CachingSymbolMapper. (symbol-mapper app-state tsnum))
             resolver (symbol-resolver conf),
@@ -614,9 +614,55 @@
           (index-create conf tsnum)
           (when-not (-> app-state :conf :tstore :flattened-attrs)
             (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs)))))
-        {:collector collector, :tsnum tsnum,
+        {:collector collector, :tsnum tsnum, :type :elastic,
          :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
          :mapper mapper, :store store, :resolver resolver}))))
+
+(defn add-syms-mids [{{db :tstore} :conf :as app-state} prefix tsnum symap midmap executor attempts]
+  (try
+    (when-not (and (.isEmpty symap) (.isEmpty midmap))
+      (log/debug "Adding new symbols and methods" (.keySet symap) (.keySet midmap))
+      (let [idx (index-name db prefix tsnum)
+            sdata (for [[i s] symap] [{:index {:_index idx, :_id (str "SYM." i)}} {:doctype TYPE-SYMBOL, :symbol s}])
+            mdata (for [[i ^SymbolicMethod sm] midmap :let [c (.getClassId sm), m (.getMethodId sm), s (.getSignatureId sm)]]
+                    [{:index {:_index idx, :_id (str "MID." i)}} {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
+            data (concat sdata mdata)
+            body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
+        (elastic http/post db tsnum :path ["/_bulk"], :body body)))
+    (catch Exception e
+      (log/error e "Error adding symbols. Will try again in a moment.")
+      (zu/sleep (* 1000 attempts))
+      (when (and executor (> attempts 0))
+        (.execute executor (fn [] (add-syms-mids app-state prefix tsnum symap midmap executor (dec attempts))))))))
+
+(defn async-chunk-store [{{{:keys [flattened-attrs] :as db} :tstore} :conf :as app-state} prefix tsnum registry executor]
+  (reify
+    TraceChunkStore
+    (add [_ tcd]
+      (let [symap (.getNewSymbols registry), midmap (.getNewMethods registry)]
+        (add-syms-mids app-state prefix tsnum symap midmap executor 100))
+      (when-let [executor (:tstore-state)]
+        (.execute executor (fn [] (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true)))))
+    (addAll [this tcds]
+      (doseq [tcd tcds] (.add this tcd)))))
+
+
+(defn elastic-async-trace-store [{{{:keys [writer-queue writer-threads] :as conf} :tstore} :conf :as app-state} old-state]
+  (let [tstore-lock (:tstore-lock app-state), tstore-state (:tstore-state old-state)]
+    (locking tstore-lock
+      (let [indexes (list-data-indexes conf)
+            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
+            registry (or (when tstore-state (:registry @tstore-state)) (SymbolRegistry.))
+            task-queue (or (:task-queue @tstore-state) (ArrayBlockingQueue. writer-queue))
+            executor (or (:executor @tstore-state)
+                         (ThreadPoolExecutor. writer-threads writer-threads 30000 TimeUnit/MILLISECONDS task-queue))
+            store (async-chunk-store app-state "data" tsnum registry executor),
+            collector (Collector. registry store false)]
+        ; TODO załadować symbole z indeksu
+        {:collector collector, :tsnum tsnum, :type :elastic-async, :task-queue task-queue, :executor executor,
+         :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
+         :mapper registry, :store store, :resolver registry, :registry registry})))
+  nil)
 
 (defn elastic-health [app-state]
   (try
@@ -625,5 +671,5 @@
         (not (empty? ixs))
         (#{:green :yellow} (:health (last ixs)))))
     (catch Exception e
-      (log/error "/healthz check returned :DOWN")))
-  )
+      (log/error "/healthz check returned :DOWN"))))
+

@@ -73,6 +73,8 @@
    :index-overcommit          s/Num
    :index-count               s/Num
    :flattened-attrs           s/Bool
+   :writer-threads            s/Num
+   :writer-queue              s/Num
    :timeout                   s/Num
    :threads                   s/Num
    (s/optional-key :default-per-route) s/Num

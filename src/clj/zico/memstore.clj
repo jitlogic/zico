@@ -2,7 +2,6 @@
   (:require [zico.util :as zu])
   (:import (com.jitlogic.zorka.common.collector MemoryChunkStore Collector TraceChunkData TraceDataExtractor TraceStatsExtractor TraceChunkSearchQuery)
            (com.jitlogic.zorka.common.tracedata SymbolRegistry TraceMarker)
-           (java.time LocalDateTime OffsetDateTime)
            (java.util ArrayList Collection)))
 
 (defn attr-vals [{:keys [tstore-state]} attr]
@@ -96,5 +95,5 @@
         tstore-state)
       (let [store (MemoryChunkStore. max-size del-size), sreg (SymbolRegistry.),
             collector (Collector. sreg store false)]
-        {:store store, :collector collector, :registry sreg, :resolver sreg,
+        {:store store, :collector collector, :registry sreg, :resolver sreg, :type :memory
          :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals}))))
