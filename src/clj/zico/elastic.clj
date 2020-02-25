@@ -2,19 +2,17 @@
   "Simple API to Elastic Search."
   (:require
     [zico.util :as zu]
+    [zico.trace :as zt]
     [clojure.string :refer [join]]
     [clojure.data.json :as json]
     [clj-http.client :as http]
-    [clojure.set :as cs]
     [clojure.string :as cstr]
     [clojure.tools.logging :as log]
     [slingshot.slingshot :refer [throw+ try+]])
   (:import
-    (java.util ArrayList Collection)
-    (com.jitlogic.zorka.common.collector TraceChunkData TraceChunkStore Collector TraceDataExtractingProcessor TraceStatsExtractingProcessor)
+    (com.jitlogic.zorka.common.collector TraceChunkData TraceChunkStore Collector)
     (java.util.regex Pattern)
-    (com.jitlogic.zorka.common.cbor TraceRecordFlags)
-    (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
+    (com.jitlogic.zorka.common.cbor TraceRecordFlags)))
 
 (def TYPE-CHUNK 3)
 
@@ -50,11 +48,13 @@
   (when (string? (:body resp))
     (json/read-str (:body resp))))
 
+
 (defn- index-headers [{:keys [username password] :as db} tsnum]
   (merge
     {:accept "application/json", :content-type "application/json"}
     (when (string? password)
       {:authorization (str "Basic " (zu/b64enc (.getBytes (str username ":" password))))})))
+
 
 (defn checked-req [req {:keys [body status] :as resp}]
   (when-not (<= 200 status 299)
@@ -71,19 +71,19 @@
         (throw+ {:type :other, :req req, :resp resp, :status status}))))
   resp)
 
-(def RE-INDEX-NAME #"([\w^_]+)_([\w^_]+)_([\w^_]+)_([0-9a-fA-F]{6})")
+(def RE-INDEX-NAME #"([\w^_]+)_([0-9a-fA-F]{6})")
 
-(defn index-name [db prefix tsnum]
-  (format "%s_%s_%s_%06x" (:name db) prefix (:instance db) tsnum))
+
+(defn index-name [db tsnum]
+  (format "%s_%06x" (:name db) tsnum))
+
 
 (defn index-parse [s]
-  (when-let [[_ name prefix instance tsnum] (re-matches RE-INDEX-NAME (str s))]
-    {:name name, :prefix prefix, :instance instance, :tsnum (Long/parseLong tsnum 16)}))
+  (when-let [[_ name tsnum] (re-matches RE-INDEX-NAME (str s))]
+    {:name name, :tsnum (Long/parseLong tsnum 16)}))
 
-(def JKS-KEYS [:trust-store :trust-store-type :trust-store-pass :keystore :keystore-type :keystore-pass])
-(def CMGR-KEYS (concat JKS-KEYS [:timeout :threads :insecure? :default-per-route]))
 
-(defn- elastic [http-method db tsnum & {:keys [path body verbose? prefix] :or {prefix "data"}}]
+(defn- elastic [http-method db tsnum & {:keys [path body verbose?]}]
   (let [req (merge
               {:headers (index-headers db tsnum)
                :unexceptional-status (constantly true)
@@ -91,8 +91,8 @@
               (when (map? body) {:body (json/write-str body)})
               (when (string? body) {:body body}))
         idx-name (if (number? tsnum)
-                   (format "%s/%s" (:url db) (index-name db prefix tsnum))
-                   (format "%s/%s_%s_*" (:url db) (:name db "zico") prefix))
+                   (format "%s/%s" (:url db) (index-name db tsnum))
+                   (format "%s/%s_*" (:url db) (:name db "zico")))
         url (apply str idx-name path)]
     (when verbose? (log/info "elastic: tsnum:" tsnum "url:" url "req:" req))
     (->>
@@ -101,9 +101,10 @@
       parse-response
       zu/keywordize)))
 
+
 (defn list-data-indexes [db]
   "List indexes matching `mask` in database `db`"
-  (let [mask (Pattern/compile (str "^" (:name db) "_data_" (:instance db) "_([a-zA-Z0-9]+)$"))]
+  (let [mask (Pattern/compile (str "^" (:name db) "_([a-zA-Z0-9]+)$"))]
     (sort-by
       :tsnum
       (for [ix (-> (http/get
@@ -120,19 +121,23 @@
           :size (zu/size->bytes (:store.size ix)))
         ))))
 
+
 (defn merge-index [db tsnum num-segments]
   (elastic
     http/post db tsnum
     :path [(format "/_forcemerge?max_num_segments=%d" num-segments)]))
+
 
 (def INDEX-SETTINGS-DEFAUTLS
   {:number_of_shards   1
    :number_of_replicas 0
    :index.mapping.total_fields.limit 16384})
 
+
 (def INDEX-SETTINGS-KEYS (keys INDEX-SETTINGS-DEFAUTLS))
 
 (defonce ATTR-KEY-TRANSFORMS [])
+
 
 (defn attr-key-transform [rules attr]
   (if attr
@@ -149,6 +154,7 @@
       attr)
     attr))
 
+
 (defn str->akey [s]
   (let [rslt
         (str "attrs."
@@ -162,12 +168,14 @@
                    .toLowerCase)))]
     (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
 
+
 (defn enable-field-mapping [app-state tsnum fields]
   (let [fm (into {} (for [f fields] {(str->akey f) {:type "text", :fielddata true}}))
         rslt (elastic http/put (-> app-state :conf :tstore) tsnum
                       :path ["/_mapping"]
                       :body {:properties fm})]
     rslt))
+
 
 (defn index-create [{:keys [flattened-attrs] :as db} tsnum]
   (elastic
@@ -178,11 +186,14 @@
                         :properties (merge DOC-MAPPING-PROPS (when flattened-attrs {:attrs {:type :flattened}}))}
                        (when-not flattened-attrs {:dynamic_templates DOC-MAPPING-TEMPLATES}))}))
 
+
 (defn index-delete [db tsnum]
   (elastic http/delete db tsnum))
 
+
 (defn index-refresh [db tsnum]
   (elastic http/get db tsnum :path ["/_refresh"]))
+
 
 (defn tcd->doc [^TraceChunkData tcd flattened-attrs]
   (zu/without-nil-vals
@@ -217,53 +228,59 @@
           (for [[k v] (.getAttrs tcd) :let [f (str->akey k)]]
             [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))))))
 
+
 (declare next-active-index)
 
-(defn chunk-add [app-state tsnum doc retry]
+
+(defn chunk-add [app-state doc retry]
   (let [db (-> app-state :conf :tstore)]
     (try+
-      (elastic http/post db tsnum :path ["/_doc"] :body doc)
+      (elastic http/post db @(:tstore-tsnum app-state) :path ["/_doc"] :body doc)
       (catch [:type :field-limit-exceeded] _
         (log/warn
           "Detected :field-limit-exceeded error. Index will be rotated. You can either increase fields limit in zico.edn"
-          "or define some additional attribute transform rules (check index" tsnum "for redundant attribute names")
+          "or define some additional attribute transform rules (check index" @(:tstore-tsnum app-state) "for redundant attribute names")
         (when retry
           (locking (-> app-state :tstore-lock)
             (try+
-              (elastic http/post db tsnum :path ["/_doc"] :body doc)
+              (elastic http/post db @(:tstore-tsnum app-state) :path ["/_doc"] :body doc)
               (catch [:type :field-limit-exceeded] _
                 (next-active-index app-state)
-                (elastic http/post db tsnum :path ["/_doc"] :body doc)))
+                (elastic http/post db @(:tstore-tsnum app-state) :path ["/_doc"] :body doc)))
             ))))))
 
-(defn chunk-store [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} tsnum]
+
+(defn chunk-store [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state}]
   "Returns trace chunk store with Elastic Search backend."
   (reify
     TraceChunkStore
     (add [_ tcd]
-      (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true))
+      (chunk-add app-state (tcd->doc tcd flattened-attrs) true))
     (addAll [_ tcds]
       (doseq [tcd tcds]
-        (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true)))))
+        (chunk-add app-state (tcd->doc tcd flattened-attrs) true)))))
+
 
 (defn index-stats [app-state tsnum]
   (elastic
     http/get (-> app-state :conf :tstore) tsnum
     :path [ "/_stats"]))
 
+
 (defn index-size [app-state tsnum]
   (-> (index-stats app-state tsnum)
       :indices first second :total :store :size_in_bytes))
 
+
 (defn next-active-index [app-state]
-  (let [{:keys [tsnum]} @(:tstore-state app-state),
+  (let [tsnum @(:tstore-tsnum app-state),
         new-tsnum (inc tsnum),
         conf (-> app-state :conf :tstore),]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
     (when-not (-> app-state :conf :tstore :flattened-attrs)
       (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs))))
-    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum)
+    (reset! (:tstore-tsnum app-state) new-tsnum)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
       (log/info "Running final index merge ...")
@@ -271,12 +288,14 @@
       (log/info "Finished final index merge ..."))
     (log/info "Current active index is" new-tsnum)))
 
+
 (defn rotate-index [app-state]
   (if (= :elastic (-> app-state :conf :tstore :type))
     (do
       (next-active-index app-state)
       "Rotation successful.")
     "Rotation request ignored."))
+
 
 (defn delete-old-indexes [app-state max-count]
   (let [conf (-> app-state :conf :tstore),
@@ -289,11 +308,12 @@
           (index-delete conf (:tsnum i))
           )))))
 
+
 (defn check-rotate [app-state]
   (locking (:tstore-lock app-state)
     (let [conf (-> app-state :conf :tstore),
           max-size (* 1024 1024 (+ (:index-size conf) (:index-overcommit conf))),
-          {:keys [tsnum]} @(:tstore-state app-state)
+          tsnum @(:tstore-tsnum app-state)
           cur-size (index-size app-state tsnum)]
       (log/debug (format "Active index utilization: %.02f" (* 100.0 (/ cur-size max-size))) "%")
       (when (> cur-size max-size)
@@ -303,6 +323,7 @@
         (when (> (index-size app-state tsnum) max-size)
           (next-active-index app-state)))
       (delete-old-indexes app-state (:index-count conf 16)))))
+
 
 (defn q->e [{:keys [errors-only spans-only traceid spanid order-by order-dir
                     min-tstamp max-tstamp min-duration limit offset
@@ -340,6 +361,7 @@
 (def RE-ATTRF #"attrs\.(.*)")
 (def RE-ATTRV #"(.*)\t(.*)")
 
+
 (defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index flattened-attrs]}]
   (merge
     (assoc
@@ -365,22 +387,8 @@
     (when chunks? {:tdata (:tdata doc), :sdata (:sdata doc)})
     {:tsnum (:tsnum (index-parse index))}))
 
-(defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata sdata]}]
-  (let [tcd (TraceChunkData. traceid spanid parentid chnum)]
-    (when tst (.setTstamp tcd tst))
-    (when tsnum (.setTsNum tcd tsnum))
-    (when duration (.setDuration tcd duration))
-    (when klass (.setKlass tcd klass))
-    (when method (.setMethod tcd method))
-    (when ttype (.setTtype tcd ttype))
-    (when recs (.setRecs tcd (.intValue recs)))
-    (when calls (.setCalls tcd (.intValue calls)))
-    (when errors (.setErrors tcd (.intValue errors)))
-    (when tdata (.setTraceData tcd (zu/b64dec tdata)))
-    (when sdata (.setSymbolData tcd (zu/b64dec sdata)))
-    tcd))
 
-(defn attr-vals [app-state attr]
+(defmethod zt/attr-vals :elastic [app-state attr]
   (let [body {:size 0, :aggregations {:avals {:terms {:field (str->akey attr)}}}}
         rslt (elastic http/get (-> app-state :conf :tstore) nil
                       :path ["/_search"] :body body)]
@@ -388,11 +396,13 @@
           :let [ak (get b "key")] :when (not= ak attr)]
       (first (cstr/split ak #"\t")))))
 
+
 (defn extract-props [prefix props]
   (for [[k v] props :let [k (zu/to-str k), vp (or (get v "properties") (get v :properties))]]
     (if vp
       (extract-props (str prefix "." k) vp)
       (str prefix "." k))))
+
 
 (defn attr-names [app-state tsnum]
   (when (= :elastic (-> app-state :conf :tstore :type))
@@ -400,45 +410,35 @@
           attrs (flatten (for [[_ xdef] rslt] (extract-props "" (get-in xdef [:mappings :properties]))))]
       (sort (for [a attrs :when (.startsWith a ".attrs")] (.substring a 7))))))
 
-(defn trace-search [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} query & {:keys [chunks?]}]
-  (let [body (q->e query)
+
+(defmethod zt/trace-search :elastic [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} query {:keys [chunks? raw? spans-only?]}]
+  (let [body (q->e query),
+        rfn (if raw? zt/rest->tcd identity), ; TODO wyeliminować podwójne mapowanie wyniku
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
                       :path ["/_search?_source=" _source ",attrs" (if flattened-attrs "" ".*")
                              (if chunks? ",tdata,sdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
-      (doc->rest doc :chunks? chunks?, :index index, :flattened-attrs flattened-attrs))))
+      (rfn (doc->rest doc :chunks? chunks?, :index index, :flattened-attrs flattened-attrs)))))
 
-(defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search]} @tstore-state,
-        chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true)
-        rslt (TraceDataExtractingProcessor/extractTrace (ArrayList. ^Collection (map chunk->tcd chunks)))]
-    rslt))
 
-(defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search]} @tstore-state,
-        chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
-        rslt (TraceStatsExtractingProcessor/extractStats (ArrayList. ^Collection (map chunk->tcd chunks)))]
-    rslt))
-
-(defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
+(defmethod zt/new-trace-store :elastic [{{conf :tstore} :conf :as app-state} old-state]
   (let [tstore-lock (:tstore-lock app-state)]
     (locking tstore-lock
       (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
-            store (chunk-store app-state tsnum)
-            ;TBD task-queue (or (:task-queue @tstore-state) (ArrayBlockingQueue. writer-queue))
-            ;TBD executor (or (:executor @tstore-state) (ThreadPoolExecutor. writer-threads writer-threads 30000 TimeUnit/MILLISECONDS task-queue))
+            store (chunk-store app-state)
+            ;TBD task-queue (or (:task-queue app-state) (ArrayBlockingQueue. writer-queue))
+            ;TBD executor (or (:executor app-state) (ThreadPoolExecutor. writer-threads writer-threads 30000 TimeUnit/MILLISECONDS task-queue))
             collector (Collector. store false)]
         (log/info "Collector will write to index" tsnum)
+        (reset! (:tstore-tsnum app-state) tsnum)
         (when (empty? indexes)
           (index-create conf tsnum)
           (when-not (-> app-state :conf :tstore :flattened-attrs) ; apply mappings for field transforms
             (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs)))))
-        {:collector collector, :tsnum tsnum, :type :elastic,
-         :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
-         :store store}))))
+        {:collector collector, :store store}))))
 
 
 (defn elastic-health [app-state]

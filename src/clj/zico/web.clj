@@ -38,13 +38,11 @@
                 [:div.splash-frame "Loading application ..."]]]
               (include-js "/js/app.js"))})
 
-
 (defn zico-error-handler [_ {:keys [reason status] :as data} _]
   (cond
     (string? data) {:status 500, :headers {}, :body {:reason data}}
     :else
     {:status  (or status 500) :headers {} :body    {:reason reason}}))
-
 
 (defn wrap-cache [f]
   (fn [{:keys [uri] :as req}]
@@ -61,8 +59,6 @@
     (rhr/ok rslt)
     (rhr/not-found {:reason "trace not found"})))
 
-(defn attr-vals [app-state id]
-  ((:attr-vals @(:tstore-state app-state)) app-state id))
 
 (defn zico-api-routes [{{:keys [user-search user-dtrace user-detail user-tstats]} :metrics :as app-state}]
   (ca/api
@@ -85,13 +81,13 @@
         :summary "search traces according to posted query"
         :body [query zico.schema.tdb/TraceSearchQuery]
         :return [zico.schema.tdb/ChunkMetadata]
-        (rhr/ok (zmet/with-timer user-search (ztrc/trace-search app-state query))))
+        (rhr/ok (zmet/with-timer user-search (ztrc/trace-search+desc app-state query))))
       (ca/GET "/attr/:id" []
         :summary "return all values of given attribute"
         :query-params [{limit :- s/Int 100}]
         :path-params [id :- s/Str]
         :return [s/Str]
-        (rhr/ok (attr-vals app-state id)))
+        (rhr/ok (ztrc/attr-vals app-state id)))
       (ca/GET "/:tid" []
         :summary "return all spans of a distributed trace"
         :path-params [tid :- s/Str]
@@ -99,7 +95,7 @@
         (rhr/ok
           (zmet/with-timer user-dtrace
             (ztrc/chunks->tree
-              (ztrc/trace-search app-state {:traceid tid, :spans-only true, :limit 1024})))))
+              (ztrc/trace-search+desc app-state {:traceid tid, :spans-only true, :limit 1024})))))
       (ca/GET "/:tid/:sid" []
         :summary "return trace execution tree"
         :path-params [tid :- s/Str, sid :- s/Str]
@@ -161,6 +157,7 @@
     (zela/elastic-health app-state)
     true))
 
+
 (defn zorka-web-routes [app-state]
   (let [api-routes (zico-api-routes app-state)
         agent-routes (zico-agent-routes app-state)]
@@ -183,6 +180,7 @@
       (resources "/")
       (not-found "Not Found!\n"))))
 
+
 (def RE-AUTH-HDR #"\s*(\w+)\s+(\S+)\s*")
 (def RE-AUTH-VAL #"(\w+):(\S+)")
 
@@ -190,6 +188,7 @@
                 :headers {"WWW-Authenticate", "Basic realm=\"ZICO\", charset=\"UTF-8\""}})
 
 (def WWW-AUTHN {:status 403, :body "Forbidden."})
+
 
 (defn http-basic-filter [f users admin-users pwcheck]
   (fn [{:keys [headers uri] :as req}]
@@ -212,6 +211,7 @@
             (contains? admin-users login) (f req)
             :else WWW-AUTHN)))
       )))
+
 
 (defn password-check [pwhash passwd]
   (cond
