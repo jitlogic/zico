@@ -1,7 +1,9 @@
 (ns zico.memstore
   (:require [zico.util :as zu])
-  (:import (com.jitlogic.zorka.common.collector MemoryChunkStore Collector TraceChunkData TraceDataExtractor TraceStatsExtractor TraceChunkSearchQuery)
-           (com.jitlogic.zorka.common.tracedata SymbolRegistry TraceMarker)
+  (:import (com.jitlogic.zorka.common.collector
+             MemoryChunkStore Collector TraceChunkData TraceChunkSearchQuery
+             TraceDataExtractingProcessor TraceStatsExtractingProcessor)
+           (com.jitlogic.zorka.common.tracedata TraceMarker)
            (java.util ArrayList Collection)))
 
 (defn attr-vals [{:keys [tstore-state]} attr]
@@ -70,17 +72,15 @@
     (map (if raw? identity tcd->rest) (.search store q))))
 
 (defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search resolver]} @tstore-state,
+  (let [{:keys [search]} @tstore-state,
         chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true, :raw? true)
-        tex (TraceDataExtractor. resolver),
-        rslt (.extract tex (ArrayList. ^Collection chunks))]
+        rslt (TraceDataExtractingProcessor/extractTrace (ArrayList. ^Collection chunks))]
     rslt))
 
 (defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search resolver]} @tstore-state,
+  (let [{:keys [search]} @tstore-state,
         chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true, :raw? true),
-        tex (TraceStatsExtractor. resolver),
-        rslt (.extract tex (ArrayList. ^Collection chunks))]
+        rslt (TraceStatsExtractingProcessor/extractStats (ArrayList. ^Collection chunks))]
     rslt))
 
 (defn memory-trace-store [app-state old-state]
@@ -93,7 +93,7 @@
         (.setMaxSize store max-size)
         (.setDelSize store del-size)
         tstore-state)
-      (let [store (MemoryChunkStore. max-size del-size), sreg (SymbolRegistry.),
-            collector (Collector. sreg store false)]
-        {:store store, :collector collector, :registry sreg, :resolver sreg, :type :memory
+      (let [store (MemoryChunkStore. max-size del-size),
+            collector (Collector. store false)]
+        {:store store, :collector collector, :type :memory
          :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals}))))

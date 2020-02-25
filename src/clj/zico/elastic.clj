@@ -8,21 +8,15 @@
     [clojure.set :as cs]
     [clojure.string :as cstr]
     [clojure.tools.logging :as log]
-    [slingshot.slingshot :refer [throw+ try+]]
-    [zico.metrics :as zmet])
+    [slingshot.slingshot :refer [throw+ try+]])
   (:import
-    (java.util HashMap Set Map ArrayList Collection)
-    (com.jitlogic.zorka.common.collector SymbolResolver SymbolMapper TraceChunkData TraceChunkStore Collector
-                                         TraceDataExtractor TraceStatsExtractor CachingSymbolMapper)
+    (java.util ArrayList Collection)
+    (com.jitlogic.zorka.common.collector TraceChunkData TraceChunkStore Collector TraceDataExtractingProcessor TraceStatsExtractingProcessor)
     (java.util.regex Pattern)
     (com.jitlogic.zorka.common.cbor TraceRecordFlags)
-    (com.jitlogic.zorka.common.tracedata SymbolRegistry SymbolicMethod)
     (java.util.concurrent ArrayBlockingQueue ThreadPoolExecutor TimeUnit)))
 
-(def TYPE-SYMBOL 1)
-(def TYPE-METHOD 2)
 (def TYPE-CHUNK 3)
-(def TYPE-SEQ 4)
 
 (def DOC-MAPPING-PROPS
   {:doctype {:type :long}
@@ -43,15 +37,8 @@
    :errors {:type :long}
    :ttype {:type :keyword}
    :fulltext {:type :text}
-
    :tdata {:type :binary, :index false}
-   :mids {:type :long}
-
-   ; symbol registries and sequence generators
-   :mdesc {:type :keyword}
-   :symbol {:type :keyword}
-   :seq {:type :long}
-   })
+   :sdata {:type :binary, :index false}})
 
 (def DOC-MAPPING-TEMPLATES
   [{:attrs_as_strings
@@ -197,168 +184,6 @@
 (defn index-refresh [db tsnum]
   (elastic http/get db tsnum :path ["/_refresh"]))
 
-(defn seq-next [db prefix tsnum seq-name block-sz seq-quant]
-  (let [idx (index-name db prefix tsnum)
-        data (for [_ (range 0 block-sz seq-quant)]
-               [{:update {:_index idx, :_id (str "SEQ." (name seq-name)), :retry_on_conflict 8}}
-                {:script {:source (format "ctx._source.seq += %d" seq-quant)}
-                 :upsert {:seq 1, :type TYPE-SEQ}}])
-        body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-    (take
-      block-sz
-      (apply concat
-        (for [r (:items (elastic http/post db tsnum :path ["/_bulk?refresh=true&_source=true"] :body body))
-              :let [n (get-in r ["update" "get" "_source" "seq"])]]
-          (range n (+ n seq-quant)))))))
-
-(def SYMS-ADD-LOCK (Object.))
-
-(defn syms-add [{{:keys [symbols-seq]} :metrics {db :tstore} :conf} prefix tsnum syms]
-  (if (empty? syms)
-    {}
-    (locking SYMS-ADD-LOCK
-      ; TODO dual locking here (check if symbols were added before lock)
-      (let [idx (index-name db prefix tsnum)
-            rslt (zipmap syms (zmet/with-timer symbols-seq (seq-next db prefix tsnum :SYMBOLS (count syms) (:seq-block-size db))))
-            data (for [[s i] rslt]
-                   [{:index {:_index idx, :_id (str "SYM." i)}}
-                    {:doctype TYPE-SYMBOL, :symbol s}])
-            body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-        (elastic
-          http/post db tsnum
-          :path ["/_bulk?refresh=true"]
-          :body body)                                       ; TODO sprawdzic czy poprawnie sie dodaly
-        rslt))))
-
-(defn syms-resolve [db tsnum sids]
-  (if (empty? sids)
-    {}
-    (let [docs (elastic http/get db tsnum :path ["/_mget"]
-                        :body {:docs (for [s sids] {:_id (str "SYM." s)})})]
-      (into {}
-        (for [d (:docs docs)]
-          {(Long/parseLong (.substring ^String (get d "_id") 4))
-           (get-in d ["_source" "symbol"])})))))
-
-(defn syms-search [db prefix tsnum syms]
-  (if (empty? syms)
-    {}
-    (let [idx (index-name db prefix tsnum)
-          data (for [s syms]
-                 [{:index idx}
-                  {:query {:term {:symbol s}}}])
-          body (str (join "\n" (map json/write-str (apply concat data))) "\n")
-          rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
-      (into {}
-        (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
-          {(get-in h ["_source" "symbol"]) (Long/parseLong (.substring ^String (get h "_id") 4))})))))
-
-(defn syms-map [{{:keys [symbols-get]} :metrics {db :tstore} :conf  :as app-state} prefix tsnum m]
-  "Given agent-side symbol map (aid -> name), produce agent-collector mapping (aid -> rid)"
-  (let [syms (set (vals m)),
-        rsmap (zmet/with-timer symbols-get (syms-search db prefix tsnum syms)),
-        asyms (cs/difference syms (keys rsmap)),
-        asmap (syms-add app-state prefix tsnum asyms)]
-    (into {}
-      (for [[aid sym] m :let [rid (or (rsmap sym) (asmap sym))] :when rid]
-        {aid rid}))))
-
-(defn mids-add [{{:keys [symbols-seq]} :metrics {db :tstore} :conf} prefix tsnum mdescs]
-  (if (empty? mdescs)
-    {}
-    (let [idx (index-name db prefix tsnum)
-          rslt (zipmap mdescs (zmet/with-timer symbols-seq (seq-next db prefix tsnum :METHODS (count mdescs) (:seq-block-size db))))
-          data (for [[[c m s] i] rslt]
-                 [{:index {:_index idx, :_id (str "MID." i)}}
-                  {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
-          body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-      (elastic
-        http/post db tsnum :path ["/_bulk?refresh=true"], :body body)
-      rslt)))
-
-(defn mids-resolve [db tsnum mids]
-  (if (empty? mids)
-    {}
-    (let [docs (elastic http/get db tsnum :path ["/_mget"]
-                        :body {:docs (for [m mids] {:_id (str "MID." m)})})]
-      (into {}
-        (for [d (:docs docs) :let [mdesc (get-in d ["_source" "mdesc"])] :when mdesc]
-          {(Long/parseLong (.substring ^String (get d "_id") 4))
-           (vec (for [i (.split mdesc ",")] (Long/parseLong i)))})))))
-
-(defn mids-search [db prefix tsnum mdescs]
-  (if (empty? mdescs)
-    {}
-    (let [idx (index-name db prefix tsnum)
-          data (for [[c m s] mdescs :let [md (str c "," m "," s)]]
-                 [{:index idx} {:query {:term {:mdesc md}}}])
-          body (str (join "\n" (map json/write-str (apply concat data))) "\n")
-          rslt (elastic http/get db tsnum :path ["/_msearch"] :body body)]
-      (into {}
-        (for [r (:responses rslt) :let [h (first (get-in r ["hits" "hits"]))] :when h]
-          {(vec (for [i (.split (get-in h ["_source" "mdesc"]) ",")]
-                  (if (re-matches #"\d+" i) (Long/parseLong i) 0)))
-           (Long/parseLong (.substring ^String (get h "_id") 4))})))))
-
-(defn mids-map [{{:keys [symbols-mid]} :metrics {db :tstore} :conf  :as app-state} prefix tsnum m]
-  "Given agent-side mid map (aid -> [c,m,s]), produce agent-collector mapping (aid -> rid)"
-  (let [mdefs (set (vals m)),
-        rsmap (zmet/with-timer symbols-mid (mids-search db prefix tsnum mdefs)),
-        amids (cs/difference mdefs (keys rsmap)),
-        asmap (mids-add app-state prefix tsnum amids)]
-    (into {}
-      (for [[aid mdef] m :let [rid (or (rsmap mdef) (asmap mdef))] :when rid]
-        {aid rid}))))
-
-(defn methods-resolve [db tsnum mids]
-  (let [mdss (mids-resolve db tsnum mids)
-        sids (into #{} (flatten (vals mdss)))
-        syms (syms-resolve db tsnum sids)]
-    (into {}
-      (for [[i [c m s]] mdss :let [cs (syms c), ms (syms m)] :when (and cs ms)]
-        {i (str cs "." ms "()")}))))
-
-(defn symbol-resolver [db]
-  "Returns SymbolResolver with Elastic Search as backend."
-  (reify
-    SymbolResolver
-    (^Map resolveSymbols [_ ^Set sids ^int tsnum]
-      (let [rslt (HashMap.)]
-        (doseq [[sid sym] (syms-resolve db tsnum (seq sids))]
-          (.put rslt (.intValue sid) sym))
-        rslt))
-    (^Map resolveMethods [_ ^Set mids ^int tsnum]
-      (let [rslt (HashMap.)]
-        (doseq [[i s] (methods-resolve db tsnum (seq mids))]
-          (.put rslt (.intValue i) s))
-        rslt))))
-
-(defn mdef->vec [md]
-  [(.longValue (.getClassId md))
-   (.longValue (.getMethodId md))
-   (.longValue (.getSignatureId md))])
-
-(defn symbol-mapper [app-state tsnum]
-  "Returns SymbolMapper with Elastic Search as backend."
-  (reify
-    SymbolMapper
-    (^Map newSymbols [_ ^Map m]
-      (let [rslt (HashMap.)]
-        (doseq [[aid rid] (syms-map app-state "data" tsnum (into {} m))]
-          (.put rslt (.intValue aid) (.intValue rid)))
-        rslt))
-    (^Map newMethods [_ ^Map m]
-      (let [rslt (HashMap.),
-            mdefs (into {} (for [[k v] m] {k, (mdef->vec v)}))
-            mimap (mids-map app-state "data" tsnum mdefs)]
-        (doseq [[aid rid] mimap]
-          (.put rslt (.intValue aid) (.intValue rid)))
-        rslt))))
-
-(defn millis->date [l]
-  l)
-
-
 (defn tcd->doc [^TraceChunkData tcd flattened-attrs]
   (zu/without-nil-vals
     (merge
@@ -367,7 +192,7 @@
        :spanid   (.getSpanIdHex tcd)
        :chnum    (.getChunkNum tcd)
        :tst      (.getTstamp tcd)
-       :tstamp   (millis->date (.getTstamp tcd))
+       :tstamp   (.getTstamp tcd)
        :error    (.hasFlag tcd TraceRecordFlags/TF_ERROR_MARK)
        :duration (- (.getTstop tcd) (.getTstart tcd))
        :klass    (.getKlass tcd)
@@ -377,7 +202,8 @@
        :errors   (.getErrors tcd)
        :ttype    (.getTtype tcd)
        :tdata    (zu/b64enc (.getTraceData tcd))
-       :fulltext    (str (.getKlass tcd) "." (.getMethod tcd) " "
+       :sdata    (zu/b64enc (.getSymbolData tcd))
+       :fulltext (str (.getKlass tcd) "." (.getMethod tcd) " "
                       (when (.getAttrs tcd) (cstr/join " " (.values (.getAttrs tcd)))))}
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
@@ -410,7 +236,6 @@
                 (elastic http/post db tsnum :path ["/_doc"] :body doc)))
             ))))))
 
-
 (defn chunk-store [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} tsnum]
   "Returns trace chunk store with Elastic Search backend."
   (reify
@@ -433,15 +258,12 @@
 (defn next-active-index [app-state]
   (let [{:keys [tsnum]} @(:tstore-state app-state),
         new-tsnum (inc tsnum),
-        conf (-> app-state :conf :tstore),
-        mapper (CachingSymbolMapper. (symbol-mapper app-state new-tsnum)),
-        store (chunk-store app-state new-tsnum),
-        collector (Collector. mapper store false)]
+        conf (-> app-state :conf :tstore),]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
     (when-not (-> app-state :conf :tstore :flattened-attrs)
       (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs))))
-    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum, :collector collector, :mapper mapper, :store store)
+    (swap! (:tstore-state app-state) assoc :tsnum new-tsnum)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
       (log/info "Running final index merge ...")
@@ -540,10 +362,10 @@
                   v vs :let [[_ s a] (re-matches RE-ATTRV v)]
                   :when (and (string? s) (string? a))]
               {a s})))))
-    (when chunks? {:tdata (:tdata doc)})
+    (when chunks? {:tdata (:tdata doc), :sdata (:sdata doc)})
     {:tsnum (:tsnum (index-parse index))}))
 
-(defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata]}]
+(defn chunk->tcd [{:keys [traceid spanid parentid chnum tsnum tst duration klass method ttype recs calls errors tdata sdata]}]
   (let [tcd (TraceChunkData. traceid spanid parentid chnum)]
     (when tst (.setTstamp tcd tst))
     (when tsnum (.setTsNum tcd tsnum))
@@ -555,6 +377,7 @@
     (when calls (.setCalls tcd (.intValue calls)))
     (when errors (.setErrors tcd (.intValue errors)))
     (when tdata (.setTraceData tcd (zu/b64dec tdata)))
+    (when sdata (.setSymbolData tcd (zu/b64dec sdata)))
     tcd))
 
 (defn attr-vals [app-state attr]
@@ -581,23 +404,22 @@
   (let [body (q->e query)
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
-                      :path ["/_search?_source=" _source ",attrs" (if flattened-attrs "" ".*") (if chunks? ",tdata" "")]
+                      :path ["/_search?_source=" _source ",attrs" (if flattened-attrs "" ".*")
+                             (if chunks? ",tdata,sdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
       (doc->rest doc :chunks? chunks?, :index index, :flattened-attrs flattened-attrs))))
 
 (defn trace-detail [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search resolver]} @tstore-state,
+  (let [{:keys [search]} @tstore-state,
         chunks (search app-state {:traceid traceid, :spanid spanid, :spans-only true} :chunks? true)
-        tex (TraceDataExtractor. resolver)
-        rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
+        rslt (TraceDataExtractingProcessor/extractTrace (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
 (defn trace-stats [{:keys [tstore-state] :as app-state} traceid spanid]
-  (let [{:keys [search resolver]} @tstore-state,
+  (let [{:keys [search]} @tstore-state,
         chunks (search app-state {:traceid traceid :spanid spanid} :chunks? true)
-        tex (TraceStatsExtractor. resolver)
-        rslt (.extract tex (ArrayList. ^Collection (map chunk->tcd chunks)))]
+        rslt (TraceStatsExtractingProcessor/extractStats (ArrayList. ^Collection (map chunk->tcd chunks)))]
     rslt))
 
 (defn elastic-trace-store [{{conf :tstore} :conf :as app-state} old-state]
@@ -605,64 +427,19 @@
     (locking tstore-lock
       (let [indexes (list-data-indexes conf)
             tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
-            mapper (CachingSymbolMapper. (symbol-mapper app-state tsnum))
-            resolver (symbol-resolver conf),
             store (chunk-store app-state tsnum)
-            collector (Collector. mapper store false)]
+            ;TBD task-queue (or (:task-queue @tstore-state) (ArrayBlockingQueue. writer-queue))
+            ;TBD executor (or (:executor @tstore-state) (ThreadPoolExecutor. writer-threads writer-threads 30000 TimeUnit/MILLISECONDS task-queue))
+            collector (Collector. store false)]
         (log/info "Collector will write to index" tsnum)
         (when (empty? indexes)
           (index-create conf tsnum)
-          (when-not (-> app-state :conf :tstore :flattened-attrs)
+          (when-not (-> app-state :conf :tstore :flattened-attrs) ; apply mappings for field transforms
             (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs)))))
         {:collector collector, :tsnum tsnum, :type :elastic,
-         :search    trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
-         :mapper mapper, :store store, :resolver resolver}))))
-
-(defn add-syms-mids [{{db :tstore} :conf :as app-state} prefix tsnum symap midmap executor attempts]
-  (try
-    (when-not (and (.isEmpty symap) (.isEmpty midmap))
-      (log/debug "Adding new symbols and methods" (.keySet symap) (.keySet midmap))
-      (let [idx (index-name db prefix tsnum)
-            sdata (for [[i s] symap] [{:index {:_index idx, :_id (str "SYM." i)}} {:doctype TYPE-SYMBOL, :symbol s}])
-            mdata (for [[i ^SymbolicMethod sm] midmap :let [c (.getClassId sm), m (.getMethodId sm), s (.getSignatureId sm)]]
-                    [{:index {:_index idx, :_id (str "MID." i)}} {:doctype TYPE-METHOD, :mdesc (str c "," m "," s)}])
-            data (concat sdata mdata)
-            body (str (join "\n" (map json/write-str (apply concat data))) "\n")]
-        (elastic http/post db tsnum :path ["/_bulk"], :body body)))
-    (catch Exception e
-      (log/error e "Error adding symbols. Will try again in a moment.")
-      (zu/sleep (* 1000 attempts))
-      (when (and executor (> attempts 0))
-        (.execute executor (fn [] (add-syms-mids app-state prefix tsnum symap midmap executor (dec attempts))))))))
-
-(defn async-chunk-store [{{{:keys [flattened-attrs] :as db} :tstore} :conf :as app-state} prefix tsnum registry executor]
-  (reify
-    TraceChunkStore
-    (add [_ tcd]
-      (let [symap (.getNewSymbols registry), midmap (.getNewMethods registry)]
-        (add-syms-mids app-state prefix tsnum symap midmap executor 100))
-      (when-let [executor (:tstore-state)]
-        (.execute executor (fn [] (chunk-add app-state tsnum (tcd->doc tcd flattened-attrs) true)))))
-    (addAll [this tcds]
-      (doseq [tcd tcds] (.add this tcd)))))
-
-
-(defn elastic-async-trace-store [{{{:keys [writer-queue writer-threads] :as conf} :tstore} :conf :as app-state} old-state]
-  (let [tstore-lock (:tstore-lock app-state), tstore-state (:tstore-state old-state)]
-    (locking tstore-lock
-      (let [indexes (list-data-indexes conf)
-            tsnum (if (empty? indexes) 0 (apply max (map :tsnum indexes)))
-            registry (or (when tstore-state (:registry @tstore-state)) (SymbolRegistry.))
-            task-queue (or (:task-queue @tstore-state) (ArrayBlockingQueue. writer-queue))
-            executor (or (:executor @tstore-state)
-                         (ThreadPoolExecutor. writer-threads writer-threads 30000 TimeUnit/MILLISECONDS task-queue))
-            store (async-chunk-store app-state "data" tsnum registry executor),
-            collector (Collector. registry store false)]
-        ; TODO załadować symbole z indeksu
-        {:collector collector, :tsnum tsnum, :type :elastic-async, :task-queue task-queue, :executor executor,
          :search trace-search, :detail trace-detail, :stats trace-stats, :attr-vals attr-vals,
-         :mapper registry, :store store, :resolver registry, :registry registry})))
-  nil)
+         :store store}))))
+
 
 (defn elastic-health [app-state]
   (try

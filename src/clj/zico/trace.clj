@@ -130,7 +130,6 @@
         app-state (assoc-in app-state [:conf :tstore :connection-manager] conn-mgr)
         new-tstore (case type
                  :elastic (ze/elastic-trace-store app-state old-state)
-                 :elastic-async (ze/elastic-async-trace-store app-state old-state)
                  :memory (zm/memory-trace-store app-state old-state)
                  (throw (ex-info "No trace store type selected." {}))),
         tfn (trace-desc-fn (:conf app-state))]
