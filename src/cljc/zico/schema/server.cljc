@@ -68,11 +68,9 @@
    :session-timeout           s/Num
    :memstore-size-max         s/Num
    :memstore-size-del         s/Num
-   :seq-block-size            s/Num
    :index-size                s/Num
    :index-overcommit          s/Num
    :index-count               s/Num
-   :flattened-attrs           s/Bool
    :writer-threads            s/Num
    :writer-queue              s/Num
    :timeout                   s/Num
@@ -83,8 +81,7 @@
    :pre-merge-segments        s/Num
    :final-merge-segments      s/Num
    :number_of_shards          s/Num
-   :number_of_replicas        s/Num
-   :index.mapping.total_fields.limit s/Num})
+   :number_of_replicas        s/Num})
 
 (s/defschema MetricsRegistryConf
   {:type (s/enum :none :simple :jmx :prometheus :elastic)
@@ -99,8 +96,7 @@
    :username s/Str
    :password s/Str})
 
-(s/defschema AttrTransformsConf
-  {:match s/Any, :replace s/Str})
+
 
 (s/defschema ZicoConf
   {:home-dir        s/Str
@@ -110,6 +106,5 @@
    :auth            AuthConfig
    :metrics         MetricsRegistryConf
    :filter-defs     [FilterDef]
-   :attr-transforms [AttrTransformsConf]
    :trace-types     {s/Keyword TraceType}})
 

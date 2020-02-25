@@ -35,13 +35,9 @@
    :errors {:type :long}
    :ttype {:type :keyword}
    :fulltext {:type :text}
+   :attrs {:type :flattened}
    :tdata {:type :binary, :index false}
    :sdata {:type :binary, :index false}})
-
-(def DOC-MAPPING-TEMPLATES
-  [{:attrs_as_strings
-    {:match   "attrs.*"
-     :mapping {:type :keyword}}}])
 
 
 (defn parse-response [resp]
@@ -130,61 +126,28 @@
 
 (def INDEX-SETTINGS-DEFAUTLS
   {:number_of_shards   1
-   :number_of_replicas 0
-   :index.mapping.total_fields.limit 16384})
+   :number_of_replicas 0})
 
 
 (def INDEX-SETTINGS-KEYS (keys INDEX-SETTINGS-DEFAUTLS))
-
-(defonce ATTR-KEY-TRANSFORMS [])
-
-
-(defn attr-key-transform [rules attr]
-  (if attr
-    (or
-      (first
-        (for [{:keys [match replace]} rules :let [r (re-matches match attr)] :when r]
-          (if (string? r)
-            replace
-            (-> replace
-                (.replace "$1" (nth r 1 ""))
-                (.replace "$2" (nth r 2 ""))
-                (.replace "$3" (nth r 3 ""))
-                (.replace "$4" (nth r 4 ""))))))
-      attr)
-    attr))
 
 
 (defn str->akey [s]
   (let [rslt
         (str "attrs."
-             (attr-key-transform
-               ATTR-KEY-TRANSFORMS
-               (-> s
-                   (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
-                   (.replaceAll "^[_\\.]" "")
-                   (.replaceAll "\\.(\\d)" "_$1")
-                   (.replace \. \_)
-                   .toLowerCase)))]
+             (-> s (.replaceAll "[\\/\\*\\?\"<>\\| \n\t\r,\\:]" "_")
+                 (.replaceAll "^[_\\.]" "") (.replace \. \_) .toLowerCase))]
     (if (> (.length rslt) 255) (.substring rslt 0 255) rslt)))
 
 
-(defn enable-field-mapping [app-state tsnum fields]
-  (let [fm (into {} (for [f fields] {(str->akey f) {:type "text", :fielddata true}}))
-        rslt (elastic http/put (-> app-state :conf :tstore) tsnum
-                      :path ["/_mapping"]
-                      :body {:properties fm})]
-    rslt))
-
-
-(defn index-create [{:keys [flattened-attrs] :as db} tsnum]
+(defn index-create [db tsnum]
   (elastic
     http/put db tsnum
     :body {:settings (merge INDEX-SETTINGS-DEFAUTLS (select-keys db INDEX-SETTINGS-KEYS))
            :mappings (merge
-                       {:_source {:excludes [:fulltext]}
-                        :properties (merge DOC-MAPPING-PROPS (when flattened-attrs {:attrs {:type :flattened}}))}
-                       (when-not flattened-attrs {:dynamic_templates DOC-MAPPING-TEMPLATES}))}))
+                       {:_source    {:excludes [:fulltext]}
+                        :properties (merge DOC-MAPPING-PROPS)}
+                       )}))
 
 
 (defn index-delete [db tsnum]
@@ -195,7 +158,7 @@
   (elastic http/get db tsnum :path ["/_refresh"]))
 
 
-(defn tcd->doc [^TraceChunkData tcd flattened-attrs]
+(defn tcd->doc [^TraceChunkData tcd]
   (zu/without-nil-vals
     (merge
       {:doctype  TYPE-CHUNK
@@ -219,14 +182,10 @@
       (if (.getParentIdHex tcd)
         {:parentid (.getParentIdHex tcd), :top-level false}
         {:top-level true})
-      (if flattened-attrs
-        {:attrs
-         (zu/group-map
-           (for [[k v] (.getAttrs tcd) :let [f (.substring (str->akey k) 6)]]
-             [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))}
-        (zu/group-map
-          (for [[k v] (.getAttrs tcd) :let [f (str->akey k)]]
-            [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))))))
+      {:attrs
+       (zu/group-map
+         (for [[k v] (.getAttrs tcd) :let [f (.substring (str->akey k) 6)]]
+           [f (str (.replace v \tab \space) \tab (.replace k \tab \space))]))})))
 
 
 (declare next-active-index)
@@ -250,15 +209,15 @@
             ))))))
 
 
-(defn chunk-store [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state}]
+(defn chunk-store [app-state]
   "Returns trace chunk store with Elastic Search backend."
   (reify
     TraceChunkStore
     (add [_ tcd]
-      (chunk-add app-state (tcd->doc tcd flattened-attrs) true))
+      (chunk-add app-state (tcd->doc tcd) true))
     (addAll [_ tcds]
       (doseq [tcd tcds]
-        (chunk-add app-state (tcd->doc tcd flattened-attrs) true)))))
+        (chunk-add app-state (tcd->doc tcd) true)))))
 
 
 (defn index-stats [app-state tsnum]
@@ -278,8 +237,6 @@
         conf (-> app-state :conf :tstore),]
     (log/info "Rotating trace store. tsnum: " tsnum "->" new-tsnum)
     (index-create conf new-tsnum)
-    (when-not (-> app-state :conf :tstore :flattened-attrs)
-      (enable-field-mapping app-state new-tsnum (map :attr (-> app-state :conf :filter-defs))))
     (reset! (:tstore-tsnum app-state) new-tsnum)
     (future
       (Thread/sleep (* 1000 (:post-merge-pause conf 10)))
@@ -362,28 +319,20 @@
 (def RE-ATTRV #"(.*)\t(.*)")
 
 
-(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index flattened-attrs]}]
+(defn doc->rest [{:keys [tstamp] :as doc} & {:keys [chunks? index]}]
   (merge
     (assoc
       (select-keys doc RSLT-FIELDS)
       :tstamp (zu/millis->iso-time tstamp)
       :tst tstamp
       :attrs
-      (if flattened-attrs
-        (into {}
-          (apply concat
-            (for [[_ v] (:attrs doc)
-                  :let [vs (if (vector? v) v [v])]
-                  v vs :let [[_ s a] (re-matches RE-ATTRV v)]
-                  :when (and (string? s) (string? a))]
-              {a s})))
-        (into {}
-          (apply concat
-            (for [[k v] doc :when (re-matches RE-ATTRF (name k))
-                  :let [vs (if (vector? v) v [v])]
-                  v vs :let [[_ s a] (re-matches RE-ATTRV v)]
-                  :when (and (string? s) (string? a))]
-              {a s})))))
+      (into {}
+        (apply concat
+          (for [[_ v] (:attrs doc)
+                :let [vs (if (vector? v) v [v])]
+                v vs :let [[_ s a] (re-matches RE-ATTRV v)]
+                :when (and (string? s) (string? a))]
+            {a s}))))
     (when chunks? {:tdata (:tdata doc), :sdata (:sdata doc)})
     {:tsnum (:tsnum (index-parse index))}))
 
@@ -411,16 +360,16 @@
       (sort (for [a attrs :when (.startsWith a ".attrs")] (.substring a 7))))))
 
 
-(defmethod zt/trace-search :elastic [{{{:keys [flattened-attrs]} :tstore} :conf :as app-state} query {:keys [chunks? raw? spans-only?]}]
+(defmethod zt/trace-search :elastic [app-state query {:keys [chunks? raw?]}]
   (let [body (q->e query),
         rfn (if raw? zt/rest->tcd identity), ; TODO wyeliminować podwójne mapowanie wyniku
         _source (clojure.string/join "," (map name RSLT-FIELDS))
         rslt (elastic http/get (-> app-state :conf :tstore) nil
-                      :path ["/_search?_source=" _source ",attrs" (if flattened-attrs "" ".*")
+                      :path ["/_search?_source=" _source ",attrs"
                              (if chunks? ",tdata,sdata" "")]
                       :body body)]
     (for [doc (-> rslt :hits :hits) :let [index (get doc "_index"), doc (:_source (zu/keywordize doc))]]
-      (rfn (doc->rest doc :chunks? chunks?, :index index, :flattened-attrs flattened-attrs)))))
+      (rfn (doc->rest doc :chunks? chunks?, :index index)))))
 
 
 (defmethod zt/new-trace-store :elastic [{{conf :tstore} :conf :as app-state} old-state]
@@ -434,10 +383,7 @@
             collector (Collector. store false)]
         (log/info "Collector will write to index" tsnum)
         (reset! (:tstore-tsnum app-state) tsnum)
-        (when (empty? indexes)
-          (index-create conf tsnum)
-          (when-not (-> app-state :conf :tstore :flattened-attrs) ; apply mappings for field transforms
-            (enable-field-mapping app-state tsnum (map :attr (-> app-state :conf :filter-defs)))))
+        (when (empty? indexes) (index-create conf tsnum))
         {:collector collector, :store store}))))
 
 

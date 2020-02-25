@@ -1,7 +1,7 @@
 ZICO 1.90.9 (2020-??-??)
 ------------------------
 
-* flattened-attrs mode for Elastic with X-Pack;
+* use flattened type for attributes (requires Elastix+X-Pack);
 * liveness endpoint: /healthz;
 * elastic search connection pooling & keep alive;
 * fixed full text search 

@@ -71,11 +71,9 @@
           :final-merge-segments 1
           :memstore-size-max    768
           :memstore-size-del    256
-          :seq-block-size       16
           :index-size           16384
           :index-overcommit     1024
           :index-count          16
-          :flattened-attrs      false
           :writer-threads       16
           :writer-queue         16384
           :timeout              30
@@ -85,16 +83,11 @@
           :keystore-type        "jks"
           ; Elastic index creation parameters
           :number_of_shards     1
-          :number_of_replicas   0
-          :index.mapping.total_fields.limit 16384}
+          :number_of_replicas   0}
 
  :filter-defs
            [{:attr "component", :description "Component", :icon "awe/puzzle#light"}
             {:attr "local.service", :description "Service", :icon "awe/cubes#light"}]
-
- :attr-transforms [
-   ; { :match #"foo" :replace "bar" }
- ]
 
  :trace-types
            {:db  {:component "db", :render :db.statement, :icon "awe/database#darkgreen"}
