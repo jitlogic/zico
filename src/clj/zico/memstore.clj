@@ -29,7 +29,7 @@
   (let [q (q->tcq query)] (map (if raw? identity zt/tcd->rest) (.search trace-store q))))
 
 
-(defmethod zt/new-trace-store :memory [{:keys [trace-store trace-collector] :as app-state} old-state]
+(defmethod zt/new-trace-store :memory [app-state {:keys [trace-store trace-collector] :as old-state}]
   (let [new-conf (-> app-state :conf :tstore)
         max-size (* 1024 1024 (:memstore-size-max new-conf 2048)),
         del-size (* 1024 1024 (:memstore-size-del new-conf 1024))
@@ -37,4 +37,4 @@
         trace-collector (or trace-collector (Collector. trace-store false))]
     (.setMaxSize trace-store max-size)
     (.setDelSize trace-store del-size)
-    {:trace-store trace-store, :trace-collector trace-collector}))
+    {:store trace-store, :collector trace-collector}))

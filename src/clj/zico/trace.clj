@@ -11,7 +11,7 @@
     (com.jitlogic.zorka.common.collector
       TraceDataResult TraceStatsResult NoSuchSessionException Collector
       TraceDataExtractingProcessor TraceStatsExtractingProcessor TraceChunkData)
-    (com.jitlogic.zorka.common.tracedata HttpConstants)
+    (com.jitlogic.zorka.common.tracedata HttpConstants TraceMarker)
     (java.util ArrayList Collection)))
 
 (defn tstore-type [app-state & _]
@@ -29,11 +29,12 @@
        :tstamp   (zu/millis->iso-time (.getTstamp tcd))
        :duration (.getDuration tcd)
        :calls    (.getCalls tcd)
+       :error    (.hasFlag tcd TraceMarker/ERROR_MARK)
        :errors   (.getErrors tcd)
        :recs     (.getRecs tcd)
        :klass    (.getKlass tcd)
        :method   (.getMethod tcd)
-       :tsnum 1}
+       :tsnum    1}
       (when chunks? {:tdata (.getTraceData tcd)})
       (when (.getAttrs tcd) {:attrs (into {} (for [[k v] (.getAttrs tcd)] {k v}))})
       )))

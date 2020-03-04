@@ -9,15 +9,15 @@
     [zico.web :as zweb]
     [zico.metrics :as zmet]
     [clojure.tools.logging :as log]
-    [zico.elastic :as ze])
+    [zico.elastic :as ze]
+    zico.memstore)
   (:gen-class)
   (:import
     (ch.qos.logback.classic Level)
     (org.slf4j LoggerFactory Logger)
     (ch.qos.logback.classic.encoder PatternLayoutEncoder)
     (ch.qos.logback.core ConsoleAppender)
-    (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)
-    (java.util.regex Pattern)))
+    (ch.qos.logback.core.rolling RollingFileAppender TimeBasedRollingPolicy)))
 
 (def ^:private SRC-DIRS ["src" "env/dev"])
 
@@ -86,12 +86,10 @@
    (let [{:keys [attr-transforms] :as conf} (zu/read-config
                 zico.schema.server/ZicoConf
                 (io/resource "zico/zico.edn")
-                (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))
-         attr-transforms (for [a attr-transforms] (assoc a :match (Pattern/compile (:match a))))]
+                (zu/to-path (zu/ensure-dir home-dir) "zico.edn"))]
      (configure-logger (-> conf :log))
      (zu/ensure-dir (-> conf :log :path))
-     (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf)))
-     (alter-var-root #'zico.elastic/ATTR-KEY-TRANSFORMS (constantly attr-transforms)))))
+     (alter-var-root #'zorka-app-state (constantly (new-app-state zorka-app-state conf))))))
 
 
 (defn zorka-main-handler [req]
