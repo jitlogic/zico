@@ -77,6 +77,11 @@
        :errors   (.getErrors tdr),
        :duration (- (.getTstop tdr) (.getTstart tdr))
        :tstart   (.getTstart tdr)}
+      (when-let [ex (.getException tdr)]
+        {:exception
+         {:class (.getClassName ex)
+          :msg   (.getMessage ex)
+          :stack (into [] (.getStack ex))}})
       (when-let [attrs (.getAttributes tdr)]
         {:attrs (into {} attrs)})
       (when-let [children (.getChildren tdr)]

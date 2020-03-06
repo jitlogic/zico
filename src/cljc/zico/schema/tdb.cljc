@@ -3,26 +3,11 @@
     [schema.core :as s :include-macros true]))
 
 
-(s/defschema TraceStackItem
-  {:class s/Str
-   :method s/Str
-   :file s/Str
-   :line s/Int})
-
-
 (s/defschema TraceException
   {:class                  s/Str
    :msg                    (s/maybe s/Str)
-   :stack                  [TraceStackItem]
+   :stack                  [s/Str]
    (s/optional-key :cause) (s/recursive #'TraceException)})
-
-
-(s/defschema TraceMethod
-  {:result s/Str
-   :package s/Str
-   :class s/Str
-   :method s/Str
-   :args s/Str})
 
 
 (s/defschema TraceRecord

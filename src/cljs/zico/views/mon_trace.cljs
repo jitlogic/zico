@@ -101,13 +101,7 @@
 
 
 (defn exception-to-string [{:keys [class msg stack]}]
-  (str
-    class ": " msg
-    (cs/join
-      "\n"
-      (for [{:keys [class method file line]} stack]
-        (str " at " class "." method "(" file ":" line ")")))
-    "\n"))
+  (str class ": " msg (cs/join "\n" stack) "\n"))
 
 
 (defn render-exception [exception full]
@@ -121,10 +115,8 @@
        [:write-to-clipboard (exception-to-string exception)])]]
    [:div.msg (str (:msg exception))]
    [:div.stk
-    (for [[{:keys [class method file line] :as e} i] (map vector (:stack exception) (range))]
-      ^{:key i} [:div.si
-                 [:div.c (str class "." method)]
-                 [:div.f (str "(" file ":" line ")")]])]])
+    (for [[i s] (sort-by first (zipmap (range) (:stack exception)))]
+      ^{:key i} [:div.si s])]])
 
 
 (defn render-trace-list-detail-fn [enable-filters dtrace-links]

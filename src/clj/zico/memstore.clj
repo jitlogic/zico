@@ -13,7 +13,7 @@
   (let [q (TraceChunkSearchQuery.)]
     (when traceid (.withTraceId q traceid))
     (when spanid (.withSpanId q spanid))
-    (when errors-only (.setErrorsOnly q errors-only))
+    (when errors-only (.setErrorsOnly q true))
     (when spans-only (.setSpansOnly q spans-only))
     (when min-tstamp (.setMinTstamp q (zu/iso-time->millis min-tstamp)))
     (when max-tstamp (.setMaxTstamp q (zu/iso-time->millis max-tstamp)))
