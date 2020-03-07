@@ -1,10 +1,12 @@
-ZICO 1.90.9 (2020-??-??)
+ZICO 1.90.9 (2020-03-07)
 ------------------------
 
 * use flattened type for attributes (requires Elastix+X-Pack);
 * liveness endpoint: /healthz;
 * elastic search connection pooling & keep alive;
-* fixed full text search 
+* fixed full text search;
+* elastic connection management - pooling, TLS etc.;
+* many fixes and cleanups;
 
 
 ZICO 1.90.8 (2020-02-20)
