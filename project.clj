@@ -1,4 +1,4 @@
-(defproject zico "2.0.0-SNAPSHOT"
+(defproject zico "2.0.0"
   :description "Trace data collection and data presentation."
   :url "http://zorka.io"
   :license {:name "GPL v3"}
@@ -7,7 +7,7 @@
                  [org.clojure/data.json "0.2.6"]
                  [org.clojure/tools.reader "1.3.2"]
 
-                 [com.jitlogic.zorka/zorka-common "2.0.0-SNAPSHOT" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
+                 [com.jitlogic.zorka/zorka-common "2.0.0" :exclusions [com.jitlogic.zorka/zorka-slf4j]]
                  [prismatic/schema "1.1.9"]
                  [slingshot "0.12.2"]
                  [aero "1.1.3"]
@@ -111,7 +111,7 @@
                                        [day8.re-frame/test "0.1.5"]]
 
                         :source-paths ["env/dev/clj"]
-                        :plugins      [[lein-figwheel "0.5.18"]
+                        :plugins      [[lein-figwheel "0.5.19"]
                                        [lein-sassy "1.0.8"]
                                        [lein-doo "0.1.11"]]
 

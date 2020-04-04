@@ -1,3 +1,9 @@
+ZICO 2.0.0 (2020-04-04)
+-----------------------
+
+* add TLS keystore type to server configuration;
+
+
 ZICO 1.90.9 (2020-03-07)
 ------------------------
 
