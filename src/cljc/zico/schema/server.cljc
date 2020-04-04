@@ -14,6 +14,7 @@
    :daemon?                            s/Bool
    (s/optional-key :keystore)          s/Str
    (s/optional-key :key-password)      s/Str
+   (s/optional-key :keystore-type)     s/Str
    (s/optional-key :truststore)        s/Str
    (s/optional-key :trust-password)    s/Str
    :min-threads                        s/Int

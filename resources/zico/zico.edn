@@ -8,6 +8,8 @@
  :http     {:port                8640
             :host                "0.0.0.0"
             :http?               true
+            :ssl?                false
+            :ssl-port            8643
             :join?               false,
             :daemon?             false
             :min-threads         2
